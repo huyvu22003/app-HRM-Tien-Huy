@@ -1,26 +1,39 @@
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap');
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-navy: #0f2f5a;
+  --color-page-bg: #eef1f5;
+  --color-accent: #1e6fd0;
+  --color-accent-hover: #12569c;
+  --color-success: #2f8f5b;
+  --color-success-bg: #e7f4ec;
+  --color-warning: #c1852a;
+  --color-warning-bg: #faf0e6;
+  --color-danger: #c0483c;
+  --color-danger-bg: #f9e9e7;
+  --color-maternity: #b0508f;
+  --color-maternity-bg: #f4e8f1;
+  --color-border: #e2e7ee;
+  --color-border-light: #eef1f4;
+  --color-text-primary: #171c22;
+  --color-text-secondary: #22303f;
+  --color-text-tertiary: #3a4657;
+  --color-text-muted: #5c6a7a;
+  --color-text-light: #7a8697;
+  --color-text-lighter: #93a0b0;
+  --color-sidebar-text: #8ba0b8;
+  --font-sans: 'Be Vietnam Pro', system-ui, -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  background: var(--color-page-bg);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
 }
+
+::-webkit-scrollbar { height: 9px; width: 9px; }
+::-webkit-scrollbar-thumb { background: #c6cfd9; border-radius: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
