@@ -1,0 +1,185 @@
+import type { Env } from "../middleware/auth";
+import { json, error, readJson, getParams } from "../utils";
+
+export async function listEmployees(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const params = getParams(url);
+  const page = Math.max(1, parseInt(params.page || "1", 10) || 1);
+  const pageSize = Math.min(200, Math.max(1, parseInt(params.pageSize || "20", 10) || 20));
+  const search = (params.search || params.q || "").trim();
+  const departmentId = params.departmentId || params.department;
+
+  const conditions: string[] = [];
+  const args: unknown[] = [];
+
+  if (search) {
+    conditions.push("(e.name LIKE ? OR e.code LIKE ? OR e.phone LIKE ?)");
+    const like = `%${search}%`;
+    args.push(like, like, like);
+  }
+  if (departmentId) {
+    conditions.push("e.department_id = ?");
+    args.push(departmentId);
+  }
+
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  const countRow = await env.DB.prepare(
+    `SELECT COUNT(*) as total FROM employees e ${where}`
+  )
+    .bind(...args)
+    .first<{ total: number }>();
+  const total = countRow?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const offset = (Math.min(page, totalPages) - 1) * pageSize;
+
+  const { results } = await env.DB.prepare(
+    `SELECT e.*, d.name as department_name
+     FROM employees e
+     LEFT JOIN departments d ON d.id = e.department_id
+     ${where}
+     ORDER BY e.id
+     LIMIT ? OFFSET ?`
+  )
+    .bind(...args, pageSize, offset)
+    .all();
+
+  return json({ data: results, total, page, pageSize, totalPages });
+}
+
+export async function getEmployee(request: Request, env: Env, id: string): Promise<Response> {
+  const employee = await env.DB.prepare(
+    `SELECT e.*, d.name as department_name
+     FROM employees e LEFT JOIN departments d ON d.id = e.department_id
+     WHERE e.id = ?`
+  )
+    .bind(id)
+    .first();
+  if (!employee) return error("Không tìm thấy nhân viên", 404);
+
+  const compensation = await env.DB.prepare("SELECT * FROM compensation WHERE employee_id = ?")
+    .bind(id)
+    .first();
+  const insurance = await env.DB.prepare("SELECT * FROM insurance WHERE employee_id = ?")
+    .bind(id)
+    .first();
+
+  return json({ employee, compensation, insurance });
+}
+
+interface EmployeeBody {
+  code?: string;
+  name?: string;
+  gender?: string;
+  dob?: string;
+  phone?: string;
+  cccd?: string;
+  address?: string;
+  email?: string;
+  departmentId?: number | null;
+  position?: string;
+  workplace?: string;
+  contractType?: string;
+  contractEnd?: string;
+  joinDate?: string;
+  status?: string;
+  manager?: string;
+  level?: string;
+  bank?: string;
+  taxCode?: string;
+}
+
+export async function createEmployee(request: Request, env: Env): Promise<Response> {
+  const body = await readJson<EmployeeBody>(request);
+  if (!body.code || !body.name) {
+    return error("Thiếu mã nhân viên hoặc họ tên", 400);
+  }
+
+  const result = await env.DB.prepare(
+    `INSERT INTO employees
+      (code, name, gender, dob, phone, cccd, address, email, department_id, position,
+       workplace, contract_type, contract_end, join_date, status, manager, level, bank, tax_code)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  )
+    .bind(
+      body.code,
+      body.name,
+      body.gender ?? null,
+      body.dob ?? null,
+      body.phone ?? null,
+      body.cccd ?? null,
+      body.address ?? null,
+      body.email ?? null,
+      body.departmentId ?? null,
+      body.position ?? null,
+      body.workplace ?? null,
+      body.contractType ?? null,
+      body.contractEnd ?? null,
+      body.joinDate ?? null,
+      body.status ?? "Đang làm việc",
+      body.manager ?? null,
+      body.level ?? null,
+      body.bank ?? null,
+      body.taxCode ?? null
+    )
+    .run();
+
+  return json({ id: result.meta.last_row_id }, 201);
+}
+
+export async function updateEmployee(request: Request, env: Env, id: string): Promise<Response> {
+  const body = await readJson<EmployeeBody>(request);
+
+  const existing = await env.DB.prepare("SELECT * FROM employees WHERE id = ?").bind(id).first();
+  if (!existing) return error("Không tìm thấy nhân viên", 404);
+
+  const fields: string[] = [];
+  const args: unknown[] = [];
+  const map: Record<string, unknown> = {
+    name: body.name,
+    gender: body.gender,
+    dob: body.dob,
+    phone: body.phone,
+    cccd: body.cccd,
+    address: body.address,
+    email: body.email,
+    department_id: body.departmentId,
+    position: body.position,
+    workplace: body.workplace,
+    contract_type: body.contractType,
+    contract_end: body.contractEnd,
+    join_date: body.joinDate,
+    status: body.status,
+    manager: body.manager,
+    level: body.level,
+    bank: body.bank,
+    tax_code: body.taxCode,
+  };
+
+  for (const [key, value] of Object.entries(map)) {
+    if (value !== undefined) {
+      fields.push(`${key} = ?`);
+      args.push(value);
+    }
+  }
+
+  if (fields.length === 0) {
+    return json({ success: true, unchanged: true });
+  }
+
+  fields.push("updated_at = datetime('now')");
+  args.push(id);
+
+  await env.DB.prepare(`UPDATE employees SET ${fields.join(", ")} WHERE id = ?`)
+    .bind(...args)
+    .run();
+
+  await env.DB.prepare(
+    `INSERT INTO audit_log (action, entity, entity_id, before_data, after_data)
+     VALUES ('update', 'employees', ?, ?, ?)`
+  )
+    .bind(id, JSON.stringify(existing), JSON.stringify(body))
+    .run();
+
+  return json({ success: true });
+}

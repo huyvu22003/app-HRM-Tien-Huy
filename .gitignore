@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+/api/node_modules
 /.pnp
 .pnp.*
 .yarn/*
@@ -35,6 +36,10 @@ yarn-error.log*
 
 # vercel
 .vercel
+
+# cloudflare
+.wrangler
+/api/.wrangler
 
 # typescript
 *.tsbuildinfo

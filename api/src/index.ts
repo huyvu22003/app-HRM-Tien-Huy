@@ -1,0 +1,133 @@
+import type { Env } from "./middleware/auth";
+import { authMiddleware } from "./middleware/auth";
+import { corsHeaders, handlePreflight } from "./middleware/cors";
+import { error, parseIdFromPath } from "./utils";
+
+import { login, logout, me } from "./handlers/auth";
+import { listEmployees, getEmployee, createEmployee, updateEmployee } from "./handlers/employees";
+import { listDepartments } from "./handlers/departments";
+import { listAttendance, updateAttendance } from "./handlers/attendance";
+import {
+  listLeaveRequests,
+  createLeaveRequest,
+  updateLeaveRequest,
+  getLeaveBalance,
+} from "./handlers/leave";
+import { getSalary } from "./handlers/salary";
+import { getKpi } from "./handlers/kpi";
+import { getConfig, updateConfig } from "./handlers/config";
+import { getPermissions, updatePermissions } from "./handlers/permissions";
+import { uploadFile, downloadFile } from "./handlers/files";
+
+export type { Env };
+
+// Routes that do not require a valid JWT.
+const PUBLIC_ROUTES: Array<{ method: string; pathname: string }> = [
+  { method: "POST", pathname: "/api/auth/login" },
+];
+
+function isPublicRoute(method: string, pathname: string): boolean {
+  return PUBLIC_ROUTES.some((r) => r.method === method && r.pathname === pathname);
+}
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const origin = env.CORS_ORIGIN || "*";
+    const preflight = handlePreflight(request, origin);
+    if (preflight) return preflight;
+
+    const url = new URL(request.url);
+    const { pathname } = url;
+    const method = request.method;
+    const headers = corsHeaders(origin);
+
+    const withCors = (response: Response): Response => {
+      const merged = new Headers(response.headers);
+      for (const [key, value] of Object.entries(headers)) merged.set(key, value);
+      return new Response(response.body, { status: response.status, headers: merged });
+    };
+
+    try {
+      // --- Auth middleware (skip for public routes) ---
+      let userId = 0;
+      if (!isPublicRoute(method, pathname)) {
+        if (pathname.startsWith("/api/")) {
+          const auth = await authMiddleware(request, env);
+          if (!auth) return withCors(error("Unauthorized", 401));
+          userId = auth.userId;
+        }
+      }
+
+      // --- Auth routes ---
+      if (method === "POST" && pathname === "/api/auth/login") return withCors(await login(request, env));
+      if (method === "POST" && pathname === "/api/auth/logout") return withCors(await logout(request, env));
+      if (method === "GET" && pathname === "/api/auth/me") return withCors(await me(request, env));
+
+      // --- Employees ---
+      if (method === "GET" && pathname === "/api/employees") return withCors(await listEmployees(request, env));
+      if (method === "POST" && pathname === "/api/employees") return withCors(await createEmployee(request, env));
+      if (method === "GET" && pathname.startsWith("/api/employees/")) {
+        const id = parseIdFromPath(pathname, "/api/employees/");
+        if (!id) return withCors(error("Thiếu id nhân viên", 400));
+        return withCors(await getEmployee(request, env, id));
+      }
+      if (method === "PUT" && pathname.startsWith("/api/employees/")) {
+        const id = parseIdFromPath(pathname, "/api/employees/");
+        if (!id) return withCors(error("Thiếu id nhân viên", 400));
+        return withCors(await updateEmployee(request, env, id));
+      }
+
+      // --- Departments ---
+      if (method === "GET" && pathname === "/api/departments") return withCors(await listDepartments(request, env));
+
+      // --- Attendance ---
+      if (method === "GET" && pathname === "/api/attendance") return withCors(await listAttendance(request, env));
+      if (method === "PUT" && pathname.startsWith("/api/attendance/")) {
+        const id = parseIdFromPath(pathname, "/api/attendance/");
+        if (!id) return withCors(error("Thiếu id chấm công", 400));
+        return withCors(await updateAttendance(request, env, id));
+      }
+
+      // --- Leave ---
+      if (method === "GET" && pathname === "/api/leave/requests") return withCors(await listLeaveRequests(request, env));
+      if (method === "POST" && pathname === "/api/leave/requests") return withCors(await createLeaveRequest(request, env, userId));
+      if (method === "PUT" && pathname.startsWith("/api/leave/requests/")) {
+        const id = parseIdFromPath(pathname, "/api/leave/requests/");
+        if (!id) return withCors(error("Thiếu id đơn nghỉ phép", 400));
+        return withCors(await updateLeaveRequest(request, env, id, userId));
+      }
+      if (method === "GET" && pathname.startsWith("/api/leave/balance/")) {
+        const employeeId = parseIdFromPath(pathname, "/api/leave/balance/");
+        if (!employeeId) return withCors(error("Thiếu id nhân viên", 400));
+        return withCors(await getLeaveBalance(request, env, employeeId));
+      }
+
+      // --- Salary ---
+      if (method === "GET" && pathname === "/api/salary") return withCors(await getSalary(request, env));
+
+      // --- KPI ---
+      if (method === "GET" && pathname === "/api/kpi") return withCors(await getKpi(request, env));
+
+      // --- Config ---
+      if (method === "GET" && pathname === "/api/config") return withCors(await getConfig(request, env));
+      if (method === "PUT" && pathname === "/api/config") return withCors(await updateConfig(request, env));
+
+      // --- Permissions ---
+      if (method === "GET" && pathname === "/api/permissions") return withCors(await getPermissions(request, env));
+      if (method === "PUT" && pathname === "/api/permissions") return withCors(await updatePermissions(request, env));
+
+      // --- Files ---
+      if (method === "POST" && pathname === "/api/files/upload") return withCors(await uploadFile(request, env));
+      if (method === "GET" && pathname.startsWith("/api/files/")) {
+        const key = parseIdFromPath(pathname, "/api/files/");
+        if (!key) return withCors(error("Thiếu key tệp tin", 400));
+        return withCors(await downloadFile(request, env, key));
+      }
+
+      return withCors(error("Không tìm thấy route", 404));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Internal Server Error";
+      return withCors(error(message, 500));
+    }
+  },
+};
