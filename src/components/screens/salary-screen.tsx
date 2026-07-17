@@ -1,80 +1,383 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { X } from "lucide-react";
+import { useMemo, useState, useRef } from "react";
+import { X, Printer } from "lucide-react";
 import { fetchSalary, fetchDepartments, type ApiSalaryRow } from "@/lib/api";
 import { useQuery } from "@/lib/hooks";
-import { DEFAULT_CFG, DEFAULT_PIT } from "@/lib/data/config";
 import { formatMoney, cn } from "@/lib/utils";
 
-function computePIT(taxable: number): number {
-  if (taxable <= 0) return 0;
-  let tax = 0;
-  let prev = 0;
-  for (const bracket of DEFAULT_PIT) {
-    const slice = Math.min(taxable, bracket.upTo) - prev;
-    if (slice <= 0) break;
-    tax += slice * bracket.rate;
-    prev = bracket.upTo;
-    if (taxable <= bracket.upTo) break;
+const STD_DAYS = 26;
+const HOURS_PER_DAY = 8;
+const PERSONAL_DEDUCTION = 15_500_000;
+const DEPENDENT_DEDUCTION = 6_200_000;
+
+const PIT_BRACKETS = [
+  { upTo: 10_000_000, rate: 0.05, quick: 0 },
+  { upTo: 30_000_000, rate: 0.10, quick: 500_000 },
+  { upTo: 60_000_000, rate: 0.20, quick: 3_500_000 },
+  { upTo: 100_000_000, rate: 0.30, quick: 9_500_000 },
+  { upTo: Infinity, rate: 0.35, quick: 14_500_000 },
+];
+
+function computePIT(taxableIncome: number): number {
+  if (taxableIncome <= 0) return 0;
+  for (const b of PIT_BRACKETS) {
+    if (taxableIncome <= b.upTo) {
+      return Math.round(taxableIncome * b.rate - b.quick);
+    }
   }
-  return Math.round(tax);
+  return 0;
 }
 
-interface SalaryComputed {
-  workSalary: number;
+export interface SalaryComputed {
+  base: number;
+  responsibility: number;
   allowance: number;
-  otWeekday: number;
-  otSunday: number;
-  otPay: number;
-  kpiBonus: number;
-  hotBonus: number;
-  gross: number;
-  insurance: number;
-  taxableIncome: number;
-  tax: number;
-  advance: number;
-  net: number;
-  stdDays: number;
+  gasAllowanceMonth: number;
+  attendanceBonus: number;
+  totalMonthly: number;
   actualDays: number;
+  gasDays: number;
+  leaveDays: number;
+  otWeekdayHours: number;
+  otSundayHours: number;
+  otHolidayHours: number;
+  otNightHours: number;
+  dependents: number;
+  workSalary: number;
+  responsibilityActual: number;
+  allowanceActual: number;
+  attendanceActual: number;
+  otWeekday: number;
+  otWeekdayExempt: number;
+  otSunday: number;
+  otSundayExempt: number;
+  otHoliday: number;
+  bonus: number;
+  mealAllowance: number;
+  gasAllowanceActual: number;
+  nightAllowance: number;
+  leavePay: number;
+  totalIncome: number;
+  taxableIncome: number;
+  bhxh: number;
+  bhyt: number;
+  bhtn: number;
+  insuranceTotal: number;
+  unionDues: number;
+  advance: number;
+  taxableAfterDeductions: number;
+  pit: number;
+  netPay: number;
 }
 
 function computeSalary(row: ApiSalaryRow): SalaryComputed {
   const base = row.base_salary ?? 0;
+  const responsibility = row.responsibility_salary ?? 0;
   const allowance = row.allowance ?? 0;
-  const stdDays = row.std_days ?? DEFAULT_CFG.attendance.standardWorkDaysPerMonth;
-  const actualDays = row.actual_days ?? stdDays;
-  const insBase = row.ins_salary_base ?? base;
-  const dependents = row.dependents ?? 0;
-  const kpiBonus = row.kpi_bonus ?? 0;
-  const hotBonus = row.hot_bonus ?? 0;
-  const advance = row.advance ?? 0;
+  const gasAllowanceMonth = row.gas_allowance ?? 0;
+  const attendanceBonus = row.attendance_bonus ?? 0;
+  const totalMonthly = base + responsibility + allowance + gasAllowanceMonth + attendanceBonus;
 
-  const workSalary = Math.round(base / stdDays * actualDays);
-
-  const hourlyRate = base / (stdDays * 8);
+  const actualDays = row.actual_days ?? 0;
+  const gasDays = row.gas_days ?? 0;
+  const leaveDays = row.leave_days ?? 0;
   const otWeekdayHours = row.ot_weekday_hours ?? 0;
   const otSundayHours = row.ot_sunday_hours ?? 0;
-  const otWeekday = Math.round(otWeekdayHours * hourlyRate * 1.5);
-  const otSunday = Math.round(otSundayHours * hourlyRate * 2.0);
-  const otPay = otWeekday + otSunday;
+  const otHolidayHours = row.ot_holiday_hours ?? 0;
+  const otNightHours = row.ot_night_hours ?? 0;
+  const dependents = row.dependents ?? 0;
 
-  const gross = workSalary + allowance + otPay + kpiBonus + hotBonus;
+  const dailyBase = base / STD_DAYS;
+  const hourlyBase = dailyBase / HOURS_PER_DAY;
 
-  const { bhxhEmployeeRate, bhytEmployeeRate, bhtnEmployeeRate } = DEFAULT_CFG.insurance;
-  const insurance = Math.round(insBase * (bhxhEmployeeRate + bhytEmployeeRate + bhtnEmployeeRate));
+  const workSalary = Math.round(dailyBase * actualDays);
+  const responsibilityActual = Math.round((responsibility / STD_DAYS) * actualDays);
+  const allowanceActual = Math.round((allowance / STD_DAYS) * actualDays);
+  const attendanceActual = row.attendance_bonus ?? 0;
+  const otWeekday = Math.round(hourlyBase * otWeekdayHours * 1.5);
+  const otWeekdayExempt = Math.round(otWeekday / 3);
+  const otSunday = Math.round(hourlyBase * otSundayHours * 2.0);
+  const otSundayExempt = Math.round(otSunday / 2);
+  const otHoliday = Math.round(hourlyBase * otHolidayHours * 3.0);
+  const bonus = row.bonus ?? 0;
+  const mealAllowance = row.meal_allowance ?? 0;
+  const gasAllowanceActual = gasDays > 0 ? Math.round((gasAllowanceMonth / STD_DAYS) * gasDays) : 0;
+  const nightAllowance = row.night_allowance ?? 0;
+  const leavePay = leaveDays > 0 ? Math.round(dailyBase * leaveDays) : 0;
 
-  const taxableIncome = Math.max(
-    0,
-    gross - insurance - DEFAULT_CFG.tax.personalDeduction - dependents * DEFAULT_CFG.tax.dependentDeduction,
-  );
-  const tax = computePIT(taxableIncome);
-  const net = gross - insurance - tax - advance;
+  const totalIncome = workSalary + responsibilityActual + allowanceActual + attendanceActual
+    + otWeekday + otWeekdayExempt + otSunday + otSundayExempt + otHoliday
+    + bonus + mealAllowance + gasAllowanceActual + nightAllowance + leavePay;
 
-  return { workSalary, allowance, otWeekday, otSunday, otPay, kpiBonus, hotBonus, gross, insurance, taxableIncome, tax, advance, net, stdDays, actualDays };
+  const taxableIncome = totalIncome - otSundayExempt - otWeekdayExempt;
+
+  const bhxh = row.bhxh_amount ?? 0;
+  const bhyt = row.bhyt_amount ?? 0;
+  const bhtn = row.bhtn_amount ?? 0;
+  const insuranceTotal = bhxh + bhyt + bhtn;
+  const unionDues = row.union_dues ?? 50000;
+  const advance = row.advance ?? 0;
+
+  const taxableAfterDeductions = taxableIncome - insuranceTotal - PERSONAL_DEDUCTION - dependents * DEPENDENT_DEDUCTION;
+  const pit = computePIT(taxableAfterDeductions);
+
+  const netPay = totalIncome - unionDues - insuranceTotal - advance - pit;
+
+  return {
+    base, responsibility, allowance, gasAllowanceMonth, attendanceBonus, totalMonthly,
+    actualDays, gasDays, leaveDays, otWeekdayHours, otSundayHours, otHolidayHours, otNightHours, dependents,
+    workSalary, responsibilityActual, allowanceActual, attendanceActual,
+    otWeekday, otWeekdayExempt, otSunday, otSundayExempt, otHoliday,
+    bonus, mealAllowance, gasAllowanceActual, nightAllowance, leavePay,
+    totalIncome, taxableIncome,
+    bhxh, bhyt, bhtn, insuranceTotal, unionDues, advance,
+    taxableAfterDeductions, pit, netPay,
+  };
 }
 
 type SalaryDisplayRow = { row: ApiSalaryRow; s: SalaryComputed };
+
+function PayslipModal({ data, period, onClose }: { data: SalaryDisplayRow; period: string; onClose: () => void }) {
+  const { row, s } = data;
+  const [y, m] = period.split("-");
+  const periodLabel = `${m}/${y}`;
+
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4">
+      <div className="w-full max-w-lg rounded-[14px] bg-white p-[20px] max-h-[90vh] overflow-y-auto">
+        <div className="mb-4 flex items-center justify-between">
+          <div className="text-[15px] font-semibold text-[var(--color-text-primary)]">
+            Phiếu lương — {row.name}
+          </div>
+          <button onClick={onClose}><X size={18} className="text-[var(--color-text-lighter)]" /></button>
+        </div>
+        <div className="mb-3 text-[12px] text-[var(--color-text-muted)]">
+          Kỳ {periodLabel} · {row.department_name} · Mã NV: {row.code}
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 text-[12.5px]">
+          <div>
+            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-lighter)]">I. Thông tin lương</div>
+            <div className="flex flex-col gap-0.5">
+              <Row label="Lương cơ bản" value={s.base} />
+              <Row label="Trách nhiệm" value={s.responsibility} />
+              <Row label="Phụ cấp" value={s.allowance} />
+              <Row label="Chuyên cần" value={s.attendanceBonus} />
+              <Row label="Hỗ trợ xăng xe" value={s.gasAllowanceMonth} />
+              <Row label="Tổng lương" value={s.totalMonthly} bold />
+            </div>
+
+            <div className="mt-3 mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-lighter)]">III. Thu nhập trong tháng</div>
+            <div className="flex flex-col gap-0.5">
+              <Row label="Lương ngày công" value={s.workSalary} />
+              <Row label="Trách nhiệm" value={s.responsibilityActual} />
+              <Row label="Phụ cấp" value={s.allowanceActual} />
+              {s.attendanceActual > 0 && <Row label="Chuyên cần" value={s.attendanceActual} />}
+              {(s.otWeekday + s.otWeekdayExempt) > 0 && <Row label="Tăng ca ngày thường" value={s.otWeekday + s.otWeekdayExempt} />}
+              {(s.otSunday + s.otSundayExempt) > 0 && <Row label="Tăng ca chủ nhật" value={s.otSunday + s.otSundayExempt} />}
+              {s.otHoliday > 0 && <Row label="Tăng ca ngày lễ" value={s.otHoliday} />}
+              {s.bonus > 0 && <Row label="Thưởng" value={s.bonus} />}
+              {s.mealAllowance > 0 && <Row label="Phụ cấp cơm" value={s.mealAllowance} />}
+              {s.gasAllowanceActual > 0 && <Row label="Phụ cấp xăng xe" value={s.gasAllowanceActual} />}
+              {s.nightAllowance > 0 && <Row label="Phụ cấp ca đêm" value={s.nightAllowance} />}
+              {s.leavePay > 0 && <Row label="Lương phép năm" value={s.leavePay} />}
+              <Row label="Tổng cộng (1)" value={s.totalIncome} bold />
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-lighter)]">II. Ngày công</div>
+            <div className="flex flex-col gap-0.5">
+              <Row label="Ngày làm thực tế" value={s.actualDays} raw />
+              {s.otWeekdayHours > 0 && <Row label="Giờ TC ngày thường" value={s.otWeekdayHours} raw />}
+              {s.otSundayHours > 0 && <Row label="Giờ TC chủ nhật" value={s.otSundayHours} raw />}
+              {s.otHolidayHours > 0 && <Row label="Giờ TC ngày lễ" value={s.otHolidayHours} raw />}
+              {s.leaveDays > 0 && <Row label="Phép năm (ngày)" value={s.leaveDays} raw />}
+              {s.gasDays > 0 && <Row label="Ngày xăng xe" value={s.gasDays} raw />}
+              <Row label="Số người phụ thuộc" value={s.dependents} raw />
+            </div>
+
+            <div className="mt-3 mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-lighter)]">IV. Các khoản trừ</div>
+            <div className="flex flex-col gap-0.5">
+              <Row label="Trừ BHXH (8%)" value={s.bhxh} />
+              <Row label="Trừ BHYT (1,5%)" value={s.bhyt} />
+              <Row label="Trừ BHTN (1%)" value={s.bhtn} />
+              <Row label="Tiền ĐPCĐ" value={s.unionDues} />
+              {s.advance > 0 && <Row label="Tạm ứng" value={s.advance} />}
+              {s.pit > 0 && <Row label="Thuế TNCN" value={s.pit} />}
+              <Row label="Tổng cộng (2)" value={s.insuranceTotal + s.unionDues + s.advance + s.pit} bold />
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-lg bg-[var(--color-success-bg)] px-4 py-3 text-center">
+          <span className="text-[12px] text-[var(--color-text-muted)]">THỰC NHẬN = (1) − (2) : </span>
+          <span className="text-[16px] font-bold text-[var(--color-success)] font-[family-name:var(--font-mono)]">
+            {formatMoney(s.netPay)} đồng
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, value, bold, raw }: { label: string; value: number; bold?: boolean; raw?: boolean }) {
+  return (
+    <div className={cn("flex justify-between py-[1px]", bold && "border-t border-[var(--color-border-light)] pt-1 mt-1")}>
+      <span className={cn("text-[var(--color-text-muted)]", bold && "font-medium text-[var(--color-text-primary)]")}>{label}</span>
+      <span className={cn("font-[family-name:var(--font-mono)]", bold && "font-medium")}>
+        {raw ? value : formatMoney(value)}
+      </span>
+    </div>
+  );
+}
+
+function PrintPayslips({ rows, period }: { rows: SalaryDisplayRow[]; period: string }) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [y, m] = period.split("-");
+  const periodLabel = `${m}/${y}`;
+
+  const handlePrint = () => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    const doc = iframe.contentDocument;
+    if (!doc) return;
+
+    const pages: string[] = [];
+    for (let i = 0; i < rows.length; i += 2) {
+      const slips = [rows[i], rows[i + 1]].filter(Boolean).map(({ row, s }, idx) => {
+        const incomeRows = [
+          ["Lương ngày công", s.workSalary],
+          ["Trách nhiệm", s.responsibilityActual],
+          ["Phụ cấp", s.allowanceActual],
+          s.attendanceActual > 0 ? ["Chuyên cần", s.attendanceActual] : null,
+          (s.otWeekday + s.otWeekdayExempt) > 0 ? ["Tăng ca ngày thường", s.otWeekday + s.otWeekdayExempt] : null,
+          (s.otSunday + s.otSundayExempt) > 0 ? ["Tăng ca chủ nhật", s.otSunday + s.otSundayExempt] : null,
+          s.otHoliday > 0 ? ["Tăng ca ngày lễ", s.otHoliday] : null,
+          s.bonus > 0 ? ["Thưởng", s.bonus] : null,
+          s.mealAllowance > 0 ? ["Phụ cấp cơm", s.mealAllowance] : null,
+          s.gasAllowanceActual > 0 ? ["Phụ cấp xăng xe", s.gasAllowanceActual] : null,
+          s.nightAllowance > 0 ? ["Phụ cấp ca đêm", s.nightAllowance] : null,
+          s.leavePay > 0 ? ["Lương phép năm", s.leavePay] : null,
+        ].filter(Boolean) as [string, number][];
+
+        const deductRows = [
+          ["Trừ BHXH (8%)", s.bhxh],
+          ["Trừ BHYT (1,5%)", s.bhyt],
+          ["Trừ BHTN (1%)", s.bhtn],
+          ["Tiền ĐPCĐ", s.unionDues],
+          s.advance > 0 ? ["Tạm ứng", s.advance] : null,
+          s.pit > 0 ? ["Thuế TNCN", s.pit] : null,
+        ].filter(Boolean) as [string, number][];
+
+        const workRows = [
+          ["Ngày làm thực tế", s.actualDays],
+          s.otWeekdayHours > 0 ? ["Giờ TC ngày thường", s.otWeekdayHours] : null,
+          s.otSundayHours > 0 ? ["Giờ TC chủ nhật", s.otSundayHours] : null,
+          s.otHolidayHours > 0 ? ["Giờ TC ngày lễ", s.otHolidayHours] : null,
+          s.leaveDays > 0 ? ["Phép năm (ngày)", s.leaveDays] : null,
+          s.gasDays > 0 ? ["Ngày xăng xe", s.gasDays] : null,
+          ["Số người phụ thuộc", s.dependents],
+        ].filter(Boolean) as [string, number][];
+
+        const salaryRows: [string, number][] = [
+          ["Lương cơ bản", s.base],
+          ["Trách nhiệm", s.responsibility],
+          ["Phụ cấp", s.allowance],
+          ["Chuyên cần", s.attendanceBonus],
+          ["Hỗ trợ xăng xe", s.gasAllowanceMonth],
+        ];
+
+        const fmt = (n: number) => n.toLocaleString("vi-VN");
+        const tblRows = (arr: [string, number][], money = true) =>
+          arr.map(([l, v]) => `<tr><td class="lbl">${l}</td><td class="val">${money ? fmt(v) : v}</td></tr>`).join("");
+
+        return `<div class="payslip">
+  <div class="ps-head">
+    <img src="/logo.png" class="logo" alt="logo" />
+    <div class="company">CÔNG TY TNHH CƠ KHÍ KHUÔN MẪU TIẾN HUY</div>
+    <div class="title">PHIẾU LƯƠNG &nbsp;•&nbsp; THÁNG ${periodLabel}</div>
+  </div>
+  <div class="ps-id">
+    <div><span class="k">Họ và tên:</span> <b>${row.name}</b></div>
+    <div><span class="k">Bộ phận:</span> ${row.department_name ?? ""}</div>
+    <div><span class="k">Mã NV:</span> ${row.code}</div>
+  </div>
+  <div class="cols">
+    <div class="col">
+      <div class="blk-h">I. Thông tin về lương</div>
+      <table class="t">${tblRows(salaryRows)}<tr class="b"><td class="lbl"><b>Tổng lương</b></td><td class="val"><b>${fmt(s.totalMonthly)}</b></td></tr></table>
+      <div class="blk-h">III. Tổng thu nhập trong tháng</div>
+      <table class="t">${tblRows(incomeRows)}<tr class="b"><td class="lbl"><b>Tổng cộng (1)</b></td><td class="val"><b>${fmt(s.totalIncome)}</b></td></tr></table>
+    </div>
+    <div class="col">
+      <div class="blk-h">II. Thông tin ngày công</div>
+      <table class="t">${tblRows(workRows, false)}</table>
+      <div class="blk-h">IV. Các khoản trừ</div>
+      <table class="t">${tblRows(deductRows)}<tr class="b"><td class="lbl"><b>Tổng cộng (2)</b></td><td class="val"><b>${fmt(s.insuranceTotal + s.unionDues + s.advance + s.pit)}</b></td></tr></table>
+    </div>
+  </div>
+  <div class="foot">
+    <div class="net">THỰC NHẬN = (1) − (2) : <span>${fmt(s.netPay)} đồng</span></div>
+    <div class="sign"><div>Người lập phiếu<br><span class="sp"></span></div><div>Người nhận<br><span class="sp"></span></div></div>
+  </div>
+</div>`;
+      });
+
+      pages.push(`<div class="page">${slips.join("\n")}</div>`);
+    }
+
+    doc.open();
+    doc.write(`<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8">
+<title>Phiếu lương ${periodLabel}</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:"Times New Roman",Times,serif;margin:0;color:#111;background:#fff}
+.page{width:210mm;height:297mm;overflow:hidden;padding:8mm;display:flex;flex-direction:column;gap:4mm;page-break-after:always}
+.page:last-child{page-break-after:auto}
+.payslip{height:138.5mm;overflow:hidden;border:1px solid #222;padding:3.5mm 5mm;display:flex;flex-direction:column}
+.ps-head{text-align:center;border-bottom:1.5px solid #222;padding-bottom:1.5mm;margin-bottom:1.5mm;position:relative}
+.logo{position:absolute;left:0;top:0;height:14mm;width:auto}
+.company{font-size:10.5pt;font-weight:bold;text-transform:uppercase;letter-spacing:.2px}
+.title{font-size:12.5pt;font-weight:bold;margin-top:0.5mm}
+.ps-id{display:flex;justify-content:space-between;font-size:10pt;margin-bottom:1.5mm;gap:8px;flex-wrap:wrap}
+.ps-id .k{color:#555}
+.cols{display:flex;gap:6mm;flex:1}
+.col{flex:1}
+.blk-h{font-size:9.5pt;font-weight:bold;background:#eef0f2;border-left:3px solid #333;padding:0.8mm 2mm;margin:1.5mm 0 0.8mm}
+table.t{width:100%;border-collapse:collapse;font-size:9.5pt}
+table.t td{padding:0.35mm 1mm;border-bottom:1px dotted #cfcfcf;line-height:1.25}
+td.lbl{text-align:left}
+td.val{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+tr.b td{border-top:1px solid #333;border-bottom:none;padding-top:0.8mm}
+.foot{margin-top:auto;padding-top:2mm}
+.net{padding:1.8mm 3mm;background:#f1f3f5;border:1.2px solid #333;font-size:11pt;font-weight:bold;text-align:right}
+.net span{font-size:12.5pt}
+.sign{display:flex;justify-content:space-around;text-align:center;font-size:9.5pt;margin-top:1mm;font-style:italic}
+.sign .sp{display:block;height:8mm}
+@media print{body{background:#fff}.page{margin:0;box-shadow:none}}
+@page{size:A4 portrait;margin:0}
+</style></head><body>${pages.join("\n")}</body></html>`);
+    doc.close();
+
+    setTimeout(() => {
+      iframe.contentWindow?.print();
+    }, 300);
+  };
+
+  return (
+    <>
+      <button
+        onClick={handlePrint}
+        className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-white px-3 py-1.5 text-[13px] font-medium hover:bg-[var(--color-page-bg)]"
+      >
+        <Printer size={14} /> In phiếu lương
+      </button>
+      <iframe ref={iframeRef} className="hidden" />
+    </>
+  );
+}
 
 export function SalaryScreen() {
   const [period, setPeriod] = useState("2026-06");
@@ -93,11 +396,11 @@ export function SalaryScreen() {
 
   const totals = useMemo(() => {
     if (!rows.length) return null;
-    const totalGross = rows.reduce((s, r) => s + r.s.gross, 0);
-    const totalNet = rows.reduce((s, r) => s + r.s.net, 0);
-    const totalIns = rows.reduce((s, r) => s + r.s.insurance, 0);
-    const totalTax = rows.reduce((s, r) => s + r.s.tax, 0);
-    return { totalGross, totalNet, totalIns, totalTax, count: rows.length };
+    const totalIncome = rows.reduce((s, r) => s + r.s.totalIncome, 0);
+    const totalNet = rows.reduce((s, r) => s + r.s.netPay, 0);
+    const totalIns = rows.reduce((s, r) => s + r.s.insuranceTotal, 0);
+    const totalTax = rows.reduce((s, r) => s + r.s.pit, 0);
+    return { totalIncome, totalNet, totalIns, totalTax, count: rows.length };
   }, [rows]);
 
   const periodLabel = (() => {
@@ -127,17 +430,20 @@ export function SalaryScreen() {
             ))}
           </select>
         </div>
-        <span className="rounded-[20px] bg-[var(--color-success-bg)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--color-success)]">
-          {rows.length} nhân viên
-        </span>
+        <div className="flex items-center gap-2">
+          <PrintPayslips rows={rows} period={period} />
+          <span className="rounded-[20px] bg-[var(--color-success-bg)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--color-success)]">
+            {rows.length} nhân viên
+          </span>
+        </div>
       </div>
 
       {totals && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
-            { label: "Tổng gross", value: formatMoney(totals.totalGross), color: "text-[var(--color-text-primary)]" },
-            { label: "Tổng BHXH", value: formatMoney(totals.totalIns), color: "text-[var(--color-danger)]" },
-            { label: "Tổng thuế", value: formatMoney(totals.totalTax), color: "text-[var(--color-danger)]" },
+            { label: "Tổng thu nhập", value: formatMoney(totals.totalIncome), color: "text-[var(--color-text-primary)]" },
+            { label: "Tổng BHXH/YT/TN", value: formatMoney(totals.totalIns), color: "text-[var(--color-danger)]" },
+            { label: "Tổng thuế TNCN", value: formatMoney(totals.totalTax), color: "text-[var(--color-danger)]" },
             { label: "Tổng thực nhận", value: formatMoney(totals.totalNet), color: "text-[var(--color-success)]" },
           ].map((s) => (
             <div key={s.label} className="rounded-[12px] border border-[var(--color-border)] bg-white px-3 py-2.5">
@@ -154,122 +460,68 @@ export function SalaryScreen() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-[14px] border border-[var(--color-border)] bg-white">
-          <table className="w-full min-w-[1200px] text-[13px]">
+          <table className="w-full min-w-[1400px] text-[13px]">
             <thead>
               <tr className="text-left text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">
                 <th className="px-3 py-3 font-medium">Nhân viên</th>
+                <th className="px-3 py-3 font-medium">Bộ phận</th>
                 <th className="px-3 py-3 text-right font-medium">Công</th>
                 <th className="px-3 py-3 text-right font-medium">Lương công</th>
-                <th className="px-3 py-3 text-right font-medium">Phụ cấp</th>
+                <th className="px-3 py-3 text-right font-medium">Trách nhiệm</th>
                 <th className="px-3 py-3 text-right font-medium">Tăng ca</th>
-                <th className="px-3 py-3 text-right font-medium">Thưởng KPI</th>
-                <th className="px-3 py-3 text-right font-medium">Tổng gộp</th>
-                <th className="px-3 py-3 text-right font-medium">BHXH</th>
+                <th className="px-3 py-3 text-right font-medium">Tổng TN</th>
+                <th className="px-3 py-3 text-right font-medium">Bảo hiểm</th>
                 <th className="px-3 py-3 text-right font-medium">Thuế</th>
                 <th className="px-3 py-3 text-right font-medium">Tạm ứng</th>
                 <th className="px-3 py-3 text-right font-medium">Thực nhận</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ row, s }) => (
-                <tr
-                  key={row.code}
-                  onClick={() => setSelected({ row, s })}
-                  className="cursor-pointer border-t border-[var(--color-border-light)] hover:bg-[var(--color-page-bg)]"
-                >
-                  <td className="px-3 py-2.5">
-                    <div className="font-medium text-[var(--color-text-primary)]">{row.name}</div>
-                    <div className="text-[11px] text-[var(--color-text-lighter)]">{row.code}</div>
-                  </td>
-                  <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)] text-[12px]">
-                    {s.actualDays}/{s.stdDays}
-                  </td>
-                  <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)]">{formatMoney(s.workSalary)}</td>
-                  <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)]">{formatMoney(s.allowance)}</td>
-                  <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)]">{formatMoney(s.otPay)}</td>
-                  <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)]">
-                    {s.kpiBonus + s.hotBonus > 0 ? formatMoney(s.kpiBonus + s.hotBonus) : "-"}
-                  </td>
-                  <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)] font-medium">
-                    {formatMoney(s.gross)}
-                  </td>
-                  <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)] text-[var(--color-danger)]">
-                    -{formatMoney(s.insurance)}
-                  </td>
-                  <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)] text-[var(--color-danger)]">
-                    -{formatMoney(s.tax)}
-                  </td>
-                  <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)]">
-                    {s.advance > 0 ? `-${formatMoney(s.advance)}` : "-"}
-                  </td>
-                  <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)] font-semibold text-[var(--color-success)]">
-                    {formatMoney(s.net)}
-                  </td>
-                </tr>
-              ))}
+              {rows.map(({ row, s }) => {
+                const totalOT = s.otWeekday + s.otWeekdayExempt + s.otSunday + s.otSundayExempt + s.otHoliday;
+                return (
+                  <tr
+                    key={row.code}
+                    onClick={() => setSelected({ row, s })}
+                    className="cursor-pointer border-t border-[var(--color-border-light)] hover:bg-[var(--color-page-bg)]"
+                  >
+                    <td className="px-3 py-2.5">
+                      <div className="font-medium text-[var(--color-text-primary)]">{row.name}</div>
+                      <div className="text-[11px] text-[var(--color-text-lighter)]">{row.code}</div>
+                    </td>
+                    <td className="px-3 py-2.5 text-[12px] text-[var(--color-text-muted)]">{row.department_name}</td>
+                    <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)] text-[12px]">
+                      {s.actualDays}/{STD_DAYS}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)]">{formatMoney(s.workSalary)}</td>
+                    <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)]">{formatMoney(s.responsibilityActual)}</td>
+                    <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)]">
+                      {totalOT > 0 ? formatMoney(totalOT) : "-"}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)] font-medium">
+                      {formatMoney(s.totalIncome)}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)] text-[var(--color-danger)]">
+                      -{formatMoney(s.insuranceTotal)}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)] text-[var(--color-danger)]">
+                      {s.pit > 0 ? `-${formatMoney(s.pit)}` : "0"}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)]">
+                      {s.advance > 0 ? `-${formatMoney(s.advance)}` : "-"}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)] font-semibold text-[var(--color-success)]">
+                      {formatMoney(s.netPay)}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
 
-      {selected && (
-        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4">
-          <div className="w-full max-w-md rounded-[14px] bg-white p-[20px]">
-            <div className="mb-4 flex items-center justify-between">
-              <div className="text-[15px] font-semibold text-[var(--color-text-primary)]">
-                Phiếu lương — {selected.row.name}
-              </div>
-              <button onClick={() => setSelected(null)}>
-                <X size={18} className="text-[var(--color-text-lighter)]" />
-              </button>
-            </div>
-            <div className="flex flex-col gap-2 text-[13px]">
-              <div className="flex justify-between text-[var(--color-text-muted)]">
-                <span>Ngày công: {selected.s.actualDays}/{selected.s.stdDays}</span>
-                <span>{selected.row.kpi_rank ? `KPI: ${selected.row.kpi_score} (${selected.row.kpi_rank})` : ""}</span>
-              </div>
-              <div className="h-px bg-[var(--color-border-light)]" />
-              {([
-                ["Lương theo công", selected.s.workSalary],
-                ["Phụ cấp", selected.s.allowance],
-                ["Tăng ca ngày thường", selected.s.otWeekday],
-                ["Tăng ca CN", selected.s.otSunday],
-                ["Thưởng KPI", selected.s.kpiBonus],
-                ["Thưởng nóng", selected.s.hotBonus],
-              ] as const).map(([label, val]) =>
-                val > 0 ? (
-                  <div key={label} className="flex justify-between text-[var(--color-text-muted)]">
-                    <span>{label}</span>
-                    <span className="font-[family-name:var(--font-mono)]">{formatMoney(val)}</span>
-                  </div>
-                ) : null
-              )}
-              <div className="flex justify-between border-t border-[var(--color-border-light)] pt-2 font-medium text-[var(--color-text-primary)]">
-                <span>Tổng gộp</span>
-                <span className="font-[family-name:var(--font-mono)]">{formatMoney(selected.s.gross)}</span>
-              </div>
-              <div className="flex justify-between text-[var(--color-danger)]">
-                <span>Khấu trừ BH ({((DEFAULT_CFG.insurance.bhxhEmployeeRate + DEFAULT_CFG.insurance.bhytEmployeeRate + DEFAULT_CFG.insurance.bhtnEmployeeRate) * 100).toFixed(1)}%)</span>
-                <span className="font-[family-name:var(--font-mono)]">-{formatMoney(selected.s.insurance)}</span>
-              </div>
-              <div className="flex justify-between text-[var(--color-danger)]">
-                <span>Thuế TNCN</span>
-                <span className="font-[family-name:var(--font-mono)]">-{formatMoney(selected.s.tax)}</span>
-              </div>
-              {selected.s.advance > 0 && (
-                <div className="flex justify-between text-[var(--color-warning)]">
-                  <span>Tạm ứng</span>
-                  <span className="font-[family-name:var(--font-mono)]">-{formatMoney(selected.s.advance)}</span>
-                </div>
-              )}
-              <div className={cn("flex justify-between border-t border-[var(--color-border-light)] pt-2 text-[15px] font-semibold text-[var(--color-success)]")}>
-                <span>Thực nhận</span>
-                <span className="font-[family-name:var(--font-mono)]">{formatMoney(selected.s.net)}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {selected && <PayslipModal data={selected} period={period} onClose={() => setSelected(null)} />}
     </div>
   );
 }

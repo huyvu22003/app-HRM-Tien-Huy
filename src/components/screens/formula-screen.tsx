@@ -5,6 +5,9 @@ import { ArrowRight } from "lucide-react";
 import { formatMoney, cn } from "@/lib/utils";
 import { FX_ORDER, FX_SRC, FX_LABEL, DEFAULT_PIT, DEFAULT_CFG } from "@/lib/data/config";
 
+const STD_DAYS = 26;
+const HOURS_PER_DAY = 8;
+
 function computeProgressivePIT(taxable: number, brackets: { upTo: number; rate: number }[]): number {
   if (taxable <= 0) return 0;
   let tax = 0;
@@ -25,24 +28,40 @@ export function FormulaScreen({ onNavigate }: { onNavigate: (screen: string) => 
     DEFAULT_PIT.map((b) => ({ upTo: b.upTo, rate: Math.round(b.rate * 100) }))
   );
 
-  const sample = { base: 8_000_000, allowance: 500_000, stdDays: 26, actualDays: 24, otWeekday: 12, otSunday: 4 };
+  const sample = {
+    base: 11_200_000, responsibility: 3_830_000, allowance: 520_000,
+    gasAllowance: 200_000, attendanceBonus: 450_000,
+    stdDays: STD_DAYS, actualDays: 26, gasDays: 26, leaveDays: 0,
+    otWeekday: 13, otSunday: 0, dependents: 2,
+  };
 
   const preview = useMemo(() => {
-    const workSalary = Math.round(sample.base / sample.stdDays * sample.actualDays);
-    const hourlyRate = sample.base / (sample.stdDays * 8);
-    const otWeekday = Math.round(sample.otWeekday * hourlyRate * 1.5);
-    const otSunday = Math.round(sample.otSunday * hourlyRate * 2.0);
-    const otPay = otWeekday + otSunday;
-    const gross = workSalary + sample.allowance + otPay;
+    const dailyBase = sample.base / STD_DAYS;
+    const hourlyBase = dailyBase / HOURS_PER_DAY;
+
+    const workSalary = Math.round(dailyBase * sample.actualDays);
+    const respActual = Math.round((sample.responsibility / STD_DAYS) * sample.actualDays);
+    const allowActual = Math.round((sample.allowance / STD_DAYS) * sample.actualDays);
+    const otWeekday = Math.round(hourlyBase * sample.otWeekday * 1.5);
+    const otWeekdayExempt = Math.round(otWeekday / 3);
+    const otSunday = Math.round(hourlyBase * sample.otSunday * 2.0);
+    const otSundayExempt = Math.round(otSunday / 2);
+    const gasActual = Math.round((sample.gasAllowance / STD_DAYS) * sample.gasDays);
+    const leavePay = sample.leaveDays > 0 ? Math.round(dailyBase * sample.leaveDays) : 0;
+
+    const totalIncome = workSalary + respActual + allowActual + sample.attendanceBonus
+      + otWeekday + otWeekdayExempt + otSunday + otSundayExempt + gasActual + leavePay;
+
+    const taxableIncome = totalIncome - otWeekdayExempt - otSundayExempt;
 
     const { bhxhEmployeeRate, bhytEmployeeRate, bhtnEmployeeRate } = DEFAULT_CFG.insurance;
     const ins = Math.round(sample.base * (bhxhEmployeeRate + bhytEmployeeRate + bhtnEmployeeRate));
 
-    const taxable = Math.max(0, gross - ins - DEFAULT_CFG.tax.personalDeduction);
+    const taxable = taxableIncome - ins - DEFAULT_CFG.tax.personalDeduction - sample.dependents * DEFAULT_CFG.tax.dependentDeduction;
     const tax = pitEnabled ? computeProgressivePIT(taxable, brackets) : 0;
-    const net = gross - ins - tax;
+    const net = totalIncome - ins - 50000 - tax;
 
-    return { workSalary, otPay, gross, ins, taxable, tax, net };
+    return { workSalary, respActual, totalIncome, ins, taxableIncome, taxable, tax, net };
   }, [brackets, pitEnabled]);
 
   return (
@@ -79,7 +98,7 @@ export function FormulaScreen({ onNavigate }: { onNavigate: (screen: string) => 
 
       <div className="rounded-[14px] border border-[var(--color-border)] bg-white p-[18px]">
         <div className="mb-3 flex items-center justify-between">
-          <div className="text-[13px] font-semibold text-[var(--color-text-primary)]">Biểu thuế TNCN luỹ tiến</div>
+          <div className="text-[13px] font-semibold text-[var(--color-text-primary)]">Biểu thuế TNCN luỹ tiến 5 bậc (2026)</div>
           <button
             onClick={() => setPitEnabled((v) => !v)}
             className={cn(
@@ -128,14 +147,17 @@ export function FormulaScreen({ onNavigate }: { onNavigate: (screen: string) => 
             ))}
           </tbody>
         </table>
+        <div className="mt-2 text-[11px] text-[var(--color-text-lighter)]">
+          Giảm trừ bản thân: {formatMoney(DEFAULT_CFG.tax.personalDeduction)} · Giảm trừ NPT: {formatMoney(DEFAULT_CFG.tax.dependentDeduction)}/người
+        </div>
       </div>
 
       <div className="rounded-[14px] border border-[var(--color-border)] bg-white p-[18px]">
         <div className="mb-1 text-[13px] font-semibold text-[var(--color-text-primary)]">
-          Xem trước — nhân viên mẫu
+          Xem trước — Hoàng Công Phúc (Cắt Laser)
         </div>
         <div className="mb-3 text-[11px] text-[var(--color-text-lighter)]">
-          Lương cơ bản {formatMoney(sample.base)} · Công {sample.actualDays}/{sample.stdDays} · OT {sample.otWeekday}h ngày thường + {sample.otSunday}h CN
+          Lương CB {formatMoney(sample.base)} · TN {formatMoney(sample.responsibility)} · Công {sample.actualDays}/{sample.stdDays} · OT {sample.otWeekday}h ngày thường · {sample.dependents} NPT
         </div>
         <div className="flex flex-wrap items-center gap-6 text-[12.5px]">
           <div>
@@ -144,8 +166,8 @@ export function FormulaScreen({ onNavigate }: { onNavigate: (screen: string) => 
           </div>
           <ArrowRight size={14} className="text-[var(--color-text-lighter)]" />
           <div>
-            <span className="text-[var(--color-text-light)]">Tổng gộp </span>
-            <span className="font-[family-name:var(--font-mono)] font-medium">{formatMoney(preview.gross)}</span>
+            <span className="text-[var(--color-text-light)]">Tổng TN </span>
+            <span className="font-[family-name:var(--font-mono)] font-medium">{formatMoney(preview.totalIncome)}</span>
           </div>
           <ArrowRight size={14} className="text-[var(--color-text-lighter)]" />
           <div>

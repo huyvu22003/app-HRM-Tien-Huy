@@ -91,8 +91,8 @@ export const DEFAULT_CFG = {
     bhtnEmployerRate: 0.01,
   },
   tax: {
-    personalDeduction: 11000000,
-    dependentDeduction: 4400000,
+    personalDeduction: 15500000,
+    dependentDeduction: 6200000,
   },
 };
 
@@ -183,45 +183,43 @@ export const PERM_ROLE_DEFAULT: Record<Role, Record<string, string[]>> = {
 
 // Salary formula pipeline: order in which components are applied
 export const FX_ORDER = [
-  "baseSalary",
-  "allowance",
+  "workSalary",
+  "responsibilityAllowance",
   "overtimeAmount",
-  "grossSalary",
-  "insuranceDeduction",
+  "totalIncome",
   "taxableIncome",
+  "insuranceDeduction",
   "personalIncomeTax",
   "netSalary",
 ] as const;
 
 export const FX_SRC: Record<(typeof FX_ORDER)[number], string> = {
-  baseSalary: "employee.baseSalary",
-  allowance: "employee.allowance",
-  overtimeAmount: "overtimeHours * hourlyRate * 1.5",
-  grossSalary: "baseSalary + allowance + overtimeAmount",
-  insuranceDeduction: "insSalaryBase * (bhxhEmployeeRate + bhytEmployeeRate + bhtnEmployeeRate)",
-  taxableIncome: "grossSalary - insuranceDeduction - personalDeduction - dependents * dependentDeduction",
-  personalIncomeTax: "progressiveTax(taxableIncome)",
-  netSalary: "grossSalary - insuranceDeduction - personalIncomeTax",
+  workSalary: "base / 26 × actualDays",
+  responsibilityAllowance: "resp / 26 × actualDays + phụ cấp",
+  overtimeAmount: "TC thường ×150% + CN ×200% + lễ ×300%",
+  totalIncome: "SUM(lương công, TC, phụ cấp, OT, thưởng…)",
+  taxableIncome: "totalIncome − OT miễn thuế (W, Y)",
+  insuranceDeduction: "BHXH(8%) + BHYT(1.5%) + BHTN(1%)",
+  personalIncomeTax: "biểu lũy tiến 5 bậc 2026",
+  netSalary: "totalIncome − BH − ĐPCĐ − tạm ứng − thuế",
 };
 
 export const FX_LABEL: Record<(typeof FX_ORDER)[number], string> = {
-  baseSalary: "Lương cơ bản",
-  allowance: "Phụ cấp",
+  workSalary: "Lương ngày công",
+  responsibilityAllowance: "Trách nhiệm & Phụ cấp",
   overtimeAmount: "Tiền tăng ca",
-  grossSalary: "Tổng thu nhập",
-  insuranceDeduction: "Khấu trừ bảo hiểm",
+  totalIncome: "Tổng thu nhập",
   taxableIncome: "Thu nhập chịu thuế",
+  insuranceDeduction: "Khấu trừ bảo hiểm",
   personalIncomeTax: "Thuế TNCN",
   netSalary: "Lương thực nhận",
 };
 
 export const DEFAULT_PIT = [
-  { upTo: 5000000, rate: 0.05 },
-  { upTo: 10000000, rate: 0.1 },
-  { upTo: 18000000, rate: 0.15 },
-  { upTo: 32000000, rate: 0.2 },
-  { upTo: 52000000, rate: 0.25 },
-  { upTo: 80000000, rate: 0.3 },
+  { upTo: 10000000, rate: 0.05 },
+  { upTo: 30000000, rate: 0.10 },
+  { upTo: 60000000, rate: 0.20 },
+  { upTo: 100000000, rate: 0.30 },
   { upTo: Infinity, rate: 0.35 },
 ];
 
