@@ -57,9 +57,7 @@ export function LoginScreen() {
       {/* Left panel */}
       <div className="relative hidden w-1/2 flex-col justify-between overflow-hidden bg-gradient-to-br from-[var(--color-navy)] to-[var(--color-accent)] p-12 text-white lg:flex">
         <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-[12px] bg-white text-[17px] font-bold text-[var(--color-navy)]">
-            TH
-          </div>
+          <img src="/logo.png" alt="Tiến Huy" className="h-12 w-12 rounded-[12px] object-cover" />
           <div className="text-[15px] font-semibold">CÔNG TY TNHH CƠ KHÍ KHUÔN MẪU TIẾN HUY</div>
         </div>
 
@@ -97,9 +95,7 @@ export function LoginScreen() {
       <div className="flex w-full flex-col items-center justify-center bg-white p-8 lg:w-1/2">
         <div className="w-full max-w-sm">
           <div className="mb-8 lg:hidden">
-            <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-[12px] bg-[var(--color-navy)] text-[15px] font-bold text-white">
-              TH
-            </div>
+            <img src="/logo.png" alt="Tiến Huy" className="mb-2 h-11 w-11 rounded-[12px] object-cover" />
           </div>
 
           <h2 className="text-[22px] font-semibold text-[var(--color-text-primary)]">Đăng nhập</h2>
