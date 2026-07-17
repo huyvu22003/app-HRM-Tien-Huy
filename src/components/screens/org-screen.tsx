@@ -1,28 +1,66 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ChevronRight, ChevronDown, Users } from "lucide-react";
-import { employees, type Employee } from "@/lib/data/employees";
-import { BLOCKS } from "@/lib/data/departments";
+import { useCallback, useMemo, useState } from "react";
+import { ChevronRight, ChevronDown, Users, Loader2 } from "lucide-react";
+import { fetchDepartments, fetchEmployees, type ApiDepartment, type ApiEmployee } from "@/lib/api";
+import { useQuery } from "@/lib/hooks";
 import { getInitials, cn } from "@/lib/utils";
 
+interface DeptEntry {
+  dept: string;
+  deptId: number;
+  staff: ApiEmployee[];
+}
+
+interface BlockEntry {
+  block: string;
+  departments: DeptEntry[];
+}
+
 export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: string) => void }) {
-  const structure = useMemo(() => {
-    return BLOCKS.map((b) => ({
-      block: b.name,
-      departments: b.depts.map((dept) => ({
-        dept,
-        staff: employees.filter((e: Employee) => e.department === dept),
-      })),
+  const deptFetcher = useCallback(() => fetchDepartments(), []);
+  const empFetcher = useCallback(() => fetchEmployees({ pageSize: 200 }), []);
+
+  const { data: deptData, isLoading: deptLoading } = useQuery(deptFetcher);
+  const { data: empData, isLoading: empLoading } = useQuery(empFetcher);
+
+  const isLoading = deptLoading || empLoading;
+
+  const structure = useMemo<BlockEntry[]>(() => {
+    if (!deptData?.data) return [];
+    const allEmployees = empData?.data ?? [];
+
+    const blockMap = new Map<string, DeptEntry[]>();
+    for (const d of deptData.data) {
+      const blockName = d.block || "Khác";
+      if (!blockMap.has(blockName)) blockMap.set(blockName, []);
+      blockMap.get(blockName)!.push({
+        dept: d.name,
+        deptId: d.id,
+        staff: allEmployees.filter((e: ApiEmployee) => e.department_name === d.name),
+      });
+    }
+
+    return Array.from(blockMap.entries()).map(([block, departments]) => ({
+      block,
+      departments,
     }));
-  }, []);
+  }, [deptData, empData]);
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [activeDept, setActiveDept] = useState<{ block: string; dept: string; staff: Employee[] } | null>(
-    structure[0]?.departments[0]
-      ? { block: structure[0].block, dept: structure[0].departments[0].dept, staff: structure[0].departments[0].staff }
-      : null
-  );
+  const [activeDept, setActiveDept] = useState<{ block: string; dept: string; staff: ApiEmployee[] } | null>(null);
+
+  const firstDept = structure[0]?.departments[0];
+  const selected = activeDept ?? (firstDept ? { block: structure[0].block, dept: firstDept.dept, staff: firstDept.staff } : null);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-[var(--color-text-muted)]">
+        <Loader2 size={20} className="animate-spin" />
+        <span className="ml-2 text-[13px]">Đang tải cơ cấu tổ chức...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
@@ -52,7 +90,7 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
                         onClick={() => setActiveDept({ block: b.block, dept: d.dept, staff: d.staff })}
                         className={cn(
                           "flex items-center justify-between rounded-[8px] px-2 py-1.5 text-left text-[12.5px]",
-                          activeDept?.dept === d.dept
+                          selected?.dept === d.dept
                             ? "bg-[var(--color-accent)] text-white"
                             : "text-[var(--color-text-muted)] hover:bg-[var(--color-page-bg)]"
                         )}
@@ -70,20 +108,20 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
       </div>
 
       <div className="rounded-[14px] border border-[var(--color-border)] bg-white p-[18px]">
-        {activeDept ? (
+        {selected ? (
           <>
             <div className="mb-1 flex items-center gap-2 text-[15px] font-semibold text-[var(--color-text-primary)]">
               <Users size={17} className="text-[var(--color-accent)]" />
-              {activeDept.dept}
+              {selected.dept}
             </div>
             <div className="mb-4 text-[12.5px] text-[var(--color-text-light)]">
-              {activeDept.block} · {activeDept.staff.length} nhân sự
+              {selected.block} · {selected.staff.length} nhân sự
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              {activeDept.staff.map((s) => (
+              {selected.staff.map((s) => (
                 <button
-                  key={s.code}
-                  onClick={() => onNavigate("employee-detail", s.code)}
+                  key={s.id}
+                  onClick={() => onNavigate("employee-detail", String(s.id))}
                   className="flex items-center gap-2.5 rounded-[10px] border border-[var(--color-border-light)] p-2.5 text-left hover:border-[var(--color-accent)]"
                 >
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-accent)] text-[11px] font-semibold text-white">

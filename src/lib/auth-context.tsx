@@ -9,85 +9,123 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { ACCOUNTS, type Account, type Role } from "@/lib/data/accounts";
+import type { Role } from "@/lib/data/accounts";
 import { ROLE_META, type RoleMeta } from "@/lib/data/config";
+import {
+  apiLogin,
+  apiLogout,
+  apiMe,
+  getToken,
+  clearToken,
+  type ApiUser,
+} from "@/lib/api";
 
-const STORAGE_KEY = "hrm_tien_huy_auth";
+const FALLBACK_KEY = "hrm_tien_huy_user";
 
-interface AuthState {
-  user: Account | null;
+export interface AuthUser {
+  id: number;
+  employeeId: number | null;
+  phone: string;
+  name: string;
+  role: Role;
+  department: string;
+  code: string;
+  email: string;
 }
 
 interface AuthContextValue {
-  user: Account | null;
+  user: AuthUser | null;
   role: Role | null;
   roleMeta: RoleMeta | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (phone: string, password: string) => { success: boolean; message?: string };
+  login: (phone: string, password: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+function apiUserToAuthUser(u: ApiUser): AuthUser {
+  return {
+    id: u.id,
+    employeeId: u.employee_id,
+    phone: u.phone,
+    name: u.name || u.phone,
+    role: u.role as Role,
+    department: "",
+    code: "",
+    email: "",
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AuthState>({ user: null });
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as AuthState;
-        if (parsed?.user?.phone && ACCOUNTS[parsed.user.phone]) {
-          setState({ user: ACCOUNTS[parsed.user.phone] });
-        }
-      }
-    } catch {
-      // ignore malformed storage
-    } finally {
+    const token = getToken();
+    if (!token) {
       setIsLoading(false);
+      return;
     }
+
+    apiMe()
+      .then((res) => {
+        setUser(apiUserToAuthUser(res.user));
+      })
+      .catch(() => {
+        clearToken();
+        try {
+          const cached = window.localStorage.getItem(FALLBACK_KEY);
+          if (cached) {
+            setUser(JSON.parse(cached));
+          }
+        } catch {
+          // ignore
+        }
+      })
+      .finally(() => setIsLoading(false));
   }, []);
 
-  const login = useCallback((phone: string, password: string) => {
-    const account = ACCOUNTS[phone];
-    if (!account) {
-      return { success: false, message: "Số điện thoại không tồn tại." };
-    }
-    if (account.password !== password) {
-      return { success: false, message: "Mật khẩu không chính xác." };
-    }
-    setState({ user: account });
+  const login = useCallback(async (phone: string, password: string) => {
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ user: account }));
-    } catch {
-      // ignore storage failures (e.g. private mode)
+      const res = await apiLogin(phone, password);
+      const authUser = apiUserToAuthUser(res.user);
+      setUser(authUser);
+      try {
+        window.localStorage.setItem(FALLBACK_KEY, JSON.stringify(authUser));
+      } catch {
+        // ignore
+      }
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Đăng nhập thất bại.";
+      return { success: false, message: msg };
     }
-    return { success: true };
   }, []);
 
   const logout = useCallback(() => {
-    setState({ user: null });
+    apiLogout().catch(() => {});
+    setUser(null);
     try {
-      window.localStorage.removeItem(STORAGE_KEY);
+      window.localStorage.removeItem(FALLBACK_KEY);
     } catch {
-      // ignore storage failures
+      // ignore
     }
   }, []);
 
   const value = useMemo<AuthContextValue>(() => {
-    const role = state.user?.role ?? null;
+    const role = user?.role ?? null;
     return {
-      user: state.user,
+      user,
       role,
       roleMeta: role ? ROLE_META[role] : null,
-      isAuthenticated: !!state.user,
+      isAuthenticated: !!user,
       isLoading,
       login,
       logout,
     };
-  }, [state.user, isLoading, login, logout]);
+  }, [user, isLoading, login, logout]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

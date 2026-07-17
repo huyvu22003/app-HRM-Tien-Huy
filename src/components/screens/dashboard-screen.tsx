@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   Download,
   Upload,
@@ -12,9 +12,10 @@ import {
   Clock,
   TrendingUp,
   AlertTriangle,
+  Loader2,
 } from "lucide-react";
-import { employees } from "@/lib/data/employees";
-import { hashName } from "@/lib/utils";
+import { fetchEmployees, fetchKpi, fetchDepartments, type ApiEmployee, type ApiKpi, type ApiDepartment } from "@/lib/api";
+import { useQuery } from "@/lib/hooks";
 
 const STEPS = [
   { key: "attendance", label: "Chấm công" },
@@ -22,6 +23,11 @@ const STEPS = [
   { key: "kpi", label: "KPI" },
   { key: "salary", label: "Lương" },
 ];
+
+function getCurrentPeriod() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
 
 export function DashboardScreen() {
   const [locked, setLocked] = useState<Record<string, boolean>>({
@@ -31,36 +37,57 @@ export function DashboardScreen() {
     salary: false,
   });
 
-  const total = employees.length;
-  const working = employees.filter((e) => e.status === "Đang làm việc").length;
+  const period = getCurrentPeriod();
+
+  const empFetcher = useCallback(() => fetchEmployees({ pageSize: 200 }), []);
+  const kpiFetcher = useCallback(() => fetchKpi(period), [period]);
+  const deptFetcher = useCallback(() => fetchDepartments(), []);
+
+  const { data: empData, isLoading: empLoading } = useQuery(empFetcher);
+  const { data: kpiData } = useQuery(kpiFetcher);
+  const { data: deptData } = useQuery(deptFetcher);
+
+  const allEmployees = empData?.data ?? [];
+  const total = empData?.total ?? 0;
+  const working = allEmployees.filter((e: ApiEmployee) => e.status === "Đang làm việc").length;
   const onLeave = Math.max(0, total - working);
 
   const deptStats = useMemo(() => {
-    const map = new Map<string, number>();
-    employees.forEach((e) => {
-      const d = e.department;
-      map.set(d, (map.get(d) ?? 0) + 1);
-    });
-    return Array.from(map.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 8);
-  }, []);
+    if (!deptData?.data) return [];
+    return deptData.data
+      .filter((d: ApiDepartment) => d.employee_count > 0)
+      .sort((a: ApiDepartment, b: ApiDepartment) => b.employee_count - a.employee_count)
+      .slice(0, 8)
+      .map((d: ApiDepartment) => [d.name, d.employee_count] as [string, number]);
+  }, [deptData]);
 
-  const topKpi = useMemo(() => {
-    return [...employees]
-      .map((e) => ({ ...e, score: 70 + (hashName(e.name) % 30) }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 5);
-  }, []);
+  const kpiSorted = useMemo(() => {
+    if (!kpiData?.data) return [];
+    return [...kpiData.data].sort((a: ApiKpi, b: ApiKpi) => b.score - a.score);
+  }, [kpiData]);
 
+  const topKpi = kpiSorted.slice(0, 5);
   const watchList = useMemo(() => {
-    return [...employees]
-      .map((e) => ({ ...e, score: 40 + (hashName(e.name + "w") % 25) }))
-      .sort((a, b) => a.score - b.score)
-      .slice(0, 5);
-  }, []);
+    if (!kpiData?.data) return [];
+    return [...kpiData.data].sort((a: ApiKpi, b: ApiKpi) => a.score - b.score).slice(0, 5);
+  }, [kpiData]);
 
-  const maxDept = Math.max(...deptStats.map(([, c]) => c), 1);
+  const avgKpi = useMemo(() => {
+    if (!kpiData?.data?.length) return "0";
+    const sum = kpiData.data.reduce((a: number, k: ApiKpi) => a + k.score, 0);
+    return (sum / kpiData.data.length).toFixed(1);
+  }, [kpiData]);
+
+  const maxDept = Math.max(...deptStats.map(([, c]: [string, number]) => c), 1);
+
+  if (empLoading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-[var(--color-text-muted)]">
+        <Loader2 size={20} className="animate-spin" />
+        <span className="ml-2 text-[13px]">Đang tải dữ liệu...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -73,7 +100,7 @@ export function DashboardScreen() {
             <div className="text-[14px] font-semibold text-[var(--color-text-primary)]">
               CÔNG TY TNHH CƠ KHÍ KHUÔN MẪU TIẾN HUY
             </div>
-            <div className="text-[12px] text-[var(--color-text-light)]">Kỳ dữ liệu: Tháng 06/2026</div>
+            <div className="text-[12px] text-[var(--color-text-light)]">Kỳ dữ liệu: Tháng {period.split("-")[1]}/{period.split("-")[0]}</div>
           </div>
         </div>
         <div className="flex gap-2">
@@ -88,7 +115,7 @@ export function DashboardScreen() {
 
       <div className="rounded-[14px] border border-[var(--color-border)] bg-white p-[18px]">
         <div className="mb-3 flex items-center justify-between">
-          <div className="text-[13px] font-semibold text-[var(--color-text-primary)]">Chốt kỳ 06/2026</div>
+          <div className="text-[13px] font-semibold text-[var(--color-text-primary)]">Chốt kỳ {period.split("-")[1]}/{period.split("-")[0]}</div>
           <span className="rounded-[20px] bg-[var(--color-warning-bg)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--color-warning)]">
             Đang xử lý
           </span>
@@ -127,7 +154,7 @@ export function DashboardScreen() {
           { label: "Đang làm", value: working, icon: UserCheck, color: "text-[var(--color-success)]" },
           { label: "Nghỉ phép", value: onLeave, icon: UserMinus, color: "text-[var(--color-warning)]" },
           { label: "Đi trễ hôm nay", value: 4, icon: Clock, color: "text-[var(--color-danger)]" },
-          { label: "KPI TB tháng", value: "82.4", icon: TrendingUp, color: "text-[var(--color-accent)]" },
+          { label: "KPI TB tháng", value: avgKpi, icon: TrendingUp, color: "text-[var(--color-accent)]" },
           { label: "Cảnh báo", value: 2, icon: AlertTriangle, color: "text-[var(--color-danger)]" },
         ].map((s) => (
           <div key={s.label} className="rounded-[14px] border border-[var(--color-border)] bg-white p-[18px]">
@@ -144,7 +171,7 @@ export function DashboardScreen() {
         <div className="rounded-[14px] border border-[var(--color-border)] bg-white p-[18px]">
           <div className="mb-3 text-[13px] font-semibold text-[var(--color-text-primary)]">Nhân sự theo bộ phận</div>
           <div className="flex flex-col gap-2">
-            {deptStats.map(([name, count]) => (
+            {deptStats.map(([name, count]: [string, number]) => (
               <div key={name} className="flex items-center gap-2">
                 <div className="w-28 truncate text-[11.5px] text-[var(--color-text-muted)]">{name}</div>
                 <div className="h-2 flex-1 rounded-full bg-[var(--color-page-bg)]">
@@ -188,13 +215,13 @@ export function DashboardScreen() {
         <div className="rounded-[14px] border border-[var(--color-border)] bg-white p-[18px]">
           <div className="mb-3 text-[13px] font-semibold text-[var(--color-text-primary)]">Top KPI xuất sắc</div>
           <div className="flex flex-col">
-            {topKpi.map((e, i) => (
+            {topKpi.map((e: ApiKpi, i: number) => (
               <div
-                key={e.code ?? i}
+                key={e.id}
                 className="flex items-center justify-between border-b border-[var(--color-border-light)] py-2 last:border-0"
               >
                 <div className="text-[12.5px] text-[var(--color-text-secondary)]">
-                  {i + 1}. {e.name}
+                  {i + 1}. {e.employee_name}
                 </div>
                 <div className="font-[family-name:var(--font-mono)] text-[12.5px] font-semibold text-[var(--color-success)]">
                   {e.score}
@@ -207,12 +234,12 @@ export function DashboardScreen() {
         <div className="rounded-[14px] border border-[var(--color-border)] bg-white p-[18px]">
           <div className="mb-3 text-[13px] font-semibold text-[var(--color-text-primary)]">Watch list</div>
           <div className="flex flex-col">
-            {watchList.map((e, i) => (
+            {watchList.map((e: ApiKpi) => (
               <div
-                key={e.code ?? i}
+                key={e.id}
                 className="flex items-center justify-between border-b border-[var(--color-border-light)] py-2 last:border-0"
               >
-                <div className="text-[12.5px] text-[var(--color-text-secondary)]">{e.name}</div>
+                <div className="text-[12.5px] text-[var(--color-text-secondary)]">{e.employee_name}</div>
                 <div className="font-[family-name:var(--font-mono)] text-[12.5px] font-semibold text-[var(--color-danger)]">
                   {e.score}
                 </div>
