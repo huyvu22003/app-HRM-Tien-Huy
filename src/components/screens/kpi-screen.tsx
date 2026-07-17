@@ -111,23 +111,6 @@ export function KpiScreen() {
     refetch();
   }, [doSign, refetch]);
 
-  function SubInput({ label, max, value, onChange }: { label: string; max: number; value: number; onChange: (v: number) => void }) {
-    return (
-      <div className="flex items-center gap-1.5">
-        <span className="w-7 text-[11px] text-[var(--color-text-muted)]">{label}</span>
-        <input
-          type="number"
-          min={0}
-          max={max}
-          value={value}
-          onChange={(e) => onChange(Math.min(max, Math.max(0, Number(e.target.value))))}
-          className="w-14 rounded-[6px] border border-[var(--color-border)] px-1.5 py-0.5 text-center text-[12px] font-[family-name:var(--font-mono)]"
-        />
-        <span className="text-[10px] text-[var(--color-text-lighter)]">/{max}</span>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-3 rounded-[14px] border border-[var(--color-border)] bg-white p-[14px]">

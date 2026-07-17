@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { ArrowLeft, Pencil, Save, X, Loader2 } from "lucide-react";
-import { fetchEmployee, type ApiEmployee, type ApiCompensation, type ApiInsurance } from "@/lib/api";
+import { fetchEmployee } from "@/lib/api";
 import { useQuery } from "@/lib/hooks";
 import { getInitials, cn, formatDate } from "@/lib/utils";
 

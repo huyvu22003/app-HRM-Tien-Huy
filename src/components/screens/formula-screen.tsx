@@ -8,6 +8,13 @@ import { FX_ORDER, FX_SRC, FX_LABEL, DEFAULT_PIT, DEFAULT_CFG } from "@/lib/data
 const STD_DAYS = 26;
 const HOURS_PER_DAY = 8;
 
+const SAMPLE = {
+  base: 11_200_000, responsibility: 3_830_000, allowance: 520_000,
+  gasAllowance: 200_000, attendanceBonus: 450_000,
+  stdDays: STD_DAYS, actualDays: 26, gasDays: 26, leaveDays: 0,
+  otWeekday: 13, otSunday: 0, dependents: 2,
+};
+
 function computeProgressivePIT(taxable: number, brackets: { upTo: number; rate: number }[]): number {
   if (taxable <= 0) return 0;
   let tax = 0;
@@ -28,36 +35,29 @@ export function FormulaScreen({ onNavigate }: { onNavigate: (screen: string) => 
     DEFAULT_PIT.map((b) => ({ upTo: b.upTo, rate: Math.round(b.rate * 100) }))
   );
 
-  const sample = {
-    base: 11_200_000, responsibility: 3_830_000, allowance: 520_000,
-    gasAllowance: 200_000, attendanceBonus: 450_000,
-    stdDays: STD_DAYS, actualDays: 26, gasDays: 26, leaveDays: 0,
-    otWeekday: 13, otSunday: 0, dependents: 2,
-  };
-
   const preview = useMemo(() => {
-    const dailyBase = sample.base / STD_DAYS;
+    const dailyBase = SAMPLE.base / STD_DAYS;
     const hourlyBase = dailyBase / HOURS_PER_DAY;
 
-    const workSalary = Math.round(dailyBase * sample.actualDays);
-    const respActual = Math.round((sample.responsibility / STD_DAYS) * sample.actualDays);
-    const allowActual = Math.round((sample.allowance / STD_DAYS) * sample.actualDays);
-    const otWeekday = Math.round(hourlyBase * sample.otWeekday * 1.5);
+    const workSalary = Math.round(dailyBase * SAMPLE.actualDays);
+    const respActual = Math.round((SAMPLE.responsibility / STD_DAYS) * SAMPLE.actualDays);
+    const allowActual = Math.round((SAMPLE.allowance / STD_DAYS) * SAMPLE.actualDays);
+    const otWeekday = Math.round(hourlyBase * SAMPLE.otWeekday * 1.5);
     const otWeekdayExempt = Math.round(otWeekday / 3);
-    const otSunday = Math.round(hourlyBase * sample.otSunday * 2.0);
+    const otSunday = Math.round(hourlyBase * SAMPLE.otSunday * 2.0);
     const otSundayExempt = Math.round(otSunday / 2);
-    const gasActual = Math.round((sample.gasAllowance / STD_DAYS) * sample.gasDays);
-    const leavePay = sample.leaveDays > 0 ? Math.round(dailyBase * sample.leaveDays) : 0;
+    const gasActual = Math.round((SAMPLE.gasAllowance / STD_DAYS) * SAMPLE.gasDays);
+    const leavePay = SAMPLE.leaveDays > 0 ? Math.round(dailyBase * SAMPLE.leaveDays) : 0;
 
-    const totalIncome = workSalary + respActual + allowActual + sample.attendanceBonus
+    const totalIncome = workSalary + respActual + allowActual + SAMPLE.attendanceBonus
       + otWeekday + otWeekdayExempt + otSunday + otSundayExempt + gasActual + leavePay;
 
     const taxableIncome = totalIncome - otWeekdayExempt - otSundayExempt;
 
     const { bhxhEmployeeRate, bhytEmployeeRate, bhtnEmployeeRate } = DEFAULT_CFG.insurance;
-    const ins = Math.round(sample.base * (bhxhEmployeeRate + bhytEmployeeRate + bhtnEmployeeRate));
+    const ins = Math.round(SAMPLE.base * (bhxhEmployeeRate + bhytEmployeeRate + bhtnEmployeeRate));
 
-    const taxable = taxableIncome - ins - DEFAULT_CFG.tax.personalDeduction - sample.dependents * DEFAULT_CFG.tax.dependentDeduction;
+    const taxable = taxableIncome - ins - DEFAULT_CFG.tax.personalDeduction - SAMPLE.dependents * DEFAULT_CFG.tax.dependentDeduction;
     const tax = pitEnabled ? computeProgressivePIT(taxable, brackets) : 0;
     const net = totalIncome - ins - 50000 - tax;
 
@@ -157,7 +157,7 @@ export function FormulaScreen({ onNavigate }: { onNavigate: (screen: string) => 
           Xem trước — Hoàng Công Phúc (Cắt Laser)
         </div>
         <div className="mb-3 text-[11px] text-[var(--color-text-lighter)]">
-          Lương CB {formatMoney(sample.base)} · TN {formatMoney(sample.responsibility)} · Công {sample.actualDays}/{sample.stdDays} · OT {sample.otWeekday}h ngày thường · {sample.dependents} NPT
+          Lương CB {formatMoney(SAMPLE.base)} · TN {formatMoney(SAMPLE.responsibility)} · Công {SAMPLE.actualDays}/{SAMPLE.stdDays} · OT {SAMPLE.otWeekday}h ngày thường · {SAMPLE.dependents} NPT
         </div>
         <div className="flex flex-wrap items-center gap-6 text-[12.5px]">
           <div>

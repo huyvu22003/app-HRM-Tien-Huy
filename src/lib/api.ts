@@ -1,5 +1,7 @@
 "use client";
 
+import { mockResolve, isDemoMode, enableDemoMode } from "@/lib/mock-api";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api";
 const TOKEN_KEY = "hrm_tien_huy_token";
 
@@ -41,6 +43,11 @@ async function request<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
+  if (isDemoMode()) {
+    const mock = mockResolve(path);
+    if (mock !== null) return mock as T;
+  }
+
   const token = getToken();
   const headers: Record<string, string> = {
     ...(options.headers as Record<string, string>),
@@ -58,23 +65,32 @@ async function request<T>(
     headers["Content-Type"] = "application/json";
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  });
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers,
+    });
 
-  if (!res.ok) {
-    let msg = res.statusText;
-    try {
-      const body = await res.json();
-      msg = body.error || body.message || msg;
-    } catch {
-      // use statusText
+    if (!res.ok) {
+      let msg = res.statusText;
+      try {
+        const body = await res.json();
+        msg = body.error || body.message || msg;
+      } catch {
+        // use statusText
+      }
+      throw new ApiError(res.status, msg);
     }
-    throw new ApiError(res.status, msg);
-  }
 
-  return res.json();
+    return res.json();
+  } catch (err) {
+    const mock = mockResolve(path);
+    if (mock !== null) {
+      enableDemoMode();
+      return mock as T;
+    }
+    throw err;
+  }
 }
 
 export const api = {
@@ -108,12 +124,33 @@ export interface ApiUser {
 }
 
 export async function apiLogin(phone: string, password: string) {
-  const res = await api.post<{ token: string; user: ApiUser }>("/auth/login", {
-    phone,
-    password,
-  });
-  setToken(res.token);
-  return res;
+  try {
+    const res = await api.post<{ token: string; user: ApiUser }>("/auth/login", {
+      phone,
+      password,
+    });
+    setToken(res.token);
+    return res;
+  } catch {
+    const { findAccountByPhone } = await import("@/lib/data/accounts");
+    const acc = findAccountByPhone(phone);
+    if (acc && acc.password === password) {
+      enableDemoMode();
+      const token = "demo-" + Date.now();
+      setToken(token);
+      return {
+        token,
+        user: {
+          id: 1,
+          employee_id: 1,
+          phone: acc.phone,
+          role: acc.role as ApiUser["role"],
+          name: acc.name,
+        },
+      };
+    }
+    throw new ApiError(401, "Số điện thoại hoặc mật khẩu không đúng");
+  }
 }
 
 export async function apiLogout() {

@@ -42,6 +42,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
   const totalPages = empData?.totalPages ?? 1;
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset page on filter change
     setPage(1);
   }, [search, dept]);
 

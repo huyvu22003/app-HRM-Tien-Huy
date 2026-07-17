@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { ChevronRight, ChevronDown, Users, Loader2 } from "lucide-react";
-import { fetchDepartments, fetchEmployees, type ApiDepartment, type ApiEmployee } from "@/lib/api";
+import { fetchDepartments, fetchEmployees, type ApiEmployee } from "@/lib/api";
 import { useQuery } from "@/lib/hooks";
 import { getInitials, cn } from "@/lib/utils";
 
