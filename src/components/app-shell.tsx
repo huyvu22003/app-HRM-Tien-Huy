@@ -145,9 +145,7 @@ export function AppShell({
       {/* Sidebar */}
       <aside className="flex w-[246px] shrink-0 flex-col bg-[var(--color-navy)] text-white">
         <div className="flex items-center gap-3 px-5 pt-6 pb-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-white text-[15px] font-bold text-[var(--color-navy)]">
-            TH
-          </div>
+          <img src="/logo.png" alt="Tiến Huy" className="h-10 w-10 rounded-[12px] object-cover" />
           <div className="leading-tight">
             <div className="text-[13px] font-semibold text-white">Tiến Huy</div>
             <div className="text-[9px] tracking-wide text-[var(--color-sidebar-text)]">

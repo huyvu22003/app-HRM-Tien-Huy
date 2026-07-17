@@ -93,9 +93,7 @@ export function DashboardScreen() {
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between rounded-[14px] border border-[var(--color-border)] bg-white p-[18px]">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-[var(--color-navy)] text-[13px] font-bold text-white">
-            TH
-          </div>
+          <img src="/logo.png" alt="Tiến Huy" className="h-11 w-11 rounded-[12px] object-cover" />
           <div>
             <div className="text-[14px] font-semibold text-[var(--color-text-primary)]">
               CÔNG TY TNHH CƠ KHÍ KHUÔN MẪU TIẾN HUY
