@@ -14,14 +14,20 @@ import {
   getLeaveBalance,
 } from "./handlers/leave";
 import { getSalary } from "./handlers/salary";
-import { getKpi } from "./handlers/kpi";
+import { getKpi, createKpi, updateKpi, signKpi } from "./handlers/kpi";
+import {
+  listRewards,
+  createReward,
+  updateReward,
+  listImprovementPlans,
+  createImprovementPlan,
+} from "./handlers/recognition";
 import { getConfig, updateConfig } from "./handlers/config";
 import { getPermissions, updatePermissions } from "./handlers/permissions";
 import { uploadFile, downloadFile } from "./handlers/files";
 
 export type { Env };
 
-// Routes that do not require a valid JWT.
 const PUBLIC_ROUTES: Array<{ method: string; pathname: string }> = [
   { method: "POST", pathname: "/api/auth/login" },
 ];
@@ -48,7 +54,6 @@ export default {
     };
 
     try {
-      // --- Auth middleware (skip for public routes) ---
       let userId = 0;
       if (!isPublicRoute(method, pathname)) {
         if (pathname.startsWith("/api/")) {
@@ -107,6 +112,31 @@ export default {
 
       // --- KPI ---
       if (method === "GET" && pathname === "/api/kpi") return withCors(await getKpi(request, env));
+      if (method === "POST" && pathname === "/api/kpi") return withCors(await createKpi(request, env));
+      if (method === "PUT" && pathname.startsWith("/api/kpi/")) {
+        const id = parseIdFromPath(pathname, "/api/kpi/");
+        if (!id) return withCors(error("Thiếu id KPI", 400));
+        return withCors(await updateKpi(request, env, id));
+      }
+      if (method === "POST" && pathname.startsWith("/api/kpi/") && pathname.endsWith("/sign")) {
+        const rest = pathname.slice("/api/kpi/".length);
+        const id = rest.split("/")[0];
+        if (!id) return withCors(error("Thiếu id KPI", 400));
+        return withCors(await signKpi(request, env, id));
+      }
+
+      // --- Recognition / Rewards ---
+      if (method === "GET" && pathname === "/api/rewards") return withCors(await listRewards(request, env));
+      if (method === "POST" && pathname === "/api/rewards") return withCors(await createReward(request, env, userId));
+      if (method === "PUT" && pathname.startsWith("/api/rewards/")) {
+        const id = parseIdFromPath(pathname, "/api/rewards/");
+        if (!id) return withCors(error("Thiếu id khen thưởng", 400));
+        return withCors(await updateReward(request, env, id, userId));
+      }
+
+      // --- Improvement Plans ---
+      if (method === "GET" && pathname === "/api/improvement-plans") return withCors(await listImprovementPlans(request, env));
+      if (method === "POST" && pathname === "/api/improvement-plans") return withCors(await createImprovementPlan(request, env));
 
       // --- Config ---
       if (method === "GET" && pathname === "/api/config") return withCors(await getConfig(request, env));
