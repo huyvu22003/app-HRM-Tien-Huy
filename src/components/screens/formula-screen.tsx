@@ -1,9 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { ArrowRight } from "lucide-react";
 import { formatMoney, cn } from "@/lib/utils";
-import { FX_ORDER, FX_SRC, FX_LABEL, DEFAULT_PIT } from "@/lib/data/config";
+import { FX_ORDER, FX_SRC, FX_LABEL, DEFAULT_PIT, DEFAULT_CFG } from "@/lib/data/config";
+
+function computeProgressivePIT(taxable: number, brackets: { upTo: number; rate: number }[]): number {
+  if (taxable <= 0) return 0;
+  let tax = 0;
+  let prev = 0;
+  for (const b of brackets) {
+    const slice = Math.min(taxable, b.upTo) - prev;
+    if (slice <= 0) break;
+    tax += slice * (b.rate / 100);
+    prev = b.upTo;
+    if (taxable <= b.upTo) break;
+  }
+  return Math.round(tax);
+}
 
 export function FormulaScreen({ onNavigate }: { onNavigate: (screen: string) => void }) {
   const [pitEnabled, setPitEnabled] = useState(true);
@@ -11,13 +25,25 @@ export function FormulaScreen({ onNavigate }: { onNavigate: (screen: string) => 
     DEFAULT_PIT.map((b) => ({ upTo: b.upTo, rate: Math.round(b.rate * 100) }))
   );
 
-  // Sample employee preview computed with the same formula chain
-  const sample = { base: 8_000_000, allowance: 500_000, ot: 900_000 };
-  const gross = sample.base + sample.allowance + sample.ot;
-  const ins = Math.round(sample.base * 0.105);
-  const taxable = Math.max(0, gross - ins - 11_000_000);
-  const tax = pitEnabled ? Math.round(taxable * (brackets[0].rate / 100)) : 0;
-  const net = gross - ins - tax;
+  const sample = { base: 8_000_000, allowance: 500_000, stdDays: 26, actualDays: 24, otWeekday: 12, otSunday: 4 };
+
+  const preview = useMemo(() => {
+    const workSalary = Math.round(sample.base / sample.stdDays * sample.actualDays);
+    const hourlyRate = sample.base / (sample.stdDays * 8);
+    const otWeekday = Math.round(sample.otWeekday * hourlyRate * 1.5);
+    const otSunday = Math.round(sample.otSunday * hourlyRate * 2.0);
+    const otPay = otWeekday + otSunday;
+    const gross = workSalary + sample.allowance + otPay;
+
+    const { bhxhEmployeeRate, bhytEmployeeRate, bhtnEmployeeRate } = DEFAULT_CFG.insurance;
+    const ins = Math.round(sample.base * (bhxhEmployeeRate + bhytEmployeeRate + bhtnEmployeeRate));
+
+    const taxable = Math.max(0, gross - ins - DEFAULT_CFG.tax.personalDeduction);
+    const tax = pitEnabled ? computeProgressivePIT(taxable, brackets) : 0;
+    const net = gross - ins - tax;
+
+    return { workSalary, otPay, gross, ins, taxable, tax, net };
+  }, [brackets, pitEnabled]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -105,29 +131,37 @@ export function FormulaScreen({ onNavigate }: { onNavigate: (screen: string) => 
       </div>
 
       <div className="rounded-[14px] border border-[var(--color-border)] bg-white p-[18px]">
-        <div className="mb-3 text-[13px] font-semibold text-[var(--color-text-primary)]">
+        <div className="mb-1 text-[13px] font-semibold text-[var(--color-text-primary)]">
           Xem trước — nhân viên mẫu
+        </div>
+        <div className="mb-3 text-[11px] text-[var(--color-text-lighter)]">
+          Lương cơ bản {formatMoney(sample.base)} · Công {sample.actualDays}/{sample.stdDays} · OT {sample.otWeekday}h ngày thường + {sample.otSunday}h CN
         </div>
         <div className="flex flex-wrap items-center gap-6 text-[12.5px]">
           <div>
+            <span className="text-[var(--color-text-light)]">Lương công </span>
+            <span className="font-[family-name:var(--font-mono)] font-medium">{formatMoney(preview.workSalary)}</span>
+          </div>
+          <ArrowRight size={14} className="text-[var(--color-text-lighter)]" />
+          <div>
             <span className="text-[var(--color-text-light)]">Tổng gộp </span>
-            <span className="font-[family-name:var(--font-mono)] font-medium">{formatMoney(gross)}</span>
+            <span className="font-[family-name:var(--font-mono)] font-medium">{formatMoney(preview.gross)}</span>
           </div>
           <ArrowRight size={14} className="text-[var(--color-text-lighter)]" />
           <div>
             <span className="text-[var(--color-text-light)]">BHXH </span>
-            <span className="font-[family-name:var(--font-mono)] text-[var(--color-danger)]">-{formatMoney(ins)}</span>
+            <span className="font-[family-name:var(--font-mono)] text-[var(--color-danger)]">-{formatMoney(preview.ins)}</span>
           </div>
           <ArrowRight size={14} className="text-[var(--color-text-lighter)]" />
           <div>
             <span className="text-[var(--color-text-light)]">Thuế </span>
-            <span className="font-[family-name:var(--font-mono)] text-[var(--color-danger)]">-{formatMoney(tax)}</span>
+            <span className="font-[family-name:var(--font-mono)] text-[var(--color-danger)]">-{formatMoney(preview.tax)}</span>
           </div>
           <ArrowRight size={14} className="text-[var(--color-text-lighter)]" />
           <div>
             <span className="text-[var(--color-text-light)]">Thực nhận </span>
             <span className="font-[family-name:var(--font-mono)] font-semibold text-[var(--color-success)]">
-              {formatMoney(net)}
+              {formatMoney(preview.net)}
             </span>
           </div>
         </div>

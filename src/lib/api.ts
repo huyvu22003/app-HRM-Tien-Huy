@@ -336,11 +336,22 @@ export interface ApiSalaryRow {
   employee_id: number;
   code: string;
   name: string;
+  department_id: number | null;
+  department_name: string | null;
   base_salary: number | null;
   allowance: number | null;
   dependents: number | null;
+  kpi_bonus: number | null;
+  hot_bonus: number | null;
+  advance: number | null;
+  std_days: number | null;
+  actual_days: number | null;
   overtime_hours: number | null;
+  ot_weekday_hours: number | null;
+  ot_sunday_hours: number | null;
   ins_salary_base: number | null;
+  kpi_score: number | null;
+  kpi_rank: string | null;
 }
 
 export function fetchSalary(period: string) {
@@ -356,9 +367,16 @@ export interface ApiKpi {
   employee_id: number;
   employee_name: string;
   employee_code: string;
+  department_name: string | null;
   period: string;
   score: number;
   rank: string | null;
+  bc: number;
+  ns: number;
+  cl: number;
+  dg: number;
+  note: string | null;
+  is_edited: number;
   signed_l1: number;
   signed_l2: number;
 }
@@ -367,6 +385,95 @@ export function fetchKpi(period: string) {
   return api.get<{ data: ApiKpi[]; period: string }>(
     `/kpi?period=${period}`,
   );
+}
+
+export function createKpi(data: {
+  employee_id: number;
+  period: string;
+  bc: number;
+  ns: number;
+  cl: number;
+  dg: number;
+  note?: string;
+}) {
+  return api.post<{ id: number; score: number; rank: string }>("/kpi", data);
+}
+
+export function updateKpi(id: number, data: { bc?: number; ns?: number; cl?: number; dg?: number; note?: string }) {
+  return api.put<{ success: boolean; score: number; rank: string }>(`/kpi/${id}`, data);
+}
+
+export function signKpi(id: number, level: 1 | 2) {
+  return api.post<{ success: boolean }>(`/kpi/${id}/sign`, { level });
+}
+
+// --- Rewards / Recognition ---
+
+export interface ApiReward {
+  id: number;
+  employee_id: number;
+  employee_name: string;
+  employee_code: string;
+  period: string;
+  type: "kpi_bonus" | "hot_bonus" | "recognition";
+  amount: number;
+  reason: string | null;
+  status: "pending" | "approved" | "rejected";
+  proposed_by: number | null;
+  proposed_by_name: string | null;
+  approved_by: number | null;
+  approved_by_name: string | null;
+  approved_at: string | null;
+  created_at: string;
+}
+
+export function fetchRewards(period?: string) {
+  const qs = period ? `?period=${period}` : "";
+  return api.get<{ data: ApiReward[] }>(`/rewards${qs}`);
+}
+
+export function createReward(data: {
+  employee_id: number;
+  period: string;
+  type: string;
+  amount?: number;
+  reason?: string;
+}) {
+  return api.post<{ id: number }>("/rewards", data);
+}
+
+export function updateReward(id: number, data: { action: "approve" | "reject" }) {
+  return api.put<{ success: boolean; status: string }>(`/rewards/${id}`, data);
+}
+
+// --- Improvement Plans ---
+
+export interface ApiImprovementPlan {
+  id: number;
+  employee_id: number;
+  employee_name: string;
+  employee_code: string;
+  period: string;
+  kpi_score: number;
+  step: "remind" | "training" | "commitment";
+  note: string | null;
+  status: "active" | "completed" | "cancelled";
+  created_at: string;
+}
+
+export function fetchImprovementPlans(period?: string) {
+  const qs = period ? `?period=${period}` : "";
+  return api.get<{ data: ApiImprovementPlan[] }>(`/improvement-plans${qs}`);
+}
+
+export function createImprovementPlan(data: {
+  employee_id: number;
+  period: string;
+  kpi_score: number;
+  step: string;
+  note?: string;
+}) {
+  return api.post<{ id: number }>("/improvement-plans", data);
 }
 
 // --- Config ---
