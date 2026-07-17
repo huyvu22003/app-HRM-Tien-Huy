@@ -212,6 +212,49 @@ function mockRewards(period: string) {
   ];
 }
 
+function mockDailyReports(date: string) {
+  const workers = EMPLOYEES.filter(
+    (e) => e.status === "Đang làm việc" && e.position !== "Tổ trưởng" && e.position !== "Xưởng trưởng",
+  );
+  const subset = workers.slice(0, 12);
+  return subset.map((e, i) => {
+    const qty = 20 + Math.floor(Math.random() * 40);
+    const ng = Math.random() > 0.7 ? Math.floor(Math.random() * 3) + 1 : 0;
+    const statuses: Array<"pending" | "verified" | "rejected"> = ["pending", "verified", "verified", "verified", "pending"];
+    const status = statuses[i % statuses.length];
+    return {
+      id: i + 1,
+      employee_id: i + 1,
+      employee_name: e.name,
+      employee_code: e.code,
+      department_name: e.department,
+      date,
+      content: [
+        "Gia công chi tiết khuôn mẫu theo bản vẽ KH-2026-047",
+        "Phay CNC lô sản phẩm P-1205, hoàn thành đúng tiến độ",
+        "Tiện chi tiết trục chính, đạt dung sai yêu cầu",
+        "Cắt dây 15 chi tiết theo đơn hàng DH-0620",
+        "Xử lý bề mặt lô hàng xuất 30/07",
+        "Hàn khung thép + kiểm tra mối hàn",
+        "Dập 200 chi tiết bu-lông M10",
+        "QC kiểm tra lô hàng XK-07, đánh dấu 2 lỗi nhỏ",
+        "Bảo trì máy CNC-04, thay dao phay",
+        "Cắt laser tấm thép 5mm theo file DXF",
+        "Tiện CNC bạc đạn Ø25, đạt Ra 0.8",
+        "Nhuộm đen lô chi tiết 150 cái",
+      ][i % 12],
+      quantity: qty,
+      ng_count: ng,
+      note: ng > 0 ? "Lỗi kích thước ngoài dung sai" : null,
+      status,
+      submitted_at: `${date}T${String(7 + Math.floor(i / 3)).padStart(2, "0")}:${String(15 + (i * 7) % 45).padStart(2, "0")}:00Z`,
+      verified_by: status !== "pending" ? 1 : null,
+      verified_by_name: status === "verified" ? "Nguyễn Văn Thiện" : status === "rejected" ? "Nguyễn Văn Thiện" : null,
+      verified_at: status !== "pending" ? `${date}T17:00:00Z` : null,
+    };
+  });
+}
+
 function mockImprovementPlans(period: string) {
   return [
     {
@@ -375,6 +418,17 @@ const MOCK_ROUTES: MockRoute[] = [
       const period = params.get("period") || "2026-06";
       return { data: mockImprovementPlans(period) };
     },
+  },
+  {
+    match: /^\/reports$/,
+    handler: (_path, params) => {
+      const date = params.get("date") || "2026-07-15";
+      return { data: mockDailyReports(date) };
+    },
+  },
+  {
+    match: /^\/reports\/\d+$/,
+    handler: () => ({ success: true, status: "verified" }),
   },
   {
     match: /^\/config$/,

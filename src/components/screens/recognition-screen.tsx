@@ -88,23 +88,31 @@ export function RecognitionScreen() {
 
   const handleCreate = useCallback(async () => {
     if (!formEmployee) return;
-    await doCreate({
-      employee_id: formEmployee,
-      period,
-      type: formType,
-      amount: Number(formAmount) || 0,
-      reason: formReason || undefined,
-    });
-    setShowCreate(false);
-    setFormEmployee(0);
-    setFormAmount("");
-    setFormReason("");
-    refetchRewards();
+    try {
+      await doCreate({
+        employee_id: formEmployee,
+        period,
+        type: formType,
+        amount: Number(formAmount) || 0,
+        reason: formReason || undefined,
+      });
+      setShowCreate(false);
+      setFormEmployee(0);
+      setFormAmount("");
+      setFormReason("");
+      refetchRewards();
+    } catch {
+      // error shown by mutation state
+    }
   }, [formEmployee, period, formType, formAmount, formReason, doCreate, refetchRewards]);
 
   const handleAction = useCallback(async (id: number, action: "approve" | "reject") => {
-    await doUpdate(id, action);
-    refetchRewards();
+    try {
+      await doUpdate(id, action);
+      refetchRewards();
+    } catch {
+      // error shown by mutation state
+    }
   }, [doUpdate, refetchRewards]);
 
   return (

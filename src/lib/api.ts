@@ -527,6 +527,47 @@ export function createImprovementPlan(data: {
   return api.post<{ id: number }>("/improvement-plans", data);
 }
 
+// --- Daily Reports ---
+
+export interface ApiDailyReport {
+  id: number;
+  employee_id: number;
+  employee_name: string;
+  employee_code: string;
+  department_name: string;
+  date: string;
+  content: string;
+  quantity: number;
+  ng_count: number;
+  note: string | null;
+  status: "pending" | "verified" | "rejected";
+  submitted_at: string;
+  verified_by: number | null;
+  verified_by_name: string | null;
+  verified_at: string | null;
+}
+
+export function fetchDailyReports(date: string) {
+  return api.get<{ data: ApiDailyReport[] }>(`/reports?date=${date}`);
+}
+
+export function createDailyReport(data: {
+  date: string;
+  content: string;
+  quantity: number;
+  ng_count: number;
+  note?: string;
+}) {
+  return api.post<{ id: number }>("/reports", data);
+}
+
+export function verifyDailyReport(
+  id: number,
+  data: { action: "verify" | "reject"; note?: string },
+) {
+  return api.put<{ success: boolean; status: string }>(`/reports/${id}`, data);
+}
+
 // --- Config ---
 
 export function fetchConfig() {
