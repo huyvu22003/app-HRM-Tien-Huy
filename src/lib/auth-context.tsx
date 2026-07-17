@@ -65,6 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const token = getToken();
     if (!token) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- init-only guard
       setIsLoading(false);
       return;
     }

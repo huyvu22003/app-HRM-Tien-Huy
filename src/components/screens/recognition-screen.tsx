@@ -8,7 +8,6 @@ import {
   updateReward as apiUpdateReward,
   fetchImprovementPlans,
   fetchEmployees,
-  type ApiReward,
 } from "@/lib/api";
 import { useQuery, useMutation } from "@/lib/hooks";
 import { formatMoney, cn } from "@/lib/utils";
@@ -66,8 +65,8 @@ export function RecognitionScreen() {
     (id: number, action: "approve" | "reject") => apiUpdateReward(id, { action })
   );
 
-  const rewards = rewardData?.data ?? [];
-  const plans = planData?.data ?? [];
+  const rewards = useMemo(() => rewardData?.data ?? [], [rewardData]);
+  const plans = useMemo(() => planData?.data ?? [], [planData]);
   const canApprove = user?.role === "super" || user?.role === "hr";
 
   const stats = useMemo(() => {

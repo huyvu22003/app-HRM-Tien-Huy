@@ -246,7 +246,7 @@ function PrintPayslips({ rows, period }: { rows: SalaryDisplayRow[]; period: str
 
     const pages: string[] = [];
     for (let i = 0; i < rows.length; i += 2) {
-      const slips = [rows[i], rows[i + 1]].filter(Boolean).map(({ row, s }, idx) => {
+      const slips = [rows[i], rows[i + 1]].filter(Boolean).map(({ row, s }) => {
         const incomeRows = [
           ["Lương ngày công", s.workSalary],
           ["Trách nhiệm", s.responsibilityActual],

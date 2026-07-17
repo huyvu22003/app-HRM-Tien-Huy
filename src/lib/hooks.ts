@@ -40,12 +40,14 @@ export function useQuery<T>(
           setIsLoading(false);
         }
       });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetcher, ...deps]);
+  }, [fetcher]);
 
+  const depsKey = JSON.stringify(deps);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetching
     load();
-  }, [load]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [depsKey]);
 
   return { data, isLoading, error, refetch: load };
 }
