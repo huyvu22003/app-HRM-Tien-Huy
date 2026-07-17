@@ -1,40 +1,67 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Plus, X, HeartHandshake, CheckCircle2, Clock, XCircle } from "lucide-react";
-import { employees } from "@/lib/data/employees";
+import { useState } from "react";
+import { Plus, X, HeartHandshake, CheckCircle2, Clock, XCircle, Loader2 } from "lucide-react";
+import { fetchLeaveRequests, type ApiLeaveRequest } from "@/lib/api";
+import { useQuery } from "@/lib/hooks";
 import { LEAVE_TYPES } from "@/lib/data/config";
-import { hashName, cn } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
-const REQUEST_TYPES = ["PN", "PB", "VR"] as const;
 const LEAVE_TYPE_LABEL: Record<string, string> = Object.fromEntries(
   LEAVE_TYPES.map((t) => [t.code, t.label])
 );
 
-function buildLeaveRequests() {
-  return employees.slice(0, 10).map((e, idx: number) => {
-    const h = hashName(e.name ?? String(idx));
-    const types = REQUEST_TYPES;
-    const status = h % 3 === 0 ? "pending" : h % 3 === 1 ? "approved" : "rejected";
-    return {
-      id: idx,
-      name: e.name,
-      type: types[h % 3],
-      days: 1 + (h % 3),
-      from: `${10 + (h % 15)}/06/2026`,
-      status,
-      approvedByLead: status !== "pending",
-      approvedByHr: status === "approved",
-    };
-  });
+type StatusFilter = "all" | "pending" | "approved" | "rejected";
+
+const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
+  { key: "all", label: "Tất cả" },
+  { key: "pending", label: "Chờ duyệt" },
+  { key: "approved", label: "Đã duyệt" },
+  { key: "rejected", label: "Từ chối" },
+];
+
+function getStatusDisplay(status: string) {
+  switch (status) {
+    case "approved":
+      return { label: "Đã duyệt", color: "approved" as const };
+    case "approved_l1":
+      return { label: "Duyệt TT", color: "approved" as const };
+    case "approved_l2":
+      return { label: "Duyệt HR", color: "approved" as const };
+    case "rejected":
+      return { label: "Từ chối", color: "rejected" as const };
+    case "pending":
+    default:
+      return { label: "Chờ duyệt", color: "pending" as const };
+  }
+}
+
+function isLeadApproved(status: string) {
+  return status === "approved_l1" || status === "approved_l2" || status === "approved";
+}
+
+function isHrApproved(status: string) {
+  return status === "approved_l2" || status === "approved";
+}
+
+function matchesFilter(status: string, filter: StatusFilter) {
+  if (filter === "all") return true;
+  if (filter === "pending") return status === "pending";
+  if (filter === "approved") return status === "approved_l1" || status === "approved_l2" || status === "approved";
+  if (filter === "rejected") return status === "rejected";
+  return true;
 }
 
 export function LeaveScreen() {
   const [modalOpen, setModalOpen] = useState(false);
   const [leaveType, setLeaveType] = useState<"PN" | "PB" | "VR">("PN");
   const [days, setDays] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
-  const requests = useMemo(() => buildLeaveRequests(), []);
+  const { data, isLoading } = useQuery(() => fetchLeaveRequests(), []);
+  const requests: ApiLeaveRequest[] = data?.data ?? [];
+
+  const filtered = requests.filter((r) => matchesFilter(r.status, statusFilter));
 
   const balance = { entitled: 12, carried: 2, used: 5, get remaining() {
     return this.entitled + this.carried - this.used;
@@ -61,61 +88,96 @@ export function LeaveScreen() {
         </button>
       </div>
 
+      <div className="flex gap-2">
+        {STATUS_FILTERS.map((f) => (
+          <button
+            key={f.key}
+            onClick={() => setStatusFilter(f.key)}
+            className={cn(
+              "rounded-[20px] border px-3 py-1 text-[12px] font-medium",
+              statusFilter === f.key
+                ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-white"
+                : "border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-page-bg)]"
+            )}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
       <div className="overflow-x-auto rounded-[14px] border border-[var(--color-border)] bg-white">
-        <table className="w-full min-w-[700px] text-[13px]">
-          <thead>
-            <tr className="text-left text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">
-              <th className="px-4 py-3 font-medium">Nhân viên</th>
-              <th className="px-4 py-3 font-medium">Loại</th>
-              <th className="px-4 py-3 font-medium">Số ngày</th>
-              <th className="px-4 py-3 font-medium">Từ ngày</th>
-              <th className="px-4 py-3 font-medium">Duyệt tổ trưởng</th>
-              <th className="px-4 py-3 font-medium">Duyệt HR</th>
-              <th className="px-4 py-3 font-medium">Trạng thái</th>
-            </tr>
-          </thead>
-          <tbody>
-            {requests.map((r) => (
-              <tr key={r.id} className="border-t border-[var(--color-border-light)]">
-                <td className="px-4 py-2.5 font-medium text-[var(--color-text-primary)]">{r.name}</td>
-                <td className="px-4 py-2.5 text-[var(--color-text-muted)]">{LEAVE_TYPE_LABEL[r.type]}</td>
-                <td className="px-4 py-2.5 font-[family-name:var(--font-mono)]">{r.days}</td>
-                <td className="px-4 py-2.5 font-[family-name:var(--font-mono)] text-[var(--color-text-muted)]">
-                  {r.from}
-                </td>
-                <td className="px-4 py-2.5">
-                  {r.approvedByLead ? (
-                    <CheckCircle2 size={15} className="text-[var(--color-success)]" />
-                  ) : (
-                    <Clock size={15} className="text-[var(--color-text-lighter)]" />
-                  )}
-                </td>
-                <td className="px-4 py-2.5">
-                  {r.approvedByHr ? (
-                    <CheckCircle2 size={15} className="text-[var(--color-success)]" />
-                  ) : (
-                    <Clock size={15} className="text-[var(--color-text-lighter)]" />
-                  )}
-                </td>
-                <td className="px-4 py-2.5">
-                  <span
-                    className={cn(
-                      "flex w-fit items-center gap-1 rounded-[20px] px-2 py-0.5 text-[11px] font-medium",
-                      r.status === "approved" && "bg-[var(--color-success-bg)] text-[var(--color-success)]",
-                      r.status === "pending" && "bg-[var(--color-warning-bg)] text-[var(--color-warning)]",
-                      r.status === "rejected" && "bg-[var(--color-danger-bg)] text-[var(--color-danger)]"
-                    )}
-                  >
-                    {r.status === "approved" && <CheckCircle2 size={11} />}
-                    {r.status === "pending" && <Clock size={11} />}
-                    {r.status === "rejected" && <XCircle size={11} />}
-                    {r.status === "approved" ? "Đã duyệt" : r.status === "pending" ? "Chờ duyệt" : "Từ chối"}
-                  </span>
-                </td>
+        {isLoading ? (
+          <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-[var(--color-text-muted)]">
+            <Loader2 size={16} className="animate-spin" />
+            Đang tải dữ liệu...
+          </div>
+        ) : (
+          <table className="w-full min-w-[700px] text-[13px]">
+            <thead>
+              <tr className="text-left text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">
+                <th className="px-4 py-3 font-medium">Nhân viên</th>
+                <th className="px-4 py-3 font-medium">Loại</th>
+                <th className="px-4 py-3 font-medium">Số ngày</th>
+                <th className="px-4 py-3 font-medium">Từ ngày</th>
+                <th className="px-4 py-3 font-medium">Duyệt tổ trưởng</th>
+                <th className="px-4 py-3 font-medium">Duyệt HR</th>
+                <th className="px-4 py-3 font-medium">Trạng thái</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-8 text-center text-[var(--color-text-muted)]">
+                    Không có đơn nghỉ phép nào.
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((r) => {
+                  const display = getStatusDisplay(r.status);
+                  return (
+                    <tr key={r.id} className="border-t border-[var(--color-border-light)]">
+                      <td className="px-4 py-2.5 font-medium text-[var(--color-text-primary)]">{r.employee_name}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-text-muted)]">{LEAVE_TYPE_LABEL[r.type_code] ?? r.type_code}</td>
+                      <td className="px-4 py-2.5 font-[family-name:var(--font-mono)]">{r.days}</td>
+                      <td className="px-4 py-2.5 font-[family-name:var(--font-mono)] text-[var(--color-text-muted)]">
+                        {r.from_date}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {isLeadApproved(r.status) ? (
+                          <CheckCircle2 size={15} className="text-[var(--color-success)]" />
+                        ) : (
+                          <Clock size={15} className="text-[var(--color-text-lighter)]" />
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {isHrApproved(r.status) ? (
+                          <CheckCircle2 size={15} className="text-[var(--color-success)]" />
+                        ) : (
+                          <Clock size={15} className="text-[var(--color-text-lighter)]" />
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <span
+                          className={cn(
+                            "flex w-fit items-center gap-1 rounded-[20px] px-2 py-0.5 text-[11px] font-medium",
+                            display.color === "approved" && "bg-[var(--color-success-bg)] text-[var(--color-success)]",
+                            display.color === "pending" && "bg-[var(--color-warning-bg)] text-[var(--color-warning)]",
+                            display.color === "rejected" && "bg-[var(--color-danger-bg)] text-[var(--color-danger)]"
+                          )}
+                        >
+                          {display.color === "approved" && <CheckCircle2 size={11} />}
+                          {display.color === "pending" && <Clock size={11} />}
+                          {display.color === "rejected" && <XCircle size={11} />}
+                          {display.label}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

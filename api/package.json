@@ -1,0 +1,16 @@
+{
+  "name": "hrm-tien-huy-api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate": "wrangler d1 execute hrm-tien-huy-db --file=../db/migrations/001_initial.sql",
+    "db:seed": "wrangler d1 execute hrm-tien-huy-db --file=../db/seed.sql"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241205.0",
+    "wrangler": "^3.99.0",
+    "typescript": "^5.7.0"
+  }
+}

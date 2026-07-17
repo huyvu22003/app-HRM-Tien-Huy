@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Lock, Phone, AlertCircle, Users2, Building2, Layers } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
-import { ACCOUNTS, type Account } from "@/lib/data/accounts";
 import { ROLE_META } from "@/lib/data/config";
 import { getInitials, cn } from "@/lib/utils";
 
@@ -14,6 +13,21 @@ const ROLE_BADGE_STYLE: Record<string, string> = {
   staff: "bg-[var(--color-page-bg)] text-[var(--color-text-muted)]",
 };
 
+interface DemoAccount {
+  phone: string;
+  password: string;
+  name: string;
+  role: string;
+}
+
+const DEMO_ACCOUNTS: DemoAccount[] = [
+  { phone: "0909000001", password: "123456", name: "Mr. Trung", role: "super" },
+  { phone: "0909000002", password: "123456", name: "Ôn Thị Uy Lam", role: "hr" },
+  { phone: "0909000003", password: "123456", name: "Nguyễn Văn Thiện", role: "lead" },
+  { phone: "0909000004", password: "123456", name: "Chu Nam Anh", role: "staff" },
+  { phone: "0909000005", password: "123456", name: "_Huy (IT)", role: "super" },
+];
+
 export function LoginScreen() {
   const { login } = useAuth();
   const [phone, setPhone] = useState("");
@@ -21,21 +35,18 @@ export function LoginScreen() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const demoAccounts: Account[] = Object.values(ACCOUNTS);
-
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    const res = login(phone, password);
+    setError("");
+    const res = await login(phone, password);
     if (!res.success) {
       setError(res.message ?? "Đăng nhập thất bại. Vui lòng thử lại.");
-    } else {
-      setError("");
     }
     setLoading(false);
   }
 
-  function fillDemo(acc: Account) {
+  function fillDemo(acc: DemoAccount) {
     setPhone(acc.phone);
     setPassword(acc.password);
     setError("");
@@ -144,37 +155,35 @@ export function LoginScreen() {
             </button>
           </form>
 
-          {demoAccounts.length > 0 && (
-            <div className="mt-8">
-              <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-lighter)]">
-                Tài khoản demo
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {demoAccounts.map((acc, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => fillDemo(acc)}
-                    className="flex flex-col items-start gap-1.5 rounded-[12px] border border-[var(--color-border)] p-3 text-left transition-colors hover:border-[var(--color-accent)] hover:bg-[var(--color-page-bg)]"
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-navy)] text-[10px] font-semibold text-white">
-                        {getInitials(acc.name ?? "?")}
-                      </div>
-                      <div className="text-[12px] font-medium text-[var(--color-text-primary)]">{acc.name}</div>
-                    </div>
-                    <span
-                      className={cn(
-                        "rounded-[20px] px-2 py-0.5 text-[10px] font-medium",
-                        ROLE_BADGE_STYLE[acc.role] ?? ROLE_BADGE_STYLE.staff
-                      )}
-                    >
-                      {ROLE_META[acc.role]?.label ?? acc.role}
-                    </span>
-                  </button>
-                ))}
-              </div>
+          <div className="mt-8">
+            <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-lighter)]">
+              Tài khoản demo
             </div>
-          )}
+            <div className="grid grid-cols-2 gap-2">
+              {DEMO_ACCOUNTS.map((acc, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => fillDemo(acc)}
+                  className="flex flex-col items-start gap-1.5 rounded-[12px] border border-[var(--color-border)] p-3 text-left transition-colors hover:border-[var(--color-accent)] hover:bg-[var(--color-page-bg)]"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-navy)] text-[10px] font-semibold text-white">
+                      {getInitials(acc.name)}
+                    </div>
+                    <div className="text-[12px] font-medium text-[var(--color-text-primary)]">{acc.name}</div>
+                  </div>
+                  <span
+                    className={cn(
+                      "rounded-[20px] px-2 py-0.5 text-[10px] font-medium",
+                      ROLE_BADGE_STYLE[acc.role] ?? ROLE_BADGE_STYLE.staff
+                    )}
+                  >
+                    {ROLE_META[acc.role as keyof typeof ROLE_META]?.label ?? acc.role}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>

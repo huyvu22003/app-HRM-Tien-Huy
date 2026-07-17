@@ -1,0 +1,16 @@
+name = "hrm-tien-huy-api"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "hrm-tien-huy-db"
+database_id = "placeholder-replace-after-create"
+
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "hrm-tien-huy-files"
+
+[vars]
+JWT_SECRET = "change-this-in-production"
+CORS_ORIGIN = "https://hrm.tienhuy.vn"
