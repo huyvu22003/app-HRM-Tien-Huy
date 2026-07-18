@@ -493,6 +493,24 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
   const { hidden, toggle, reset, visibleColumns } = useColumnPrefs("employees", columns);
 
   const [exporting, setExporting] = useState(false);
+  const EMPTY_NEW = { code: "", name: "", department_name: "", position: "", phone: "", status: "Đang làm việc" };
+  const [adding, setAdding] = useState(false);
+  const [newEmp, setNewEmp] = useState(EMPTY_NEW);
+  const [addSaving, setAddSaving] = useState(false);
+
+  async function saveNewEmployee() {
+    if (!newEmp.code.trim() || !newEmp.name.trim()) return;
+    setAddSaving(true);
+    try {
+      await importEmployees([{ ...newEmp }]);
+      setAdding(false);
+      setNewEmp(EMPTY_NEW);
+      setPage(1);
+      refetch();
+    } finally {
+      setAddSaving(false);
+    }
+  }
 
   async function handleExport() {
     const cols = visibleColumns.filter((c) => c.exportValue);
@@ -587,7 +605,13 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
               >
                 <Upload size={14} /> Import
               </button>
-              <button className="flex items-center gap-1.5 rounded-[8px] bg-[var(--color-accent)] px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-[var(--color-accent-hover)]">
+              <button
+                onClick={() => {
+                  setAdding(true);
+                  setPage(1);
+                }}
+                className="flex items-center gap-1.5 rounded-[8px] bg-[var(--color-accent)] px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-[var(--color-accent-hover)]"
+              >
                 <Plus size={14} /> Thêm mới
               </button>
             </>
@@ -620,6 +644,74 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
               </tr>
             </thead>
             <tbody>
+              {adding && (
+                <tr className="border-t border-[var(--color-accent)] bg-[var(--color-page-bg)]">
+                  <td colSpan={visibleColumns.length} className="px-4 py-3">
+                    <div className="flex flex-wrap items-end gap-2">
+                      <input
+                        autoFocus
+                        value={newEmp.code}
+                        onChange={(e) => setNewEmp((s) => ({ ...s, code: e.target.value }))}
+                        placeholder="Mã thẻ *"
+                        className="h-8 w-[90px] rounded-[6px] border border-[var(--color-border)] px-2 text-[12.5px] outline-none focus:border-[var(--color-accent)]"
+                      />
+                      <input
+                        value={newEmp.name}
+                        onChange={(e) => setNewEmp((s) => ({ ...s, name: e.target.value }))}
+                        placeholder="Họ và tên *"
+                        className="h-8 w-[170px] rounded-[6px] border border-[var(--color-border)] px-2 text-[12.5px] outline-none focus:border-[var(--color-accent)]"
+                      />
+                      <select
+                        value={newEmp.department_name}
+                        onChange={(e) => setNewEmp((s) => ({ ...s, department_name: e.target.value }))}
+                        className="h-8 w-[150px] rounded-[6px] border border-[var(--color-border)] bg-white px-2 text-[12.5px] outline-none focus:border-[var(--color-accent)]"
+                      >
+                        <option value="">-- Bộ phận --</option>
+                        {departments.map((d: string) => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                      <input
+                        value={newEmp.position}
+                        onChange={(e) => setNewEmp((s) => ({ ...s, position: e.target.value }))}
+                        placeholder="Chức vụ"
+                        className="h-8 w-[140px] rounded-[6px] border border-[var(--color-border)] px-2 text-[12.5px] outline-none focus:border-[var(--color-accent)]"
+                      />
+                      <input
+                        value={newEmp.phone}
+                        onChange={(e) => setNewEmp((s) => ({ ...s, phone: e.target.value }))}
+                        placeholder="Điện thoại"
+                        className="h-8 w-[120px] rounded-[6px] border border-[var(--color-border)] px-2 text-[12.5px] outline-none focus:border-[var(--color-accent)]"
+                      />
+                      <select
+                        value={newEmp.status}
+                        onChange={(e) => setNewEmp((s) => ({ ...s, status: e.target.value }))}
+                        className="h-8 w-[130px] rounded-[6px] border border-[var(--color-border)] bg-white px-2 text-[12.5px] outline-none focus:border-[var(--color-accent)]"
+                      >
+                        {["Đang làm việc", "Thử việc", "Nghỉ thai sản", "Nghỉ việc"].map((s) => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={saveNewEmployee}
+                        disabled={addSaving || !newEmp.code.trim() || !newEmp.name.trim()}
+                        className="flex h-8 items-center gap-1.5 rounded-[6px] bg-[var(--color-success)] px-3 text-[12.5px] font-medium text-white disabled:opacity-60"
+                      >
+                        {addSaving ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />} Lưu
+                      </button>
+                      <button
+                        onClick={() => {
+                          setAdding(false);
+                          setNewEmp(EMPTY_NEW);
+                        }}
+                        className="flex h-8 items-center rounded-[6px] border border-[var(--color-border)] px-3 text-[12.5px] text-[var(--color-text-secondary)]"
+                      >
+                        Huỷ
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )}
               {items.map((e: ApiEmployee, i: number) => (
                 <tr
                   key={e.id}
