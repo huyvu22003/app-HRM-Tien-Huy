@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { cn, formatMoney, seededRandom } from "@/lib/utils";
 import { EMPLOYEES } from "@/lib/data/employees";
+import { exportStyledExcel } from "@/lib/excel-export";
 
 type ReconcileStatus = "matched" | "variance" | "missing";
 
@@ -169,6 +170,37 @@ export function PayrollScreen() {
     return list;
   }, [data, search, statusFilter, deptFilter, sortBy]);
 
+  async function handleExport() {
+    const sorted = [...filtered].sort(
+      (a, b) => a.department.localeCompare(b.department, "vi") || a.code.localeCompare(b.code, "vi"),
+    );
+    await exportStyledExcel({
+      filename: `doi-chieu-payroll-2026-06`,
+      title: "ĐỐI CHIẾU PAYROLL — KỲ 06/2026",
+      meta: [`Ngày xuất: ${new Date().toLocaleDateString("vi-VN")}`, `Số lượng: ${sorted.length} nhân viên`],
+      columns: [
+        { label: "Mã NV" },
+        { label: "Họ tên" },
+        { label: "Bộ phận" },
+        { label: "Hệ thống", align: "right", format: "money" },
+        { label: "Ngân hàng", align: "right", format: "money" },
+        { label: "Chênh lệch", align: "right", format: "money" },
+        { label: "Trạng thái" },
+        { label: "Mã tham chiếu" },
+      ],
+      rows: sorted.map((r) => [
+        r.code,
+        r.name,
+        r.department,
+        r.systemNet,
+        r.bankAmount,
+        r.variance,
+        STATUS_CONFIG[r.status].label,
+        r.bankRef || "-",
+      ]),
+    });
+  }
+
   const stats = useMemo(() => {
     const matched = data.filter((r) => r.status === "matched").length;
     const withVariance = data.filter((r) => r.status === "variance").length;
@@ -194,7 +226,10 @@ export function PayrollScreen() {
               So sánh lương tính toán hệ thống với số thực chi qua ngân hàng
             </div>
           </div>
-          <button className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition hover:border-[var(--color-primary)]">
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition hover:border-[var(--color-primary)]"
+          >
             <Download size={13} />
             Xuất Excel
           </button>

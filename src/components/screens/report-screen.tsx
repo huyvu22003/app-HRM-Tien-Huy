@@ -12,6 +12,7 @@ import {
   Send,
   Filter,
   AlertTriangle,
+  Download,
 } from "lucide-react";
 import {
   fetchDailyReports,
@@ -21,6 +22,7 @@ import {
 } from "@/lib/api";
 import { useQuery, useMutation } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
+import { exportStyledExcel } from "@/lib/excel-export";
 import { useAuth } from "@/lib/auth-context";
 import { DEPARTMENTS } from "@/lib/data/departments";
 
@@ -106,6 +108,38 @@ export function ReportScreen() {
     }
     return list;
   }, [reports, search, deptFilter, statusFilter]);
+
+  const statusLabel = (s: string) =>
+    s === "verified" ? "Đã xác nhận" : s === "rejected" ? "Từ chối" : "Chờ duyệt";
+
+  async function handleExport() {
+    const sorted = [...filtered].sort(
+      (a, b) => (a.department_name ?? "").localeCompare(b.department_name ?? "", "vi") || a.employee_code.localeCompare(b.employee_code, "vi"),
+    );
+    await exportStyledExcel({
+      filename: `bao-cao-ngay-${selectedDate}`,
+      title: `BÁO CÁO SẢN LƯỢNG NGÀY ${selectedDate.split("-").reverse().join("/")}`,
+      meta: [`Ngày xuất: ${new Date().toLocaleDateString("vi-VN")}`, `Số lượng: ${sorted.length} báo cáo`],
+      columns: [
+        { label: "Mã NV" },
+        { label: "Họ và tên" },
+        { label: "Bộ phận" },
+        { label: "Nội dung công việc", width: 320 },
+        { label: "Số lượng", align: "right", format: "int" },
+        { label: "NG", align: "right", format: "int" },
+        { label: "Trạng thái" },
+      ],
+      rows: sorted.map((r) => [
+        r.employee_code,
+        r.employee_name,
+        r.department_name ?? "-",
+        r.content,
+        r.quantity,
+        r.ng_count,
+        statusLabel(r.status),
+      ]),
+    });
+  }
 
   const stats = useMemo(() => {
     const total = reports.length;
@@ -353,6 +387,13 @@ export function ReportScreen() {
             </button>
           ))}
         </div>
+
+        <button
+          onClick={handleExport}
+          className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-white px-3 py-1.5 text-[12.5px] text-[var(--color-text-secondary)] transition hover:border-[var(--color-primary)]"
+        >
+          <Download size={13} /> Xuất Excel
+        </button>
       </div>
 
       {/* Count */}
