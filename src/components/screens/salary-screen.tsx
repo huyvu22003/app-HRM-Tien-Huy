@@ -7,7 +7,7 @@ import { useQuery } from "@/lib/hooks";
 import { formatMoney, cn } from "@/lib/utils";
 import { useColumnPrefs, type ColumnDef } from "@/lib/table-prefs";
 import { ColumnMenu } from "@/components/ui/column-menu";
-import { exportToCsv } from "@/lib/export";
+import { exportStyledExcel } from "@/lib/excel-export";
 
 const STD_DAYS = 26;
 const HOURS_PER_DAY = 8;
@@ -148,15 +148,15 @@ function totalOtOf(s: SalaryComputed): number {
 const SAL_COLUMNS: ColumnDef<SalaryDisplayRow>[] = [
   { id: "name", label: "Nhân viên", locked: true, cell: (d) => d.row.name, exportValue: (d) => `${d.row.name} (${d.row.code})` },
   { id: "department_name", label: "Bộ phận", cell: (d) => d.row.department_name ?? "-", exportValue: (d) => d.row.department_name ?? "" },
-  { id: "cong", label: "Công", align: "right", cell: (d) => `${d.s.actualDays}/${STD_DAYS}`, exportValue: (d) => d.s.actualDays },
-  { id: "workSalary", label: "Lương công", align: "right", cell: (d) => formatMoney(d.s.workSalary), exportValue: (d) => d.s.workSalary },
-  { id: "responsibilityActual", label: "Trách nhiệm", align: "right", cell: (d) => formatMoney(d.s.responsibilityActual), exportValue: (d) => d.s.responsibilityActual },
-  { id: "overtime", label: "Tăng ca", align: "right", cell: (d) => (totalOtOf(d.s) > 0 ? formatMoney(totalOtOf(d.s)) : "-"), exportValue: (d) => totalOtOf(d.s) },
-  { id: "totalIncome", label: "Tổng TN", align: "right", cell: (d) => formatMoney(d.s.totalIncome), exportValue: (d) => d.s.totalIncome },
-  { id: "insuranceTotal", label: "Bảo hiểm", align: "right", cell: (d) => `-${formatMoney(d.s.insuranceTotal)}`, exportValue: (d) => -d.s.insuranceTotal },
-  { id: "pit", label: "Thuế", align: "right", cell: (d) => (d.s.pit > 0 ? `-${formatMoney(d.s.pit)}` : "0"), exportValue: (d) => -d.s.pit },
-  { id: "advance", label: "Tạm ứng", align: "right", cell: (d) => (d.s.advance > 0 ? `-${formatMoney(d.s.advance)}` : "-"), exportValue: (d) => -d.s.advance },
-  { id: "netPay", label: "Thực nhận", align: "right", cell: (d) => formatMoney(d.s.netPay), exportValue: (d) => d.s.netPay },
+  { id: "cong", label: "Công", align: "right", cell: (d) => `${d.s.actualDays}/${STD_DAYS}`, exportValue: (d) => d.s.actualDays, exportFormat: "int" },
+  { id: "workSalary", label: "Lương công", align: "right", cell: (d) => formatMoney(d.s.workSalary), exportValue: (d) => d.s.workSalary, exportFormat: "money" },
+  { id: "responsibilityActual", label: "Trách nhiệm", align: "right", cell: (d) => formatMoney(d.s.responsibilityActual), exportValue: (d) => d.s.responsibilityActual, exportFormat: "money" },
+  { id: "overtime", label: "Tăng ca", align: "right", cell: (d) => (totalOtOf(d.s) > 0 ? formatMoney(totalOtOf(d.s)) : "-"), exportValue: (d) => totalOtOf(d.s), exportFormat: "money" },
+  { id: "totalIncome", label: "Tổng TN", align: "right", cell: (d) => formatMoney(d.s.totalIncome), exportValue: (d) => d.s.totalIncome, exportFormat: "money" },
+  { id: "insuranceTotal", label: "Bảo hiểm", align: "right", cell: (d) => `-${formatMoney(d.s.insuranceTotal)}`, exportValue: (d) => -d.s.insuranceTotal, exportFormat: "money" },
+  { id: "pit", label: "Thuế", align: "right", cell: (d) => (d.s.pit > 0 ? `-${formatMoney(d.s.pit)}` : "0"), exportValue: (d) => -d.s.pit, exportFormat: "money" },
+  { id: "advance", label: "Tạm ứng", align: "right", cell: (d) => (d.s.advance > 0 ? `-${formatMoney(d.s.advance)}` : "-"), exportValue: (d) => -d.s.advance, exportFormat: "money" },
+  { id: "netPay", label: "Thực nhận", align: "right", cell: (d) => formatMoney(d.s.netPay), exportValue: (d) => d.s.netPay, exportFormat: "money" },
 ];
 
 function PayslipModal({ data, period, onClose }: { data: SalaryDisplayRow; period: string; onClose: () => void }) {
@@ -431,11 +431,20 @@ export function SalaryScreen() {
 
   const { hidden, toggle, reset, isVisible } = useColumnPrefs("salary", SAL_COLUMNS);
 
-  function handleExport() {
+  async function handleExport() {
     const cols = SAL_COLUMNS.filter((c) => isVisible(c.id) && c.exportValue);
-    const headers = cols.map((c) => c.label);
-    const body = rows.map((d, i) => cols.map((c) => c.exportValue!(d, i)));
-    exportToCsv(`bang-luong-${period}`, headers, body);
+    const sorted = [...rows].sort(
+      (a, b) =>
+        (a.row.department_name ?? "").localeCompare(b.row.department_name ?? "", "vi") ||
+        a.row.code.localeCompare(b.row.code, "vi"),
+    );
+    await exportStyledExcel({
+      filename: `bang-luong-${period}`,
+      title: `BẢNG LƯƠNG KỲ ${periodLabel}`,
+      meta: [`Ngày xuất: ${new Date().toLocaleDateString("vi-VN")}`, `Số lượng: ${sorted.length} nhân viên`],
+      columns: cols.map((c) => ({ label: c.label, align: c.align, format: c.exportFormat })),
+      rows: sorted.map((d, i) => cols.map((c) => c.exportValue!(d, i)))
+    });
   }
 
   return (

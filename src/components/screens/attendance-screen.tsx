@@ -7,7 +7,7 @@ import { fetchAttendance, updateAttendance, type ApiAttendance } from "@/lib/api
 import { useQuery } from "@/lib/hooks";
 import { useColumnPrefs, type ColumnDef } from "@/lib/table-prefs";
 import { ColumnMenu } from "@/components/ui/column-menu";
-import { exportToCsv } from "@/lib/export";
+import { exportStyledExcel } from "@/lib/excel-export";
 
 type Flag = "all" | "hasLeave" | "mismatch" | "edited";
 
@@ -90,11 +90,15 @@ export function AttendanceScreen() {
 
   const { hidden, toggle, reset, isVisible } = useColumnPrefs("attendance", ATT_COLUMNS);
 
-  function handleExport() {
+  async function handleExport() {
     const cols = ATT_COLUMNS.filter((c) => isVisible(c.id) && c.exportValue);
-    const headers = cols.map((c) => c.label);
-    const rows = filtered.map((r, i) => cols.map((c) => c.exportValue!(r.row, i)));
-    exportToCsv(`cham-cong-${period}`, headers, rows);
+    await exportStyledExcel({
+      filename: `cham-cong-${period}`,
+      title: `BẢNG CHẤM CÔNG KỲ ${periodDisplay}`,
+      meta: [`Ngày xuất: ${new Date().toLocaleDateString("vi-VN")}`, `Số lượng: ${filtered.length} nhân viên`],
+      columns: cols.map((c) => ({ label: c.label, align: c.align, format: c.exportFormat })),
+      rows: filtered.map((r, i) => cols.map((c) => c.exportValue!(r.row, i)))
+    });
   }
 
   return (

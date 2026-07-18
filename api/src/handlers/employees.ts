@@ -146,6 +146,70 @@ export async function createEmployee(request: Request, env: Env): Promise<Respon
   return json({ id: result.meta.last_row_id }, 201);
 }
 
+export async function importEmployees(request: Request, env: Env): Promise<Response> {
+  const body = await readJson<{ employees?: Array<Record<string, unknown>> }>(request);
+  const rows = Array.isArray(body.employees) ? body.employees : [];
+  let created = 0;
+  let updated = 0;
+
+  for (const r of rows) {
+    const code = String(r.code ?? "").trim();
+    const name = String(r.name ?? "").trim();
+    if (!code || !name) continue;
+
+    // Resolve department by name
+    let departmentId: number | null = null;
+    const deptName = String(r.department_name ?? r.department ?? "").trim();
+    if (deptName) {
+      const dept = await env.DB.prepare("SELECT id FROM departments WHERE name = ?")
+        .bind(deptName)
+        .first<{ id: number }>();
+      departmentId = dept?.id ?? null;
+    }
+
+    const existing = await env.DB.prepare("SELECT id FROM employees WHERE code = ?")
+      .bind(code)
+      .first<{ id: number }>();
+
+    const cols = {
+      name,
+      gender: (r.gender as string) ?? null,
+      dob: (r.dob as string) ?? null,
+      phone: (r.phone as string) ?? null,
+      cccd: (r.cccd as string) ?? null,
+      address: (r.address as string) ?? null,
+      email: (r.email as string) ?? null,
+      department_id: departmentId,
+      position: (r.position as string) ?? null,
+      workplace: (r.workplace as string) ?? null,
+      contract_type: (r.contract_type as string) ?? null,
+      join_date: (r.join_date as string) ?? null,
+      status: (r.status as string) ?? "Đang làm việc",
+      manager: (r.manager as string) ?? null,
+      level: (r.level as string) ?? null,
+      bank: (r.bank as string) ?? null,
+      tax_code: (r.tax_code as string) ?? null,
+    };
+
+    if (existing) {
+      const sets = Object.keys(cols).map((k) => `${k} = ?`).join(", ");
+      await env.DB.prepare(`UPDATE employees SET ${sets} WHERE id = ?`)
+        .bind(...Object.values(cols), existing.id)
+        .run();
+      updated++;
+    } else {
+      const keys = ["code", ...Object.keys(cols)];
+      const placeholders = keys.map(() => "?").join(", ");
+      await env.DB.prepare(`INSERT INTO employees (${keys.join(", ")}) VALUES (${placeholders})`)
+        .bind(code, ...Object.values(cols))
+        .run();
+      created++;
+    }
+  }
+
+  return json({ success: true, created, updated });
+}
+
 export async function updateEmployee(request: Request, env: Env, id: string): Promise<Response> {
   const body = await readJson<EmployeeBody>(request);
 

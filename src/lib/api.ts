@@ -255,6 +255,13 @@ export function updateEmployee(id: number | string, data: Record<string, unknown
   return api.put<{ success: boolean }>(`/employees/${id}`, data);
 }
 
+export function importEmployees(employees: Record<string, unknown>[]) {
+  return api.post<{ success: boolean; created: number; updated: number }>(
+    "/employees/import",
+    { employees },
+  );
+}
+
 // --- Departments ---
 
 export interface ApiDepartment {
