@@ -17,6 +17,7 @@ import { fetchEmployee, updateEmployee, fetchDepartments, type ApiEmployee, type
 import { useAuth } from "@/lib/auth-context";
 import { useQuery, useMutation } from "@/lib/hooks";
 import { getInitials, cn, formatDate, formatMoney, seededRandom } from "@/lib/utils";
+import { getEmployeePhoto, setEmployeePhoto } from "@/lib/photo-store";
 
 const TABS = ["Tổng hợp", "Công việc", "Cá nhân", "Lương & phụ cấp", "Bảo hiểm", "Hồ sơ đính kèm"];
 
@@ -454,7 +455,8 @@ export function EmployeeDetailScreen({
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<EditableFields | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoDraft, setPhotoDraft] = useState<string | null>(null);
+  const [photoSaved, setPhotoSaved] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -498,7 +500,7 @@ export function EmployeeDetailScreen({
     );
   }
 
-  const currentPhoto = photoPreview ?? photoUrl ?? employee.photo_url;
+  const currentPhoto = photoDraft ?? photoUrl ?? getEmployeePhoto(employee.id) ?? employee.photo_url;
 
   const kpiScore = seededRandom(employee.name + "kpi", 65, 98);
   const kpiRank = kpiScore >= 90 ? "Tốt" : kpiScore >= 70 ? "Khá" : kpiScore >= 50 ? "TB" : "Yếu";
@@ -543,7 +545,6 @@ export function EmployeeDetailScreen({
   function cancelEditing() {
     setEditing(false);
     setForm(null);
-    setPhotoPreview(null);
     setSaveSuccess(false);
   }
 
@@ -592,8 +593,6 @@ export function EmployeeDetailScreen({
       await doUpdate(employeeId, payload);
       setEditing(false);
       setForm(null);
-      if (photoPreview) setPhotoUrl(photoPreview);
-      setPhotoPreview(null);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
       refetch();
@@ -606,6 +605,20 @@ export function EmployeeDetailScreen({
     setForm((prev) => (prev ? { ...prev, [field]: value } : prev));
   }
 
+  function savePhoto() {
+    if (!photoDraft || !employee) return;
+    setEmployeePhoto(employee.id, photoDraft);
+    setPhotoUrl(photoDraft);
+    setPhotoDraft(null);
+    setPhotoSaved(true);
+    setTimeout(() => setPhotoSaved(false), 3000);
+  }
+
+  function cancelPhoto() {
+    setPhotoDraft(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
   function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -615,7 +628,7 @@ export function EmployeeDetailScreen({
     }
     const reader = new FileReader();
     reader.onload = () => {
-      setPhotoPreview(reader.result as string);
+      setPhotoDraft(reader.result as string);
     };
     reader.readAsDataURL(file);
   }
@@ -705,13 +718,36 @@ export function EmployeeDetailScreen({
             <div className="mt-1 text-[13px] text-[var(--color-text-muted)]">
               {employee.position ?? "Nhân viên"} · {employee.department_name ?? "-"}
             </div>
-            {canEdit && !currentPhoto && (
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="mt-2 flex items-center gap-1.5 text-[11.5px] text-[var(--color-accent)] hover:underline"
-              >
-                <Upload size={12} /> Tải ảnh nhân viên
-              </button>
+            {canEdit && (
+              <div className="mt-2 flex items-center gap-2">
+                {photoDraft ? (
+                  <>
+                    <button
+                      onClick={savePhoto}
+                      className="flex items-center gap-1.5 rounded-[8px] bg-[var(--color-success)] px-3 py-1.5 text-[11.5px] font-medium text-white hover:opacity-90"
+                    >
+                      <Save size={12} /> Lưu ảnh
+                    </button>
+                    <button
+                      onClick={cancelPhoto}
+                      className="flex items-center gap-1.5 rounded-[8px] border border-[var(--color-border)] px-3 py-1.5 text-[11.5px] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]"
+                    >
+                      <X size={12} /> Huỷ
+                    </button>
+                    <span className="text-[11px] text-[var(--color-text-light)]">Ảnh mới chưa lưu</span>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center gap-1.5 text-[11.5px] text-[var(--color-accent)] hover:underline"
+                  >
+                    <Upload size={12} /> {currentPhoto ? "Thay ảnh nhân viên" : "Tải ảnh nhân viên"}
+                  </button>
+                )}
+                {photoSaved && (
+                  <span className="text-[11px] font-medium text-[var(--color-success)]">Đã lưu ảnh ✓</span>
+                )}
+              </div>
             )}
           </div>
           <div className="flex flex-col items-center rounded-[10px] border-2 border-[var(--color-accent)] px-4 py-2">

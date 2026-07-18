@@ -9,6 +9,21 @@ import { getInitials, cn, formatDate, seededRandom } from "@/lib/utils";
 import { useColumnPrefs, type ColumnDef } from "@/lib/table-prefs";
 import { ColumnMenu } from "@/components/ui/column-menu";
 import { exportToCsv } from "@/lib/export";
+import { getEmployeePhoto } from "@/lib/photo-store";
+
+function Avatar({ id, name, photoUrl, className }: { id: number; name: string; photoUrl?: string | null; className?: string }) {
+  const photo = getEmployeePhoto(id) ?? photoUrl;
+  return (
+    <div className={cn("flex items-center justify-center overflow-hidden rounded-full bg-[var(--color-accent)] font-semibold text-white", className)}>
+      {photo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={photo} alt={name} className="h-full w-full object-cover" />
+      ) : (
+        getInitials(name)
+      )}
+    </div>
+  );
+}
 
 function EmployeeHoverCard({ employee, anchorRect }: { employee: ApiEmployee; anchorRect: DOMRect }) {
   const cardRef = useRef<HTMLDivElement>(null);
@@ -38,14 +53,7 @@ function EmployeeHoverCard({ employee, anchorRect }: { employee: ApiEmployee; an
       style={{ top: pos.top, left: pos.left }}
     >
       <div className="flex items-center gap-3 border-b border-[var(--color-border-light)] p-3.5">
-        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--color-accent)]">
-          {employee.photo_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={employee.photo_url} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <span className="text-[14px] font-semibold text-white">{getInitials(employee.name)}</span>
-          )}
-        </div>
+        <Avatar id={employee.id} name={employee.name} photoUrl={employee.photo_url} className="h-12 w-12 flex-shrink-0 text-[14px]" />
         <div className="min-w-0 flex-1">
           <div className="truncate text-[14px] font-semibold text-[var(--color-text-primary)]">{employee.name}</div>
           <div className="text-[11.5px] text-[var(--color-text-muted)]">
@@ -177,9 +185,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
             setHoverRect(null);
           }}
         >
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-accent)] text-[11px] font-semibold text-white">
-            {getInitials(e.name)}
-          </div>
+          <Avatar id={e.id} name={e.name} photoUrl={e.photo_url} className="h-8 w-8 text-[11px]" />
           <span className="font-medium text-[var(--color-text-primary)]">{e.name}</span>
         </div>
       ),
