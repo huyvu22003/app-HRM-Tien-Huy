@@ -112,14 +112,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
   const [hoverRect, setHoverRect] = useState<DOMRect | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const employeeFetcher = useCallback(
-    () => fetchEmployees({ page, pageSize: PAGE_SIZE, search: search || undefined }),
-    [page, search],
-  );
-
   const deptFetcher = useCallback(() => fetchDepartments(), []);
-
-  const { data: empData, isLoading } = useQuery(employeeFetcher, [page, search]);
   const { data: deptData } = useQuery(deptFetcher);
 
   const departments = useMemo(() => {
@@ -127,11 +120,27 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
     return deptData.data.map((d: ApiDepartment) => d.name);
   }, [deptData]);
 
-  const items = useMemo(() => {
-    if (!empData?.data) return [];
-    if (dept === "all") return empData.data;
-    return empData.data.filter((e: ApiEmployee) => e.department_name === dept);
-  }, [empData, dept]);
+  // Resolve the selected department name → id so filtering happens server-side
+  // (across all pages), not just within the current paginated slice.
+  const deptId = useMemo(() => {
+    if (dept === "all" || !deptData?.data) return undefined;
+    return deptData.data.find((d: ApiDepartment) => d.name === dept)?.id;
+  }, [dept, deptData]);
+
+  const employeeFetcher = useCallback(
+    () =>
+      fetchEmployees({
+        page,
+        pageSize: PAGE_SIZE,
+        search: search || undefined,
+        departmentId: deptId,
+      }),
+    [page, search, deptId],
+  );
+
+  const { data: empData, isLoading } = useQuery(employeeFetcher, [page, search, deptId]);
+
+  const items = useMemo(() => empData?.data ?? [], [empData]);
 
   const totalPages = empData?.totalPages ?? 1;
 

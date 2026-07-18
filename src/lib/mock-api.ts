@@ -375,11 +375,15 @@ const MOCK_ROUTES: MockRoute[] = [
       const page = Number(params.get("page") || 1);
       const pageSize = Number(params.get("pageSize") || 20);
       const search = params.get("search")?.toLowerCase();
+      const departmentId = params.get("departmentId");
       let list = apiEmployees;
       if (search) {
         list = list.filter(
           (e) => e.name.toLowerCase().includes(search) || e.code.toLowerCase().includes(search),
         );
+      }
+      if (departmentId) {
+        list = list.filter((e) => e.department_id === Number(departmentId));
       }
       const total = list.length;
       const start = (page - 1) * pageSize;
