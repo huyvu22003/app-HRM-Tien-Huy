@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, X, HeartHandshake, CheckCircle2, Clock, XCircle, Loader2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Plus, X, HeartHandshake, CheckCircle2, Clock, XCircle, Loader2, Calendar } from "lucide-react";
 import { fetchLeaveRequests, type ApiLeaveRequest } from "@/lib/api";
 import { useQuery } from "@/lib/hooks";
 import { LEAVE_TYPES } from "@/lib/data/config";
-import { cn } from "@/lib/utils";
+import { EMPLOYEES } from "@/lib/data/employees";
+import { cn, formatDate } from "@/lib/utils";
 
 const LEAVE_TYPE_LABEL: Record<string, string> = Object.fromEntries(
   LEAVE_TYPES.map((t) => [t.code, t.label])
@@ -62,6 +63,11 @@ export function LeaveScreen() {
   const requests: ApiLeaveRequest[] = data?.data ?? [];
 
   const filtered = requests.filter((r) => matchesFilter(r.status, statusFilter));
+
+  const maternityEmployees = useMemo(
+    () => EMPLOYEES.filter((e) => e.status === "Nghỉ thai sản"),
+    [],
+  );
 
   const balance = { entitled: 12, carried: 2, used: 5, get remaining() {
     return this.entitled + this.carried - this.used;
@@ -201,13 +207,44 @@ export function LeaveScreen() {
         </div>
 
         <div className="rounded-[14px] border border-[var(--color-maternity)] bg-[var(--color-maternity-bg)] p-[18px]">
-          <div className="mb-2 flex items-center gap-2 text-[13px] font-semibold text-[var(--color-maternity)]">
+          <div className="mb-3 flex items-center gap-2 text-[13px] font-semibold text-[var(--color-maternity)]">
             <HeartHandshake size={16} /> Chế độ thai sản
           </div>
-          <p className="mb-3 text-[12.5px] text-[var(--color-text-muted)]">
-            2 trường hợp đang trong thời gian nghỉ thai sản theo quy định BHXH.
-          </p>
-          <button className="rounded-[8px] bg-[var(--color-maternity)] px-3 py-1.5 text-[12px] font-medium text-white">
+          {maternityEmployees.length === 0 ? (
+            <p className="text-[12.5px] text-[var(--color-text-muted)]">Không có trường hợp nghỉ thai sản.</p>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              <p className="text-[12.5px] text-[var(--color-text-muted)]">
+                {maternityEmployees.length} trường hợp đang trong thời gian nghỉ thai sản theo quy định BHXH.
+              </p>
+              {maternityEmployees.map((e) => {
+                const startDate = e.leaveDate || "";
+                const endMonth = startDate ? (() => {
+                  const d = new Date(startDate);
+                  d.setMonth(d.getMonth() + 6);
+                  return `${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+                })() : "";
+                return (
+                  <div key={e.code} className="flex items-center justify-between rounded-[10px] bg-white/70 px-3 py-2">
+                    <div>
+                      <div className="text-[12.5px] font-medium text-[var(--color-text-primary)]">{e.name}</div>
+                      <div className="text-[11px] text-[var(--color-text-muted)]">{e.department} · Mã {e.code}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="flex items-center gap-1 text-[11px] text-[var(--color-maternity)]">
+                        <Calendar size={11} />
+                        Từ {formatDate(startDate)}
+                      </div>
+                      {endMonth && (
+                        <div className="text-[10.5px] text-[var(--color-text-lighter)]">Dự kiến quay lại: {endMonth}</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <button className="mt-3 rounded-[8px] bg-[var(--color-maternity)] px-3 py-1.5 text-[12px] font-medium text-white">
             Đăng ký trường hợp mới
           </button>
         </div>

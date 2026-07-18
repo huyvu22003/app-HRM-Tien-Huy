@@ -157,7 +157,7 @@ export function AppShell({
 
       {/* Sidebar */}
       <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 flex w-[246px] shrink-0 flex-col bg-[var(--color-navy)] text-white transition-transform duration-200 lg:static lg:translate-x-0",
+        "fixed inset-y-0 left-0 z-50 flex h-screen w-[246px] shrink-0 flex-col bg-[var(--color-navy)] text-white transition-transform duration-200 lg:sticky lg:top-0 lg:translate-x-0",
         sidebarOpen ? "translate-x-0" : "-translate-x-full",
       )}>
         <div className="flex items-center justify-between px-5 pt-6 pb-4">
