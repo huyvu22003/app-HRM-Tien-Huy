@@ -543,8 +543,47 @@ export function EmployeeDetailScreen({
 
   async function handleSave() {
     if (!form || !employeeId) return;
+    const toNumber = (v: string) => {
+      const n = Number(String(v).replace(/[^\d.-]/g, ""));
+      return Number.isFinite(n) ? n : 0;
+    };
+    const payload = {
+      code: form.code,
+      name: form.name,
+      gender: form.gender,
+      dob: form.dob,
+      phone: form.phone,
+      cccd: form.cccd,
+      address: form.address,
+      email: form.email,
+      departmentName: form.department_name,
+      position: form.position,
+      workplace: form.workplace,
+      contractType: form.contract_type,
+      contractEnd: form.contract_end,
+      joinDate: form.join_date,
+      status: form.status,
+      manager: form.manager,
+      level: form.level,
+      bank: form.bank,
+      taxCode: form.tax_code,
+      compensation: {
+        baseSalary: toNumber(form.base_salary),
+        allowance: toNumber(form.allowance),
+        dependents: toNumber(form.dependents),
+      },
+      insurance: {
+        status: form.ins_status,
+        insCode: form.ins_code,
+        bhxhBook: form.bhxh_book,
+        bhytCode: form.bhyt_code,
+        bhytClinic: form.bhyt_clinic,
+        startDate: form.ins_start_date,
+        salaryBase: toNumber(form.ins_salary_base),
+      },
+    };
     try {
-      await doUpdate(employeeId, { ...form });
+      await doUpdate(employeeId, payload);
       setEditing(false);
       setForm(null);
       if (photoPreview) setPhotoUrl(photoPreview);
