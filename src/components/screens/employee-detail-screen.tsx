@@ -13,7 +13,7 @@ import {
   User as UserIcon,
   FileText,
 } from "lucide-react";
-import { fetchEmployee, updateEmployee, type ApiEmployee, type ApiCompensation, type ApiInsurance } from "@/lib/api";
+import { fetchEmployee, updateEmployee, fetchDepartments, type ApiEmployee, type ApiCompensation, type ApiInsurance, type ApiDepartment } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery, useMutation } from "@/lib/hooks";
 import { getInitials, cn, formatDate, formatMoney, seededRandom } from "@/lib/utils";
@@ -444,6 +444,12 @@ export function EmployeeDetailScreen({
   );
 
   const { data, isLoading, refetch } = useQuery(fetcher, [employeeId]);
+  const deptFetcher = useCallback(() => fetchDepartments(), []);
+  const { data: deptData } = useQuery(deptFetcher);
+  const deptOptions = useMemo(
+    () => (deptData?.data ?? []).map((d: ApiDepartment) => d.name),
+    [deptData],
+  );
   const [tab, setTab] = useState(0);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<EditableFields | null>(null);
@@ -771,7 +777,7 @@ export function EmployeeDetailScreen({
               <div className="grid grid-cols-2 gap-5 md:grid-cols-3">
                 <Field label="Mã thẻ" value={employee.code} editing={editing} field="code" form={form!} onChange={handleFieldChange} />
                 <Field label="Họ và tên" value={employee.name} editing={editing} field="name" form={form!} onChange={handleFieldChange} />
-                <Field label="Bộ phận" value={employee.department_name} editing={editing} field="department_name" form={form!} onChange={handleFieldChange} />
+                <Field label="Bộ phận" value={employee.department_name} editing={editing} field="department_name" form={form!} onChange={handleFieldChange} type="select" options={deptOptions} />
                 <Field label="Chức vụ" value={employee.position} editing={editing} field="position" form={form!} onChange={handleFieldChange} />
                 <Field label="Ngày vào làm" value={formatDate(employee.join_date)} editing={editing} field="join_date" form={form!} onChange={handleFieldChange} type="date" />
                 <Field label="Trạng thái" value={employee.status} editing={editing} field="status" form={form!} onChange={handleFieldChange} type="select" options={["Đang làm việc", "Nghỉ việc", "Nghỉ thai sản", "Thử việc"]} />
@@ -783,7 +789,7 @@ export function EmployeeDetailScreen({
 
           {tab === 1 && (
             <div className="grid grid-cols-2 gap-5 md:grid-cols-3">
-              <Field label="Bộ phận" value={employee.department_name} editing={editing} field="department_name" form={form!} onChange={handleFieldChange} />
+              <Field label="Bộ phận" value={employee.department_name} editing={editing} field="department_name" form={form!} onChange={handleFieldChange} type="select" options={deptOptions} />
               <Field label="Chức vụ" value={employee.position} editing={editing} field="position" form={form!} onChange={handleFieldChange} />
               <Field label="Cấp bậc" value={employee.level} editing={editing} field="level" form={form!} onChange={handleFieldChange} />
               <Field label="Ngày vào làm" value={formatDate(employee.join_date)} editing={editing} field="join_date" form={form!} onChange={handleFieldChange} type="date" />

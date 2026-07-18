@@ -1,30 +1,32 @@
 -- Seed data for HRM Tiến Huy
 
 -- Departments
-INSERT INTO departments (name, block, block_color) VALUES ('Phay CNC', 'Sản xuất', '#1e6fd0');
-INSERT INTO departments (name, block, block_color) VALUES ('Dập', 'Sản xuất', '#1e6fd0');
-INSERT INTO departments (name, block, block_color) VALUES ('Cắt Dây', 'Sản xuất', '#1e6fd0');
-INSERT INTO departments (name, block, block_color) VALUES ('Tiện CNC SL nhiều', 'Sản xuất', '#1e6fd0');
-INSERT INTO departments (name, block, block_color) VALUES ('Phay Cơ', 'Sản xuất', '#1e6fd0');
-INSERT INTO departments (name, block, block_color) VALUES ('Xử lý bề mặt', 'Sản xuất', '#1e6fd0');
-INSERT INTO departments (name, block, block_color) VALUES ('Hàn', 'Sản xuất', '#1e6fd0');
-INSERT INTO departments (name, block, block_color) VALUES ('Cắt Laser', 'Sản xuất', '#1e6fd0');
-INSERT INTO departments (name, block, block_color) VALUES ('Cưa-Quay-Nhuộm đen', 'Sản xuất', '#1e6fd0');
-INSERT INTO departments (name, block, block_color) VALUES ('Tiện CNC SL ít', 'Sản xuất', '#1e6fd0');
-INSERT INTO departments (name, block, block_color) VALUES ('Tiện Cơ', 'Sản xuất', '#1e6fd0');
-INSERT INTO departments (name, block, block_color) VALUES ('QC', 'Kỹ thuật & QC', '#2f8f5b');
-INSERT INTO departments (name, block, block_color) VALUES ('QLSX', 'Kỹ thuật & QC', '#2f8f5b');
-INSERT INTO departments (name, block, block_color) VALUES ('Khai phá', 'Kỹ thuật & QC', '#2f8f5b');
-INSERT INTO departments (name, block, block_color) VALUES ('Bảo Trì', 'Kỹ thuật & QC', '#2f8f5b');
-INSERT INTO departments (name, block, block_color) VALUES ('HTQT', 'Kỹ thuật & QC', '#2f8f5b');
-INSERT INTO departments (name, block, block_color) VALUES ('Kế toán', 'Văn phòng', '#ef7c15');
-INSERT INTO departments (name, block, block_color) VALUES ('Kinh Doanh', 'Văn phòng', '#ef7c15');
-INSERT INTO departments (name, block, block_color) VALUES ('Nhân Sự', 'Văn phòng', '#ef7c15');
-INSERT INTO departments (name, block, block_color) VALUES ('Thu Mua', 'Văn phòng', '#ef7c15');
-INSERT INTO departments (name, block, block_color) VALUES ('Kho', 'Hỗ trợ & Kho', '#c1852a');
-INSERT INTO departments (name, block, block_color) VALUES ('Tạp vụ', 'Hỗ trợ & Kho', '#c1852a');
-INSERT INTO departments (name, block, block_color) VALUES ('Ban Giám đốc', 'Văn phòng', '#ef7c15');
-INSERT INTO departments (name, block, block_color) VALUES ('Bộ phận IT', 'Văn phòng', '#ef7c15');
+-- NOTE: keep INSERT order stable — employee.department_id references these row ids.
+-- Display order is controlled by the API (block ordering), not insert order.
+INSERT INTO departments (name, block, block_color) VALUES ('Phay CNC', 'Khối Sản xuất', '#1e6fd0');
+INSERT INTO departments (name, block, block_color) VALUES ('Dập', 'Khối Sản xuất', '#1e6fd0');
+INSERT INTO departments (name, block, block_color) VALUES ('Cắt Dây', 'Khối Sản xuất', '#1e6fd0');
+INSERT INTO departments (name, block, block_color) VALUES ('Tiện CNC SL nhiều', 'Khối Sản xuất', '#1e6fd0');
+INSERT INTO departments (name, block, block_color) VALUES ('Phay Cơ', 'Khối Sản xuất', '#1e6fd0');
+INSERT INTO departments (name, block, block_color) VALUES ('Xử lý bề mặt', 'Khối Sản xuất', '#1e6fd0');
+INSERT INTO departments (name, block, block_color) VALUES ('Hàn', 'Khối Sản xuất', '#1e6fd0');
+INSERT INTO departments (name, block, block_color) VALUES ('Cắt Laser', 'Khối Sản xuất', '#1e6fd0');
+INSERT INTO departments (name, block, block_color) VALUES ('Cưa-Quay-Nhuộm đen', 'Khối Sản xuất', '#1e6fd0');
+INSERT INTO departments (name, block, block_color) VALUES ('Tiện CNC SL ít', 'Khối Sản xuất', '#1e6fd0');
+INSERT INTO departments (name, block, block_color) VALUES ('Tiện Cơ', 'Khối Sản xuất', '#1e6fd0');
+INSERT INTO departments (name, block, block_color) VALUES ('QC', 'Khối Kỹ thuật & QC', '#2f8f5b');
+INSERT INTO departments (name, block, block_color) VALUES ('QLSX', 'Khối Kỹ thuật & QC', '#2f8f5b');
+INSERT INTO departments (name, block, block_color) VALUES ('Khai phá', 'Khối Kỹ thuật & QC', '#2f8f5b');
+INSERT INTO departments (name, block, block_color) VALUES ('Bảo Trì', 'Khối Kỹ thuật & QC', '#2f8f5b');
+INSERT INTO departments (name, block, block_color) VALUES ('HTQT', 'Khối Kỹ thuật & QC', '#2f8f5b');
+INSERT INTO departments (name, block, block_color) VALUES ('Kế toán', 'Khối Văn phòng', '#ef7c15');
+INSERT INTO departments (name, block, block_color) VALUES ('Kinh Doanh', 'Khối Văn phòng', '#ef7c15');
+INSERT INTO departments (name, block, block_color) VALUES ('Nhân Sự', 'Khối Văn phòng', '#ef7c15');
+INSERT INTO departments (name, block, block_color) VALUES ('Thu Mua', 'Khối Văn phòng', '#ef7c15');
+INSERT INTO departments (name, block, block_color) VALUES ('Kho', 'Khối Hỗ trợ & Kho', '#c1852a');
+INSERT INTO departments (name, block, block_color) VALUES ('Tạp vụ', 'Khối Hỗ trợ & Kho', '#c1852a');
+INSERT INTO departments (name, block, block_color) VALUES ('Ban Giám đốc', 'Khối Điều hành', '#0f2f5a');
+INSERT INTO departments (name, block, block_color) VALUES ('Bộ phận IT', 'Khối Điều hành', '#0f2f5a');
 
 -- Employees
 INSERT INTO employees (code, name, gender, dob, phone, cccd, address, email, department_id, position, workplace, contract_type, contract_end, join_date, resign_date, status, manager, level, bank, tax_code) VALUES ('0142', 'Nguyễn Văn Thiện', 'Nam', '1978-02-25', '0931611116', '019781380465', 'Quận 12, TP.HCM', 'nguyen.van.thien.0142@tienhuy.vn', 1, 'Tổ trưởng', 'Nhà xưởng', 'Không xác định thời hạn', NULL, '2022-01-12', NULL, 'Đang làm việc', '-', 'Tổ trưởng', 'Vietcombank - 2359552829', '2384229719');

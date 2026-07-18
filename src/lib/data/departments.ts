@@ -9,33 +9,40 @@ export interface Department {
   parentId: string | null;
 }
 
+// Blocks are ordered top-down by standard org flow:
+// Điều hành → Văn phòng → Kỹ thuật & QC → Sản xuất → Hỗ trợ & Kho
 export const BLOCKS = [
+  {
+    name: "Khối Điều hành",
+    color: "#0f2f5a",
+    depts: ["Ban Giám đốc", "Bộ phận IT"],
+  },
+  {
+    name: "Khối Văn phòng",
+    color: "#ef7c15",
+    depts: ["Nhân Sự", "Kế toán", "Kinh Doanh", "Thu Mua"],
+  },
+  {
+    name: "Khối Kỹ thuật & QC",
+    color: "#2f8f5b",
+    depts: ["QLSX", "Khai phá", "QC", "Bảo Trì", "HTQT"],
+  },
   {
     name: "Khối Sản xuất",
     color: "#1e6fd0",
     depts: [
       "Phay CNC",
+      "Tiện CNC SL nhiều",
+      "Tiện CNC SL ít",
+      "Phay Cơ",
+      "Tiện Cơ",
       "Dập",
       "Cắt Dây",
-      "Tiện CNC SL nhiều",
-      "Phay Cơ",
-      "Xử lý bề mặt",
-      "Hàn",
       "Cắt Laser",
+      "Hàn",
+      "Xử lý bề mặt",
       "Cưa-Quay-Nhuộm đen",
-      "Tiện CNC SL ít",
-      "Tiện Cơ",
     ],
-  },
-  {
-    name: "Khối Kỹ thuật & QC",
-    color: "#2f8f5b",
-    depts: ["QC", "QLSX", "Khai phá", "Bảo Trì", "HTQT"],
-  },
-  {
-    name: "Khối Văn phòng",
-    color: "#ef7c15",
-    depts: ["Kế toán", "Kinh Doanh", "Nhân Sự", "Thu Mua"],
   },
   {
     name: "Khối Hỗ trợ & Kho",
@@ -43,6 +50,9 @@ export const BLOCKS = [
     depts: ["Kho", "Tạp vụ"],
   },
 ];
+
+// Canonical block display order — used by both mock and API sorting
+export const BLOCK_ORDER = BLOCKS.map((b) => b.name);
 
 // Head employee code per department (first / senior member of each team)
 const DEPT_HEAD_CODE: Record<string, string> = {
@@ -79,11 +89,7 @@ function blockOf(dept: string): { block: string; blockColor: string } {
   return { block: "Khối Điều hành", blockColor: "#0f2f5a" };
 }
 
-export const DEPARTMENTS: Department[] = [
-  ...BLOCKS.flatMap((b) => b.depts),
-  "Ban Giám đốc",
-  "Bộ phận IT",
-].map((name) => {
+export const DEPARTMENTS: Department[] = BLOCKS.flatMap((b) => b.depts).map((name) => {
   const { block, blockColor } = blockOf(name);
   return {
     id: name,

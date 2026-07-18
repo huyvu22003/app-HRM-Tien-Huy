@@ -44,7 +44,7 @@ async function request<T>(
   options: RequestInit = {},
 ): Promise<T> {
   if (isDemoMode()) {
-    const mock = mockResolve(path);
+    const mock = mockResolve(path, options.method || "GET", options.body);
     if (mock !== null) return mock as T;
   }
 
@@ -84,7 +84,7 @@ async function request<T>(
 
     return res.json();
   } catch (err) {
-    const mock = mockResolve(path);
+    const mock = mockResolve(path, options.method || "GET", options.body);
     if (mock !== null) {
       enableDemoMode();
       return mock as T;
@@ -269,6 +269,26 @@ export interface ApiDepartment {
 
 export function fetchDepartments() {
   return api.get<{ data: ApiDepartment[] }>("/departments");
+}
+
+export function createDepartment(data: {
+  name: string;
+  block: string;
+  blockColor?: string;
+  headEmployeeId?: number | null;
+}) {
+  return api.post<{ id: number }>("/departments", data);
+}
+
+export function updateDepartment(
+  id: number | string,
+  data: { name?: string; block?: string; blockColor?: string; headEmployeeId?: number | null },
+) {
+  return api.put<{ success: boolean }>(`/departments/${id}`, data);
+}
+
+export function deleteDepartment(id: number | string) {
+  return api.delete<{ success: boolean }>(`/departments/${id}`);
 }
 
 // --- Attendance ---
