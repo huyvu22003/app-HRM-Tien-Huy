@@ -45,25 +45,25 @@ const GROUPS: { title: string; items: Item[] }[] = [
       { key: "attendance", label: "Chấm công", icon: Clock, status: "live" },
       { key: "leave", label: "Phép năm", icon: CalendarDays, status: "live" },
       { key: "salary", label: "Lương thưởng", icon: Banknote, status: "live" },
-      { key: "report", label: "Báo cáo ngày", icon: FileText, status: "priority" },
+      { key: "report", label: "Báo cáo ngày", icon: FileText, status: "live" },
     ],
   },
   {
     title: "Hiệu suất",
     items: [
       { key: "kpi", label: "KPI & Xếp hạng", icon: Target, status: "live" },
-      { key: "recognition", label: "Khen thưởng", icon: Award, status: "priority" },
-      { key: "payroll", label: "Payroll đối chiếu", icon: Scale, status: "priority" },
+      { key: "recognition", label: "Khen thưởng", icon: Award, status: "live" },
+      { key: "payroll", label: "Payroll đối chiếu", icon: Scale, status: "live" },
     ],
   },
   {
     title: "Phát triển & Quản trị",
     items: [
-      { key: "training", label: "Đào tạo", icon: GraduationCap, status: "later" },
+      { key: "training", label: "Đào tạo", icon: GraduationCap, status: "live" },
       { key: "permissions", label: "Phân quyền", icon: Shield, status: "live" },
       { key: "config", label: "Cấu hình", icon: Settings, status: "live" },
       { key: "formula", label: "Công thức lương", icon: Calculator, status: "live" },
-      { key: "audit", label: "Audit log", icon: ScrollText, status: "later" },
+      { key: "audit", label: "Audit log", icon: ScrollText, status: "live" },
     ],
   },
 ];
@@ -94,8 +94,8 @@ export function FrameworkScreen({ onNavigate }: { onNavigate: (screen: string) =
             <div className="text-[11px] text-white/70">Bộ phận</div>
           </div>
           <div>
-            <div className="font-[family-name:var(--font-mono)] text-[22px] font-semibold">5</div>
-            <div className="text-[11px] text-white/70">Nhóm phân hệ</div>
+            <div className="font-[family-name:var(--font-mono)] text-[22px] font-semibold">16</div>
+            <div className="text-[11px] text-white/70">Phân hệ</div>
           </div>
         </div>
       </div>
@@ -178,7 +178,7 @@ export function FrameworkScreen({ onNavigate }: { onNavigate: (screen: string) =
               <div key={i} className="flex items-start gap-2.5">
                 <CheckCircle2
                   size={16}
-                  className={i === 0 ? "text-[var(--color-success)]" : "text-[var(--color-text-lighter)]"}
+                  className="text-[var(--color-success)]"
                 />
                 <span className="text-[var(--color-text-muted)]">{phase}</span>
               </div>
