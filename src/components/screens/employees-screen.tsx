@@ -296,19 +296,39 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
 
   const { hidden, toggle, reset, visibleColumns } = useColumnPrefs("employees", columns);
 
+  const [exporting, setExporting] = useState(false);
+
   async function handleExport() {
     const cols = visibleColumns.filter((c) => c.exportValue);
-    exportStyledExcel({
-      filename: `nhan-vien-${new Date().toISOString().slice(0, 10)}`,
-      title: "DANH SÁCH NHÂN VIÊN",
-      meta: [
-        dept === "all" ? "Bộ phận: Tất cả" : `Bộ phận: ${dept}`,
-        `Ngày xuất: ${new Date().toLocaleDateString("vi-VN")}`,
-        `Số lượng: ${items.length} nhân viên`,
-      ],
-      columns: cols.map((c) => ({ label: c.label, align: c.align, format: c.exportFormat })),
-      rows: items.map((e: ApiEmployee, i: number) => cols.map((c) => c.exportValue!(e, i)))
-    });
+    setExporting(true);
+    try {
+      // Export the full filtered set (all pages), not just the current page,
+      // and group employees by department so teammates sit together.
+      const all = await fetchEmployees({
+        page: 1,
+        pageSize: 1000,
+        search: search || undefined,
+        departmentId: deptId,
+      });
+      const sorted = [...(all.data ?? [])].sort(
+        (a: ApiEmployee, b: ApiEmployee) =>
+          (a.department_name ?? "").localeCompare(b.department_name ?? "", "vi") ||
+          a.code.localeCompare(b.code, "vi"),
+      );
+      exportStyledExcel({
+        filename: `nhan-vien-${new Date().toISOString().slice(0, 10)}`,
+        title: "DANH SÁCH NHÂN VIÊN",
+        meta: [
+          dept === "all" ? "Bộ phận: Tất cả" : `Bộ phận: ${dept}`,
+          `Ngày xuất: ${new Date().toLocaleDateString("vi-VN")}`,
+          `Số lượng: ${sorted.length} nhân viên`,
+        ],
+        columns: cols.map((c) => ({ label: c.label, align: c.align, format: c.exportFormat })),
+        rows: sorted.map((e: ApiEmployee, i: number) => cols.map((c) => c.exportValue!(e, i))),
+      });
+    } finally {
+      setExporting(false);
+    }
   }
 
   return (
@@ -348,9 +368,11 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
           <ColumnMenu columns={columns} hidden={hidden} onToggle={toggle} onReset={reset} />
           <button
             onClick={handleExport}
-            className="flex items-center gap-1.5 rounded-[8px] border border-[var(--color-border)] px-3 py-1.5 text-[12.5px] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]"
+            disabled={exporting}
+            className="flex items-center gap-1.5 rounded-[8px] border border-[var(--color-border)] px-3 py-1.5 text-[12.5px] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)] disabled:opacity-60"
           >
-            <Download size={14} /> Xuất Excel
+            {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+            {exporting ? "Đang xuất..." : "Xuất Excel"}
           </button>
           {canEdit && (
             <>

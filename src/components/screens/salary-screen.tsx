@@ -433,12 +433,17 @@ export function SalaryScreen() {
 
   async function handleExport() {
     const cols = SAL_COLUMNS.filter((c) => isVisible(c.id) && c.exportValue);
+    const sorted = [...rows].sort(
+      (a, b) =>
+        (a.row.department_name ?? "").localeCompare(b.row.department_name ?? "", "vi") ||
+        a.row.code.localeCompare(b.row.code, "vi"),
+    );
     exportStyledExcel({
       filename: `bang-luong-${period}`,
       title: `BẢNG LƯƠNG KỲ ${periodLabel}`,
-      meta: [`Ngày xuất: ${new Date().toLocaleDateString("vi-VN")}`, `Số lượng: ${rows.length} nhân viên`],
+      meta: [`Ngày xuất: ${new Date().toLocaleDateString("vi-VN")}`, `Số lượng: ${sorted.length} nhân viên`],
       columns: cols.map((c) => ({ label: c.label, align: c.align, format: c.exportFormat })),
-      rows: rows.map((d, i) => cols.map((c) => c.exportValue!(d, i)))
+      rows: sorted.map((d, i) => cols.map((c) => c.exportValue!(d, i)))
     });
   }
 

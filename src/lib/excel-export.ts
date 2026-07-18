@@ -72,7 +72,7 @@ export function buildExcelHtml(opts: ExcelExportOptions): string {
   const metaRows = meta
     .map(
       (m) =>
-        `<tr><td colspan="${colCount}" style="padding:1px 8px;font-size:10pt;color:#555;">${esc(m)}</td></tr>`,
+        `<tr><td colspan="${colCount}" style="padding:1px 8px;font-size:10pt;color:#555;text-align:center;">${esc(m)}</td></tr>`,
     )
     .join("");
 
@@ -90,9 +90,9 @@ export function buildExcelHtml(opts: ExcelExportOptions): string {
 </head>
 <body>
 <table>
-  <tr><td colspan="${colCount}" class="company" style="padding:8px 8px 0;">CÔNG TY TNHH CƠ KHÍ KHUÔN MẪU TIẾN HUY</td></tr>
-  <tr><td colspan="${colCount}" style="padding:0 8px;font-size:9pt;color:#888;">Hệ thống quản trị nhân sự HRM</td></tr>
-  <tr><td colspan="${colCount}" class="title" style="padding:8px 8px 2px;">${esc(title)}</td></tr>
+  <tr><td colspan="${colCount}" class="company" style="padding:8px 8px 0;text-align:center;">CÔNG TY TNHH CƠ KHÍ KHUÔN MẪU TIẾN HUY</td></tr>
+  <tr><td colspan="${colCount}" style="padding:0 8px;font-size:9pt;color:#888;text-align:center;">Hệ thống quản trị nhân sự HRM</td></tr>
+  <tr><td colspan="${colCount}" class="title" style="padding:8px 8px 2px;text-align:center;">${esc(title)}</td></tr>
   ${metaRows}
   <tr><td colspan="${colCount}" style="height:6px;"></td></tr>
   <thead><tr>${headCells}</tr></thead>
