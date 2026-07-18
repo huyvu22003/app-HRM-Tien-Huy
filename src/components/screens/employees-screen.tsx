@@ -511,7 +511,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
           (a.department_name ?? "").localeCompare(b.department_name ?? "", "vi") ||
           a.code.localeCompare(b.code, "vi"),
       );
-      exportStyledExcel({
+      await exportStyledExcel({
         filename: `nhan-vien-${new Date().toISOString().slice(0, 10)}`,
         title: "DANH SÁCH NHÂN VIÊN",
         meta: [

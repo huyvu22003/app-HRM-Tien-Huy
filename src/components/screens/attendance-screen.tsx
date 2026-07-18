@@ -92,7 +92,7 @@ export function AttendanceScreen() {
 
   async function handleExport() {
     const cols = ATT_COLUMNS.filter((c) => isVisible(c.id) && c.exportValue);
-    exportStyledExcel({
+    await exportStyledExcel({
       filename: `cham-cong-${period}`,
       title: `BẢNG CHẤM CÔNG KỲ ${periodDisplay}`,
       meta: [`Ngày xuất: ${new Date().toLocaleDateString("vi-VN")}`, `Số lượng: ${filtered.length} nhân viên`],

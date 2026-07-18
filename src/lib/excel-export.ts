@@ -1,16 +1,16 @@
 "use client";
 
+import ExcelJS from "exceljs";
+
 /**
- * Styled Excel export. Produces a real .xls file that Excel opens with full
- * corporate styling — logo, coloured header, borders, zebra rows, column
- * widths and number formats — by emitting an Office-flavoured HTML table.
- * No heavy dependency, works with the static export build.
+ * Styled Excel (.xlsx) export via exceljs — real workbook with an embedded
+ * company logo, centered title banner, coloured header, borders, zebra rows,
+ * column widths and number formats. Opens with no "format mismatch" warning.
  */
 
 export interface ExcelColumn {
   label: string;
   align?: "left" | "right" | "center";
-  /** money → "#,##0 ₫"; int → "#,##0"; text keeps as-is. Default: auto by value type. */
   format?: "money" | "int" | "text";
   width?: number; // px
 }
@@ -18,96 +18,149 @@ export interface ExcelColumn {
 export interface ExcelExportOptions {
   filename: string;
   title: string;
-  meta?: string[]; // e.g. ["Kỳ: 06/2026", "Ngày xuất: 18/07/2026"]
+  meta?: string[];
   columns: ExcelColumn[];
   rows: (string | number)[][];
-  logoDataUrl?: string | null;
 }
 
-const NAVY = "#0f2f5a";
-const HEADER_BG = "#1a5276";
-const ZEBRA = "#f4f7fb";
-const BORDER = "#c9d4e0";
+const NAVY = "FF0F2F5A";
+const HEADER_BG = "FF1A5276";
+const ZEBRA = "FFF4F7FB";
+const BORDER = "FFC9D4E0";
 
-function esc(v: string | number): string {
-  return String(v ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+let _logoCache: { base64: string; width: number; height: number } | null | undefined;
+
+async function getLogo(maxWidth = 150): Promise<{ base64: string; width: number; height: number } | null> {
+  if (_logoCache !== undefined) return _logoCache;
+  try {
+    const result = await new Promise<{ base64: string; width: number; height: number } | null>((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxWidth / img.width);
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return resolve(null);
+        ctx.drawImage(img, 0, 0, w, h);
+        try {
+          const dataUrl = canvas.toDataURL("image/png");
+          resolve({ base64: dataUrl.replace(/^data:image\/png;base64,/, ""), width: w, height: h });
+        } catch {
+          resolve(null);
+        }
+      };
+      img.onerror = () => resolve(null);
+      img.src = "/logo.png";
+    });
+    _logoCache = result;
+    return result;
+  } catch {
+    _logoCache = null;
+    return null;
+  }
 }
 
-function msoFormat(fmt: "money" | "int" | "text"): string {
-  if (fmt === "money") return "mso-number-format:'#,##0\\ \\₫';";
-  if (fmt === "int") return "mso-number-format:'#,##0';";
-  return "mso-number-format:'\\@';"; // force text (keeps leading zeros, phone codes)
+function numFmt(format: "money" | "int" | "text" | undefined, isNum: boolean): string | undefined {
+  const f = format ?? (isNum ? "int" : "text");
+  if (f === "money") return '#,##0" ₫"';
+  if (f === "int") return "#,##0";
+  return undefined;
 }
 
-export function buildExcelHtml(opts: ExcelExportOptions): string {
-  const { title, meta = [], columns, rows, logoDataUrl } = opts;
+export async function exportStyledExcel(opts: ExcelExportOptions): Promise<void> {
+  const { title, meta = [], columns, rows, filename } = opts;
   const colCount = columns.length;
 
-  const headCells = columns
-    .map(
-      (c) =>
-        `<th style="background:${HEADER_BG};color:#fff;font-weight:bold;border:1px solid ${NAVY};padding:6px 8px;text-align:${c.align ?? "left"};white-space:nowrap;${c.width ? `width:${c.width}px;` : ""}">${esc(c.label)}</th>`,
-    )
-    .join("");
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Bảng dữ liệu", { views: [{ showGridLines: false }] });
 
-  const bodyRows = rows
-    .map((row, i) => {
-      const bg = i % 2 === 1 ? `background:${ZEBRA};` : "";
-      const cells = columns
-        .map((c, j) => {
-          const raw = row[j];
-          const isNum = typeof raw === "number";
-          const align = c.align ?? (isNum ? "right" : "left");
-          const fmt: "money" | "int" | "text" = c.format ?? (isNum ? "int" : "text");
-          return `<td style="border:1px solid ${BORDER};padding:4px 8px;text-align:${align};${bg}${msoFormat(fmt)}">${esc(raw)}</td>`;
-        })
-        .join("");
-      return `<tr>${cells}</tr>`;
-    })
-    .join("");
+  ws.columns = columns.map((c) => ({ width: c.width ? c.width / 7 : 18 }));
 
-  const metaRows = meta
-    .map(
-      (m) =>
-        `<tr><td colspan="${colCount}" style="padding:1px 8px;font-size:10pt;color:#555;text-align:center;">${esc(m)}</td></tr>`,
-    )
-    .join("");
+  const logo = await getLogo();
+  if (logo) {
+    const id = wb.addImage({ base64: logo.base64, extension: "png" });
+    ws.addImage(id, { tl: { col: 0, row: 0 }, ext: { width: logo.width, height: logo.height } });
+  }
 
-  // Note: Excel's HTML import cannot embed data-URL images (shows a broken
-  // link box), so the header is a styled text banner rather than an <img>.
-  void logoDataUrl;
+  const centerMerged = (rowIdx: number, text: string, opts2: { size?: number; bold?: boolean; color?: string }) => {
+    ws.mergeCells(rowIdx, 1, rowIdx, colCount);
+    const cell = ws.getCell(rowIdx, 1);
+    cell.value = text;
+    cell.alignment = { horizontal: "center", vertical: "middle" };
+    cell.font = { name: "Calibri", size: opts2.size ?? 11, bold: opts2.bold, color: { argb: opts2.color ?? "FF333333" } };
+  };
 
-  return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
-<head><meta charset="utf-8">
-<style>
-  table { border-collapse: collapse; font-family: 'Segoe UI', Arial, sans-serif; font-size: 10pt; }
-  .company { font-size: 14pt; font-weight: bold; color: ${NAVY}; }
-  .title { font-size: 15pt; font-weight: bold; color: ${NAVY}; }
-</style>
-</head>
-<body>
-<table>
-  <tr><td colspan="${colCount}" class="company" style="padding:8px 8px 0;text-align:center;">CÔNG TY TNHH CƠ KHÍ KHUÔN MẪU TIẾN HUY</td></tr>
-  <tr><td colspan="${colCount}" style="padding:0 8px;font-size:9pt;color:#888;text-align:center;">Hệ thống quản trị nhân sự HRM</td></tr>
-  <tr><td colspan="${colCount}" class="title" style="padding:8px 8px 2px;text-align:center;">${esc(title)}</td></tr>
-  ${metaRows}
-  <tr><td colspan="${colCount}" style="height:6px;"></td></tr>
-  <thead><tr>${headCells}</tr></thead>
-  <tbody>${bodyRows}</tbody>
-</table>
-</body></html>`;
-}
+  // Header banner (rows tall enough to clear the logo)
+  ws.getRow(1).height = 22;
+  ws.getRow(2).height = 16;
+  centerMerged(1, "CÔNG TY TNHH CƠ KHÍ KHUÔN MẪU TIẾN HUY", { size: 14, bold: true, color: NAVY });
+  centerMerged(2, "Hệ thống quản trị nhân sự HRM", { size: 9, color: "FF888888" });
+  centerMerged(3, title, { size: 15, bold: true, color: NAVY });
 
-export function exportStyledExcel(opts: ExcelExportOptions): void {
-  const html = buildExcelHtml(opts);
-  const blob = new Blob(["﻿", html], { type: "application/vnd.ms-excel;charset=utf-8;" });
+  let r = 4;
+  for (const m of meta) {
+    centerMerged(r, m, { size: 10, color: "FF555555" });
+    r++;
+  }
+  r++; // spacer row
+
+  // Header row
+  const headerRow = ws.getRow(r);
+  columns.forEach((c, i) => {
+    const cell = headerRow.getCell(i + 1);
+    cell.value = c.label;
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: HEADER_BG } };
+    cell.font = { color: { argb: "FFFFFFFF" }, bold: true, size: 10 };
+    cell.alignment = { horizontal: c.align ?? "left", vertical: "middle" };
+    cell.border = {
+      top: { style: "thin", color: { argb: NAVY } },
+      bottom: { style: "thin", color: { argb: NAVY } },
+      left: { style: "thin", color: { argb: NAVY } },
+      right: { style: "thin", color: { argb: NAVY } },
+    };
+  });
+  headerRow.height = 20;
+  const headerRowIdx = r;
+  r++;
+
+  // Data rows
+  rows.forEach((row, ri) => {
+    const dataRow = ws.getRow(r);
+    const zebra = ri % 2 === 1;
+    columns.forEach((c, ci) => {
+      const raw = row[ci];
+      const isNum = typeof raw === "number";
+      const cell = dataRow.getCell(ci + 1);
+      cell.value = raw;
+      cell.alignment = { horizontal: c.align ?? (isNum ? "right" : "left"), vertical: "middle" };
+      const fmt = numFmt(c.format, isNum);
+      if (fmt) cell.numFmt = fmt;
+      if (zebra) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ZEBRA } };
+      cell.border = {
+        top: { style: "thin", color: { argb: BORDER } },
+        bottom: { style: "thin", color: { argb: BORDER } },
+        left: { style: "thin", color: { argb: BORDER } },
+        right: { style: "thin", color: { argb: BORDER } },
+      };
+      cell.font = { size: 10 };
+    });
+    r++;
+  });
+
+  // Freeze header + title so it stays visible while scrolling
+  ws.views = [{ state: "frozen", ySplit: headerRowIdx, showGridLines: false }];
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = opts.filename.endsWith(".xls") ? opts.filename : `${opts.filename}.xls`;
+  a.download = filename.endsWith(".xlsx") ? filename : `${filename}.xlsx`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

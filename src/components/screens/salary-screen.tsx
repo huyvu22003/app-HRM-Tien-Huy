@@ -438,7 +438,7 @@ export function SalaryScreen() {
         (a.row.department_name ?? "").localeCompare(b.row.department_name ?? "", "vi") ||
         a.row.code.localeCompare(b.row.code, "vi"),
     );
-    exportStyledExcel({
+    await exportStyledExcel({
       filename: `bang-luong-${period}`,
       title: `BẢNG LƯƠNG KỲ ${periodLabel}`,
       meta: [`Ngày xuất: ${new Date().toLocaleDateString("vi-VN")}`, `Số lượng: ${sorted.length} nhân viên`],

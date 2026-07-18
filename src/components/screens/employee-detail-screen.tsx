@@ -720,33 +720,35 @@ export function EmployeeDetailScreen({
             </div>
             {canEdit && (
               <div className="mt-2 flex items-center gap-2">
-                {photoDraft ? (
-                  <>
-                    <button
-                      onClick={savePhoto}
-                      className="flex items-center gap-1.5 rounded-[8px] bg-[var(--color-success)] px-3 py-1.5 text-[11.5px] font-medium text-white hover:opacity-90"
-                    >
-                      <Save size={12} /> Lưu ảnh
-                    </button>
-                    <button
-                      onClick={cancelPhoto}
-                      className="flex items-center gap-1.5 rounded-[8px] border border-[var(--color-border)] px-3 py-1.5 text-[11.5px] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]"
-                    >
-                      <X size={12} /> Huỷ
-                    </button>
-                    <span className="text-[11px] text-[var(--color-text-light)]">Ảnh mới chưa lưu</span>
-                  </>
-                ) : (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-1.5 rounded-[8px] border border-[var(--color-border)] px-3 py-1.5 text-[11.5px] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]"
+                >
+                  <Upload size={12} /> {currentPhoto ? "Thay ảnh" : "Tải ảnh"}
+                </button>
+                <button
+                  onClick={savePhoto}
+                  disabled={!photoDraft}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-[8px] px-3 py-1.5 text-[11.5px] font-medium transition-colors",
+                    photoDraft
+                      ? "bg-[var(--color-success)] text-white hover:opacity-90"
+                      : "cursor-not-allowed bg-[var(--color-page-bg)] text-[var(--color-text-lighter)]",
+                  )}
+                  title={photoDraft ? "Lưu ảnh mới" : "Chọn ảnh mới trước khi lưu"}
+                >
+                  <Save size={12} /> Lưu ảnh
+                </button>
+                {photoDraft && (
                   <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center gap-1.5 text-[11.5px] text-[var(--color-accent)] hover:underline"
+                    onClick={cancelPhoto}
+                    className="flex items-center gap-1.5 rounded-[8px] border border-[var(--color-border)] px-3 py-1.5 text-[11.5px] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]"
                   >
-                    <Upload size={12} /> {currentPhoto ? "Thay ảnh nhân viên" : "Tải ảnh nhân viên"}
+                    <X size={12} /> Huỷ
                   </button>
                 )}
-                {photoSaved && (
-                  <span className="text-[11px] font-medium text-[var(--color-success)]">Đã lưu ảnh ✓</span>
-                )}
+                {photoDraft && <span className="text-[11px] text-[var(--color-warning)]">● Ảnh mới chưa lưu</span>}
+                {photoSaved && <span className="text-[11px] font-medium text-[var(--color-success)]">Đã lưu ảnh ✓</span>}
               </div>
             )}
           </div>
