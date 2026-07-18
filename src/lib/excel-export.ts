@@ -29,42 +29,6 @@ const HEADER_BG = "#1a5276";
 const ZEBRA = "#f4f7fb";
 const BORDER = "#c9d4e0";
 
-let _logoCache: string | null | undefined;
-
-/** Load /logo.png, downscale to keep the file small, return a data URL. */
-export async function getLogoDataUrl(maxHeight = 64): Promise<string | null> {
-  if (_logoCache !== undefined) return _logoCache;
-  try {
-    const dataUrl = await new Promise<string | null>((resolve) => {
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => {
-        const scale = Math.min(1, maxHeight / img.height);
-        const w = Math.round(img.width * scale);
-        const h = Math.round(img.height * scale);
-        const canvas = document.createElement("canvas");
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return resolve(null);
-        ctx.drawImage(img, 0, 0, w, h);
-        try {
-          resolve(canvas.toDataURL("image/png"));
-        } catch {
-          resolve(null);
-        }
-      };
-      img.onerror = () => resolve(null);
-      img.src = "/logo.png";
-    });
-    _logoCache = dataUrl;
-    return dataUrl;
-  } catch {
-    _logoCache = null;
-    return null;
-  }
-}
-
 function esc(v: string | number): string {
   return String(v ?? "")
     .replace(/&/g, "&amp;")
@@ -112,32 +76,23 @@ export function buildExcelHtml(opts: ExcelExportOptions): string {
     )
     .join("");
 
-  const logoCell = logoDataUrl
-    ? `<img src="${logoDataUrl}" style="height:44px;" />`
-    : "";
+  // Note: Excel's HTML import cannot embed data-URL images (shows a broken
+  // link box), so the header is a styled text banner rather than an <img>.
+  void logoDataUrl;
 
   return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
 <head><meta charset="utf-8">
 <style>
   table { border-collapse: collapse; font-family: 'Segoe UI', Arial, sans-serif; font-size: 10pt; }
-  .company { font-size: 13pt; font-weight: bold; color: ${NAVY}; }
+  .company { font-size: 14pt; font-weight: bold; color: ${NAVY}; }
   .title { font-size: 15pt; font-weight: bold; color: ${NAVY}; }
 </style>
 </head>
 <body>
 <table>
-  <tr>
-    <td colspan="${colCount}" style="padding:6px 8px;">
-      <table style="border:none;"><tr>
-        <td style="border:none;padding-right:10px;">${logoCell}</td>
-        <td style="border:none;">
-          <div class="company">CÔNG TY TNHH CƠ KHÍ KHUÔN MẪU TIẾN HUY</div>
-          <div style="font-size:9pt;color:#888;">Hệ thống quản trị nhân sự HRM</div>
-        </td>
-      </tr></table>
-    </td>
-  </tr>
-  <tr><td colspan="${colCount}" class="title" style="padding:6px 8px 2px;">${esc(title)}</td></tr>
+  <tr><td colspan="${colCount}" class="company" style="padding:8px 8px 0;">CÔNG TY TNHH CƠ KHÍ KHUÔN MẪU TIẾN HUY</td></tr>
+  <tr><td colspan="${colCount}" style="padding:0 8px;font-size:9pt;color:#888;">Hệ thống quản trị nhân sự HRM</td></tr>
+  <tr><td colspan="${colCount}" class="title" style="padding:8px 8px 2px;">${esc(title)}</td></tr>
   ${metaRows}
   <tr><td colspan="${colCount}" style="height:6px;"></td></tr>
   <thead><tr>${headCells}</tr></thead>

@@ -8,7 +8,7 @@ import { useQuery } from "@/lib/hooks";
 import { getInitials, cn, formatDate, seededRandom } from "@/lib/utils";
 import { useColumnPrefs, type ColumnDef } from "@/lib/table-prefs";
 import { ColumnMenu } from "@/components/ui/column-menu";
-import { exportStyledExcel, getLogoDataUrl } from "@/lib/excel-export";
+import { exportStyledExcel } from "@/lib/excel-export";
 import { getEmployeePhoto } from "@/lib/photo-store";
 
 function Avatar({ id, name, photoUrl, className }: { id: number; name: string; photoUrl?: string | null; className?: string }) {
@@ -298,7 +298,6 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
 
   async function handleExport() {
     const cols = visibleColumns.filter((c) => c.exportValue);
-    const logoDataUrl = await getLogoDataUrl();
     exportStyledExcel({
       filename: `nhan-vien-${new Date().toISOString().slice(0, 10)}`,
       title: "DANH SÁCH NHÂN VIÊN",
@@ -308,8 +307,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
         `Số lượng: ${items.length} nhân viên`,
       ],
       columns: cols.map((c) => ({ label: c.label, align: c.align, format: c.exportFormat })),
-      rows: items.map((e: ApiEmployee, i: number) => cols.map((c) => c.exportValue!(e, i))),
-      logoDataUrl,
+      rows: items.map((e: ApiEmployee, i: number) => cols.map((c) => c.exportValue!(e, i)))
     });
   }
 

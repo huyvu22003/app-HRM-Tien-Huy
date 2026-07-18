@@ -7,7 +7,7 @@ import { useQuery } from "@/lib/hooks";
 import { formatMoney, cn } from "@/lib/utils";
 import { useColumnPrefs, type ColumnDef } from "@/lib/table-prefs";
 import { ColumnMenu } from "@/components/ui/column-menu";
-import { exportStyledExcel, getLogoDataUrl } from "@/lib/excel-export";
+import { exportStyledExcel } from "@/lib/excel-export";
 
 const STD_DAYS = 26;
 const HOURS_PER_DAY = 8;
@@ -433,14 +433,12 @@ export function SalaryScreen() {
 
   async function handleExport() {
     const cols = SAL_COLUMNS.filter((c) => isVisible(c.id) && c.exportValue);
-    const logoDataUrl = await getLogoDataUrl();
     exportStyledExcel({
       filename: `bang-luong-${period}`,
       title: `BẢNG LƯƠNG KỲ ${periodLabel}`,
       meta: [`Ngày xuất: ${new Date().toLocaleDateString("vi-VN")}`, `Số lượng: ${rows.length} nhân viên`],
       columns: cols.map((c) => ({ label: c.label, align: c.align, format: c.exportFormat })),
-      rows: rows.map((d, i) => cols.map((c) => c.exportValue!(d, i))),
-      logoDataUrl,
+      rows: rows.map((d, i) => cols.map((c) => c.exportValue!(d, i)))
     });
   }
 

@@ -7,7 +7,7 @@ import { fetchAttendance, updateAttendance, type ApiAttendance } from "@/lib/api
 import { useQuery } from "@/lib/hooks";
 import { useColumnPrefs, type ColumnDef } from "@/lib/table-prefs";
 import { ColumnMenu } from "@/components/ui/column-menu";
-import { exportStyledExcel, getLogoDataUrl } from "@/lib/excel-export";
+import { exportStyledExcel } from "@/lib/excel-export";
 
 type Flag = "all" | "hasLeave" | "mismatch" | "edited";
 
@@ -92,14 +92,12 @@ export function AttendanceScreen() {
 
   async function handleExport() {
     const cols = ATT_COLUMNS.filter((c) => isVisible(c.id) && c.exportValue);
-    const logoDataUrl = await getLogoDataUrl();
     exportStyledExcel({
       filename: `cham-cong-${period}`,
       title: `BẢNG CHẤM CÔNG KỲ ${periodDisplay}`,
       meta: [`Ngày xuất: ${new Date().toLocaleDateString("vi-VN")}`, `Số lượng: ${filtered.length} nhân viên`],
       columns: cols.map((c) => ({ label: c.label, align: c.align, format: c.exportFormat })),
-      rows: filtered.map((r, i) => cols.map((c) => c.exportValue!(r.row, i))),
-      logoDataUrl,
+      rows: filtered.map((r, i) => cols.map((c) => c.exportValue!(r.row, i)))
     });
   }
 
