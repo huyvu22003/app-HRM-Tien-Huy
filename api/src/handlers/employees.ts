@@ -67,6 +67,22 @@ export async function getEmployee(request: Request, env: Env, id: string): Promi
   return json({ employee, compensation, insurance });
 }
 
+interface CompensationBody {
+  baseSalary?: number;
+  allowance?: number;
+  dependents?: number;
+}
+
+interface InsuranceBody {
+  status?: string;
+  insCode?: string;
+  bhxhBook?: string;
+  bhytCode?: string;
+  bhytClinic?: string;
+  startDate?: string;
+  salaryBase?: number;
+}
+
 interface EmployeeBody {
   code?: string;
   name?: string;
@@ -77,6 +93,7 @@ interface EmployeeBody {
   address?: string;
   email?: string;
   departmentId?: number | null;
+  departmentName?: string;
   position?: string;
   workplace?: string;
   contractType?: string;
@@ -87,6 +104,8 @@ interface EmployeeBody {
   level?: string;
   bank?: string;
   taxCode?: string;
+  compensation?: CompensationBody;
+  insurance?: InsuranceBody;
 }
 
 export async function createEmployee(request: Request, env: Env): Promise<Response> {
@@ -133,9 +152,23 @@ export async function updateEmployee(request: Request, env: Env, id: string): Pr
   const existing = await env.DB.prepare("SELECT * FROM employees WHERE id = ?").bind(id).first();
   if (!existing) return error("Không tìm thấy nhân viên", 404);
 
+  // Resolve department by name → id (falls back to explicit departmentId)
+  let departmentId = body.departmentId;
+  if (departmentId === undefined && body.departmentName !== undefined) {
+    if (body.departmentName) {
+      const dept = await env.DB.prepare("SELECT id FROM departments WHERE name = ?")
+        .bind(body.departmentName)
+        .first<{ id: number }>();
+      departmentId = dept?.id ?? null;
+    } else {
+      departmentId = null;
+    }
+  }
+
   const fields: string[] = [];
   const args: unknown[] = [];
   const map: Record<string, unknown> = {
+    code: body.code,
     name: body.name,
     gender: body.gender,
     dob: body.dob,
@@ -143,7 +176,7 @@ export async function updateEmployee(request: Request, env: Env, id: string): Pr
     cccd: body.cccd,
     address: body.address,
     email: body.email,
-    department_id: body.departmentId,
+    department_id: departmentId,
     position: body.position,
     workplace: body.workplace,
     contract_type: body.contractType,
@@ -163,16 +196,56 @@ export async function updateEmployee(request: Request, env: Env, id: string): Pr
     }
   }
 
-  if (fields.length === 0) {
-    return json({ success: true, unchanged: true });
+  if (fields.length > 0) {
+    fields.push("updated_at = datetime('now')");
+    args.push(id);
+    await env.DB.prepare(`UPDATE employees SET ${fields.join(", ")} WHERE id = ?`)
+      .bind(...args)
+      .run();
   }
 
-  fields.push("updated_at = datetime('now')");
-  args.push(id);
+  // Upsert compensation (salary)
+  if (body.compensation) {
+    const c = body.compensation;
+    await env.DB.prepare(
+      `INSERT INTO compensation (employee_id, base_salary, allowance, dependents)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(employee_id) DO UPDATE SET
+         base_salary = excluded.base_salary,
+         allowance = excluded.allowance,
+         dependents = excluded.dependents`
+    )
+      .bind(id, c.baseSalary ?? 0, c.allowance ?? 0, c.dependents ?? 0)
+      .run();
+  }
 
-  await env.DB.prepare(`UPDATE employees SET ${fields.join(", ")} WHERE id = ?`)
-    .bind(...args)
-    .run();
+  // Upsert insurance
+  if (body.insurance) {
+    const ins = body.insurance;
+    await env.DB.prepare(
+      `INSERT INTO insurance (employee_id, status, ins_code, bhxh_book, bhyt_code, bhyt_clinic, start_date, salary_base)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(employee_id) DO UPDATE SET
+         status = excluded.status,
+         ins_code = excluded.ins_code,
+         bhxh_book = excluded.bhxh_book,
+         bhyt_code = excluded.bhyt_code,
+         bhyt_clinic = excluded.bhyt_clinic,
+         start_date = excluded.start_date,
+         salary_base = excluded.salary_base`
+    )
+      .bind(
+        id,
+        ins.status ?? "Chưa tham gia",
+        ins.insCode ?? null,
+        ins.bhxhBook ?? null,
+        ins.bhytCode ?? null,
+        ins.bhytClinic ?? null,
+        ins.startDate ?? null,
+        ins.salaryBase ?? 0
+      )
+      .run();
+  }
 
   await env.DB.prepare(
     `INSERT INTO audit_log (action, entity, entity_id, before_data, after_data)

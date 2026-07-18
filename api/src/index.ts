@@ -5,7 +5,12 @@ import { error, parseIdFromPath } from "./utils";
 
 import { login, logout, me } from "./handlers/auth";
 import { listEmployees, getEmployee, createEmployee, updateEmployee } from "./handlers/employees";
-import { listDepartments } from "./handlers/departments";
+import {
+  listDepartments,
+  createDepartment,
+  updateDepartment,
+  deleteDepartment,
+} from "./handlers/departments";
 import { listAttendance, updateAttendance } from "./handlers/attendance";
 import {
   listLeaveRequests,
@@ -84,6 +89,17 @@ export default {
 
       // --- Departments ---
       if (method === "GET" && pathname === "/api/departments") return withCors(await listDepartments(request, env));
+      if (method === "POST" && pathname === "/api/departments") return withCors(await createDepartment(request, env));
+      if (method === "PUT" && pathname.startsWith("/api/departments/")) {
+        const id = parseIdFromPath(pathname, "/api/departments/");
+        if (!id) return withCors(error("Thiếu id phòng ban", 400));
+        return withCors(await updateDepartment(request, env, id));
+      }
+      if (method === "DELETE" && pathname.startsWith("/api/departments/")) {
+        const id = parseIdFromPath(pathname, "/api/departments/");
+        if (!id) return withCors(error("Thiếu id phòng ban", 400));
+        return withCors(await deleteDepartment(request, env, id));
+      }
 
       // --- Attendance ---
       if (method === "GET" && pathname === "/api/attendance") return withCors(await listAttendance(request, env));

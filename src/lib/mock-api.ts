@@ -1,7 +1,7 @@
 "use client";
 
 import { EMPLOYEES } from "@/lib/data/employees";
-import { DEPARTMENTS } from "@/lib/data/departments";
+import { DEPARTMENTS, BLOCK_ORDER } from "@/lib/data/departments";
 import { ACCOUNTS } from "@/lib/data/accounts";
 
 function toApiEmployee(e: (typeof EMPLOYEES)[number], idx: number) {
@@ -47,7 +47,54 @@ function toApiDepartment(d: (typeof DEPARTMENTS)[number], idx: number) {
   };
 }
 
-const apiDepartments = DEPARTMENTS.map(toApiDepartment);
+type ApiDept = {
+  id: number;
+  name: string;
+  block: string;
+  block_color: string;
+  head_employee_id: number | null;
+  parent_id: number | null;
+  employee_count: number;
+};
+
+const DEPT_STORE_KEY = "hrm_demo_departments";
+
+function defaultDepartments(): ApiDept[] {
+  return DEPARTMENTS.map(toApiDepartment);
+}
+
+function loadDepartments(): ApiDept[] {
+  try {
+    const stored = window.localStorage.getItem(DEPT_STORE_KEY);
+    if (stored) return JSON.parse(stored) as ApiDept[];
+  } catch {
+    /* ignore */
+  }
+  return defaultDepartments();
+}
+
+function persistDepartments() {
+  try {
+    window.localStorage.setItem(DEPT_STORE_KEY, JSON.stringify(_departments));
+  } catch {
+    /* ignore */
+  }
+}
+
+let _departments: ApiDept[] | null = null;
+
+function getDepartments(): ApiDept[] {
+  if (!_departments) _departments = loadDepartments();
+  return _departments;
+}
+
+function sortedDepartments(): ApiDept[] {
+  const rank = (block: string) => {
+    const i = BLOCK_ORDER.indexOf(block);
+    return i === -1 ? 99 : i;
+  };
+  return [...getDepartments()].sort((a, b) => rank(a.block) - rank(b.block) || a.id - b.id);
+}
 
 const STD_DAYS = 26;
 
@@ -274,8 +321,25 @@ function mockImprovementPlans(period: string) {
 
 type MockRoute = {
   match: RegExp;
-  handler: (path: string, params: URLSearchParams) => unknown;
+  method?: string;
+  handler: (path: string, params: URLSearchParams, body: unknown) => unknown;
 };
+
+function parseBody(body: unknown): Record<string, unknown> {
+  if (typeof body === "string") {
+    try {
+      return JSON.parse(body) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function blockColorFor(block: string): string {
+  const found = getDepartments().find((d) => d.block === block);
+  return found?.block_color ?? "#1e6fd0";
+}
 
 const MOCK_ROUTES: MockRoute[] = [
   {
@@ -364,7 +428,59 @@ const MOCK_ROUTES: MockRoute[] = [
   },
   {
     match: /^\/departments$/,
-    handler: () => ({ data: apiDepartments }),
+    method: "GET",
+    handler: () => ({ data: sortedDepartments() }),
+  },
+  {
+    match: /^\/departments$/,
+    method: "POST",
+    handler: (_path, _params, body) => {
+      const b = parseBody(body);
+      const name = String(b.name ?? "").trim();
+      const block = String(b.block ?? "").trim();
+      const list = getDepartments();
+      const nextId = list.reduce((max, d) => Math.max(max, d.id), 0) + 1;
+      const dept: ApiDept = {
+        id: nextId,
+        name,
+        block,
+        block_color: (b.blockColor as string) || blockColorFor(block),
+        head_employee_id: (b.headEmployeeId as number) ?? null,
+        parent_id: null,
+        employee_count: 0,
+      };
+      list.push(dept);
+      persistDepartments();
+      return { id: nextId };
+    },
+  },
+  {
+    match: /^\/departments\/(\d+)$/,
+    method: "PUT",
+    handler: (path, _params, body) => {
+      const id = Number(path.split("/").pop());
+      const b = parseBody(body);
+      const dept = getDepartments().find((d) => d.id === id);
+      if (!dept) return { success: false };
+      if (b.name !== undefined) dept.name = String(b.name).trim();
+      if (b.block !== undefined) {
+        dept.block = String(b.block).trim();
+        dept.block_color = (b.blockColor as string) || blockColorFor(dept.block);
+      }
+      if (b.headEmployeeId !== undefined) dept.head_employee_id = (b.headEmployeeId as number) ?? null;
+      persistDepartments();
+      return { success: true };
+    },
+  },
+  {
+    match: /^\/departments\/(\d+)$/,
+    method: "DELETE",
+    handler: (path) => {
+      const id = Number(path.split("/").pop());
+      _departments = getDepartments().filter((d) => d.id !== id);
+      persistDepartments();
+      return { success: true };
+    },
   },
   {
     match: /^\/attendance$/,
@@ -432,13 +548,14 @@ const MOCK_ROUTES: MockRoute[] = [
   },
 ];
 
-export function mockResolve(fullPath: string): unknown | null {
+export function mockResolve(fullPath: string, method: string = "GET", body?: unknown): unknown | null {
   const [pathPart, queryPart] = fullPath.split("?");
   const params = new URLSearchParams(queryPart || "");
 
   for (const route of MOCK_ROUTES) {
+    if (route.method && route.method !== method) continue;
     if (route.match.test(pathPart)) {
-      return route.handler(pathPart, params);
+      return route.handler(pathPart, params, body);
     }
   }
   return null;
