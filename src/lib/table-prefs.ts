@@ -24,6 +24,8 @@ export interface ColumnDef<Row> {
   cellClass?: string;
   /** Value used when exporting to CSV/Excel. Falls back to no export column. */
   exportValue?: (row: Row, index: number) => string | number;
+  /** Number format for styled Excel export. */
+  exportFormat?: "money" | "int" | "text";
 }
 
 function loadHidden(tableKey: string): Set<string> {

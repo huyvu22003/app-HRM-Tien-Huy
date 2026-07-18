@@ -8,7 +8,7 @@ import { useQuery } from "@/lib/hooks";
 import { getInitials, cn, formatDate, seededRandom } from "@/lib/utils";
 import { useColumnPrefs, type ColumnDef } from "@/lib/table-prefs";
 import { ColumnMenu } from "@/components/ui/column-menu";
-import { exportToCsv } from "@/lib/export";
+import { exportStyledExcel, getLogoDataUrl } from "@/lib/excel-export";
 import { getEmployeePhoto } from "@/lib/photo-store";
 
 function Avatar({ id, name, photoUrl, className }: { id: number; name: string; photoUrl?: string | null; className?: string }) {
@@ -296,11 +296,21 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
 
   const { hidden, toggle, reset, visibleColumns } = useColumnPrefs("employees", columns);
 
-  function handleExport() {
+  async function handleExport() {
     const cols = visibleColumns.filter((c) => c.exportValue);
-    const headers = cols.map((c) => c.label);
-    const rows = items.map((e: ApiEmployee, i: number) => cols.map((c) => c.exportValue!(e, i)));
-    exportToCsv(`nhan-vien-${new Date().toISOString().slice(0, 10)}`, headers, rows);
+    const logoDataUrl = await getLogoDataUrl();
+    exportStyledExcel({
+      filename: `nhan-vien-${new Date().toISOString().slice(0, 10)}`,
+      title: "DANH SÁCH NHÂN VIÊN",
+      meta: [
+        dept === "all" ? "Bộ phận: Tất cả" : `Bộ phận: ${dept}`,
+        `Ngày xuất: ${new Date().toLocaleDateString("vi-VN")}`,
+        `Số lượng: ${items.length} nhân viên`,
+      ],
+      columns: cols.map((c) => ({ label: c.label, align: c.align, format: c.exportFormat })),
+      rows: items.map((e: ApiEmployee, i: number) => cols.map((c) => c.exportValue!(e, i))),
+      logoDataUrl,
+    });
   }
 
   return (
