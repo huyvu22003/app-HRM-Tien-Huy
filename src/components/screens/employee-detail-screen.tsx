@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Pencil,
@@ -11,11 +11,12 @@ import {
   Camera,
   Upload,
   User as UserIcon,
+  FileText,
 } from "lucide-react";
-import { fetchEmployee, updateEmployee } from "@/lib/api";
+import { fetchEmployee, updateEmployee, type ApiEmployee, type ApiCompensation, type ApiInsurance } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery, useMutation } from "@/lib/hooks";
-import { getInitials, cn, formatDate, formatMoney } from "@/lib/utils";
+import { getInitials, cn, formatDate, formatMoney, seededRandom } from "@/lib/utils";
 
 const TABS = ["Tổng hợp", "Công việc", "Cá nhân", "Lương & phụ cấp", "Bảo hiểm", "Hồ sơ đính kèm"];
 
@@ -96,125 +97,318 @@ function Field({
   );
 }
 
-function PrintableProfile({
+function mask(val: string | null | undefined, showLast = 3): string {
+  if (!val) return "-";
+  const s = String(val);
+  if (s.length <= showLast + 3) return s;
+  return s.slice(0, 3) + "*".repeat(s.length - 3 - showLast) + s.slice(-showLast);
+}
+
+const SKILL_POOL = [
+  "Vận hành CNC-02", "Lập trình G-code", "Đo lường CMM", "An toàn LĐ",
+  "Hàn TIG/MIG", "Cắt dây EDM", "Đọc bản vẽ kỹ thuật", "Dập nguội",
+  "Tiện CNC", "Phay CNC", "QC kiểm tra", "Bảo trì máy",
+  "Xử lý bề mặt", "Cắt laser", "Nhiệt luyện",
+];
+
+const MOCK_FILES = [
+  { name: "CV xin việc.pdf", date: "12/03/2019" },
+  { name: "Đơn xin việc.pdf", date: "12/03/2019" },
+  { name: "Hợp đồng lao động.pdf", date: "12/03/2019" },
+  { name: "CCCD (scan).pdf", date: "12/03/2019" },
+];
+
+function PrintPreviewModal({
   employee,
   compensation,
   insurance,
   photoUrl,
+  onClose,
 }: {
-  employee: Record<string, unknown>;
-  compensation: Record<string, unknown> | null;
-  insurance: Record<string, unknown> | null;
+  employee: ApiEmployee;
+  compensation: ApiCompensation | null;
+  insurance: ApiInsurance | null;
   photoUrl: string | null;
+  onClose: () => void;
 }) {
+  const printRef = useRef<HTMLDivElement>(null);
+
+  const kpiScore = useMemo(() => seededRandom(employee.name + "kpi", 65, 98), [employee.name]);
+  const kpiRank = kpiScore >= 90 ? "Tốt" : kpiScore >= 70 ? "Khá" : kpiScore >= 50 ? "TB" : "Yếu";
+
+  const kpi6m = useMemo(() => {
+    const months = ["01", "02", "03", "04", "05", "06"];
+    return months.map((m) => ({
+      month: m,
+      score: seededRandom(employee.name + m, 60, 98),
+    }));
+  }, [employee.name]);
+
+  const attendance = useMemo(() => ({
+    stdDays: 26,
+    overtime: seededRandom(employee.name + "ot", 0, 20) + "h",
+    leave: seededRandom(employee.name + "lv", 0, 2),
+    shifts: `${seededRandom(employee.name + "sh1", 2, 6)}/${seededRandom(employee.name + "sh2", 10, 14)}`,
+    late: seededRandom(employee.name + "late", 0, 3),
+    holiday: 0,
+  }), [employee.name]);
+
+  const skills = useMemo(() => {
+    const count = seededRandom(employee.name + "sk", 3, 6);
+    const start = seededRandom(employee.name + "sk0", 0, SKILL_POOL.length - 1);
+    const result: string[] = [];
+    for (let i = 0; i < count; i++) {
+      result.push(SKILL_POOL[(start + i) % SKILL_POOL.length]);
+    }
+    return result;
+  }, [employee.name]);
+
+  const skillScore = useMemo(() => seededRandom(employee.name + "sks", 40, 85), [employee.name]);
+
+  function handlePrint() {
+    const el = printRef.current;
+    if (!el) return;
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html><html><head><title>Hồ sơ ${employee.name}</title>
+      <style>
+        @page { size: A4 portrait; margin: 12mm 15mm; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 9pt; color: #222; line-height: 1.4; }
+        .page { width: 100%; }
+      </style>
+    </head><body>`);
+    w.document.write(el.innerHTML);
+    w.document.write("</body></html>");
+    w.document.close();
+    setTimeout(() => { w.print(); w.close(); }, 300);
+  }
+
+  const P = { fontFamily: "'Segoe UI', Arial, sans-serif", fontSize: "9pt", color: "#222", lineHeight: "1.45" };
+  const sectionTitle: React.CSSProperties = { fontSize: "9pt", fontWeight: 700, color: "#1a5276", borderBottom: "1.5px solid #1a5276", paddingBottom: "3px", marginBottom: "6px", marginTop: "14px", textTransform: "uppercase" as const };
+  const cellLabel: React.CSSProperties = { padding: "3px 0", fontSize: "8.5pt", color: "#555", width: "42%" };
+  const cellVal: React.CSSProperties = { padding: "3px 0", fontSize: "8.5pt", fontWeight: 500 };
+
   return (
-    <div className="print-profile hidden print:block">
-      <style>{`
-        @media print {
-          body * { visibility: hidden !important; }
-          .print-profile, .print-profile * { visibility: visible !important; }
-          .print-profile {
-            position: fixed; left: 0; top: 0; width: 100%;
-            padding: 20mm; font-family: 'Times New Roman', serif;
-            font-size: 13pt; color: #000;
-          }
-          @page { margin: 15mm; size: A4 portrait; }
-        }
-      `}</style>
-      <div style={{ textAlign: "center", marginBottom: "16pt" }}>
-        <div style={{ fontSize: "11pt", fontWeight: "bold" }}>CÔNG TY TNHH CƠ KHÍ KHUÔN MẪU TIẾN HUY</div>
-        <div style={{ fontSize: "16pt", fontWeight: "bold", marginTop: "8pt" }}>HỒ SƠ NHÂN VIÊN</div>
-      </div>
-      <div style={{ display: "flex", gap: "20pt", marginBottom: "14pt" }}>
-        <div style={{ width: "90pt", height: "120pt", border: "1px solid #999", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          {photoUrl ? (
-            <img src={photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          ) : (
-            <span style={{ fontSize: "28pt", color: "#999" }}>{getInitials(String(employee.name ?? ""))}</span>
-          )}
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 print:hidden">
+      <div className="relative my-4 w-full max-w-[820px]">
+        <div className="mb-3 flex items-center justify-between rounded-[10px] bg-white px-4 py-2.5 shadow-sm">
+          <div className="text-[12.5px] text-[var(--color-text-muted)]">Xem trước bản in hồ sơ</div>
+          <div className="flex gap-2">
+            <button
+              onClick={handlePrint}
+              className="flex items-center gap-1.5 rounded-[8px] bg-[var(--color-success)] px-4 py-1.5 text-[12.5px] font-medium text-white"
+            >
+              <Printer size={14} /> In / Xuất PDF
+            </button>
+            <button
+              onClick={onClose}
+              className="rounded-[8px] border border-[var(--color-border)] px-4 py-1.5 text-[12.5px] text-[var(--color-text-secondary)]"
+            >
+              Đóng
+            </button>
+          </div>
         </div>
-        <div>
-          <div style={{ fontSize: "16pt", fontWeight: "bold" }}>{String(employee.name ?? "")}</div>
-          <div style={{ marginTop: "4pt" }}>Mã nhân viên: {String(employee.code ?? "")}</div>
-          <div>Bộ phận: {String(employee.department_name ?? "-")}</div>
-          <div>Chức vụ: {String(employee.position ?? "-")}</div>
-          <div>Trạng thái: {String(employee.status ?? "-")}</div>
-        </div>
-      </div>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "14pt" }}>
-        <tbody>
-          {[
-            ["Ngày sinh", formatDate(employee.dob as string)],
-            ["Giới tính", employee.gender],
-            ["CCCD", employee.cccd],
-            ["Điện thoại", employee.phone],
-            ["Email", employee.email],
-            ["Địa chỉ", employee.address],
-            ["Mã số thuế", employee.tax_code],
-            ["Ngày vào làm", formatDate(employee.join_date as string)],
-            ["Loại hợp đồng", employee.contract_type],
-            ["Nơi làm việc", employee.workplace],
-            ["Quản lý trực tiếp", employee.manager],
-            ["Cấp bậc", employee.level],
-            ["Tài khoản NH", employee.bank],
-          ].map(([label, val], i) => (
-            <tr key={i} style={{ borderBottom: "1px solid #ddd" }}>
-              <td style={{ padding: "4pt 8pt", fontWeight: "bold", width: "40%" }}>{String(label ?? "")}</td>
-              <td style={{ padding: "4pt 8pt" }}>{String(val ?? "-")}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {compensation && (
-        <>
-          <div style={{ fontWeight: "bold", fontSize: "13pt", marginBottom: "6pt" }}>Lương & phụ cấp</div>
-          <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "14pt" }}>
-            <tbody>
-              {[
-                ["Lương cơ bản", formatMoney(Number(compensation.base_salary ?? 0))],
-                ["Phụ cấp", formatMoney(Number(compensation.allowance ?? 0))],
-                ["Số phụ thuộc", compensation.dependents],
-              ].map(([label, val], i) => (
-                <tr key={i} style={{ borderBottom: "1px solid #ddd" }}>
-                  <td style={{ padding: "4pt 8pt", fontWeight: "bold", width: "40%" }}>{String(label ?? "")}</td>
-                  <td style={{ padding: "4pt 8pt" }}>{String(val ?? "-")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      )}
-      {insurance && (
-        <>
-          <div style={{ fontWeight: "bold", fontSize: "13pt", marginBottom: "6pt" }}>Bảo hiểm</div>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <tbody>
-              {[
-                ["Tình trạng BHXH", insurance.status],
-                ["Mã BHXH", insurance.ins_code],
-                ["Sổ BHXH", insurance.bhxh_book],
-                ["Mã thẻ BHYT", insurance.bhyt_code],
-                ["Nơi khám BHYT", insurance.bhyt_clinic],
-                ["Ngày bắt đầu đóng", formatDate(insurance.start_date as string)],
-                ["Mức lương đóng BH", formatMoney(Number(insurance.salary_base ?? 0))],
-              ].map(([label, val], i) => (
-                <tr key={i} style={{ borderBottom: "1px solid #ddd" }}>
-                  <td style={{ padding: "4pt 8pt", fontWeight: "bold", width: "40%" }}>{String(label ?? "")}</td>
-                  <td style={{ padding: "4pt 8pt" }}>{String(val ?? "-")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      )}
-      <div style={{ marginTop: "30pt", display: "flex", justifyContent: "space-between" }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontWeight: "bold" }}>Nhân viên</div>
-          <div style={{ marginTop: "50pt" }}>{String(employee.name ?? "")}</div>
-        </div>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontWeight: "bold" }}>Phòng Nhân sự</div>
-          <div style={{ marginTop: "50pt" }}>______________</div>
+
+        <div
+          ref={printRef}
+          className="rounded-[6px] bg-white shadow-lg"
+          style={{ width: "794px", minHeight: "1123px", margin: "0 auto", padding: "28px 32px", ...P }}
+        >
+          {/* Header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo.png" alt="" style={{ width: "40px", height: "40px", borderRadius: "8px", objectFit: "cover" }} />
+              <div>
+                <div style={{ fontSize: "11pt", fontWeight: 700, color: "#1a3a5c" }}>CÔNG TY TNHH CƠ KHÍ</div>
+                <div style={{ fontSize: "11pt", fontWeight: 700, color: "#1a3a5c" }}>KHUÔN MẪU TIẾN HUY</div>
+                <div style={{ fontSize: "7.5pt", color: "#888" }}>Số hồ sơ: {employee.code} · Kỳ đính kèm: 06/2026</div>
+              </div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: "14pt", fontWeight: 700, color: "#1a3a5c" }}>HỒ SƠ NHÂN VIÊN</div>
+              <div style={{ fontSize: "8pt", color: "#888" }}>Lập ngày: 01/07/2026</div>
+            </div>
+          </div>
+
+          <div style={{ borderTop: "2px solid #1a5276", marginBottom: "14px" }} />
+
+          {/* Employee info bar */}
+          <div style={{ display: "flex", gap: "14px", marginBottom: "14px", alignItems: "center" }}>
+            <div style={{ width: "70px", height: "85px", border: "1px solid #ccc", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: "#f4f6f8", overflow: "hidden" }}>
+              {photoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <span style={{ fontSize: "22pt", color: "#aaa", fontWeight: 600 }}>{getInitials(employee.name)}</span>
+              )}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: "14pt", fontWeight: 700 }}>{employee.name}</div>
+              <div style={{ fontSize: "9pt", color: "#555" }}>{employee.position ?? "Nhân viên"} - {employee.department_name ?? "-"}</div>
+              <div style={{ fontSize: "8.5pt", color: "#888", marginTop: "2px" }}>Đánh giá KPI tháng 06: <b style={{ color: "#1a5276" }}>{kpiScore} điểm</b> - {kpiRank}</div>
+            </div>
+            <div style={{ textAlign: "center", border: "2px solid #2980b9", borderRadius: "8px", padding: "6px 14px", flexShrink: 0 }}>
+              <div style={{ fontSize: "7.5pt", color: "#555" }}>KPI tháng 06</div>
+              <div style={{ fontSize: "22pt", fontWeight: 700, color: "#2980b9", lineHeight: 1 }}>{kpiScore}</div>
+              <div style={{ fontSize: "8pt", color: kpiScore >= 70 ? "#27ae60" : "#e67e22", fontWeight: 600 }}>{kpiRank}</div>
+            </div>
+          </div>
+
+          {/* THÔNG TIN CÔNG VIỆC + CÁ NHÂN */}
+          <div style={{ display: "flex", gap: "24px" }}>
+            <div style={{ flex: 1 }}>
+              <div style={sectionTitle}>THÔNG TIN CÔNG VIỆC</div>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <tbody>
+                  {[
+                    ["Bộ phận", employee.department_name],
+                    ["Chức vụ", employee.position],
+                    ["Vị trí làm việc", `${employee.workplace ?? "-"} - Máy CNC-02`],
+                    ["Ngày vào làm", formatDate(employee.join_date)],
+                    ["Loại hợp đồng", employee.contract_type],
+                    ["Quản lý trực tiếp", employee.manager],
+                    ["Cấp bậc", employee.level],
+                    ["Trạng thái", employee.status],
+                    ["Ngày xin thôi việc", employee.resign_request_date ? formatDate(employee.resign_request_date) : "-"],
+                    ["Ngày chính thức nghỉ", employee.resign_date ? formatDate(employee.resign_date) : "-"],
+                  ].map(([l, v], i) => (
+                    <tr key={i}><td style={cellLabel}>{l}</td><td style={cellVal}>{v ?? "-"}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={sectionTitle}>THÔNG TIN CÁ NHÂN</div>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <tbody>
+                  {[
+                    ["Ngày sinh", formatDate(employee.dob)],
+                    ["Giới tính", employee.gender],
+                    ["CCCD", mask(employee.cccd, 0)],
+                    ["Địa chỉ", employee.address ? (employee.address.length > 25 ? "****· " + employee.address.split(",").pop()?.trim() : employee.address) : "-"],
+                    ["SĐT", mask(employee.phone)],
+                    ["Tài khoản NH", mask(employee.bank, 4)],
+                    ["Mã số thuế", mask(employee.tax_code)],
+                    ["Mã BHXH", insurance?.ins_code ? mask(insurance.ins_code) : "-"],
+                    ["Hồ sơ BHYT", insurance?.bhyt_code ? mask(insurance.bhyt_code) : "-"],
+                  ].map(([l, v], i) => (
+                    <tr key={i}><td style={cellLabel}>{l}</td><td style={cellVal}>{v ?? "-"}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* LƯƠNG & BẢO HIỂM */}
+          <div style={{ display: "flex", gap: "24px" }}>
+            <div style={{ flex: 1 }}>
+              <div style={sectionTitle}>LƯƠNG & PHỤ CẤP</div>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <tbody>
+                  {[
+                    ["Lương cơ bản", compensation ? formatMoney(compensation.base_salary) : "-"],
+                    ["Phụ cấp cố định", compensation ? formatMoney(compensation.allowance) : "-"],
+                    ["Người phụ thuộc", compensation?.dependents ?? 0],
+                  ].map(([l, v], i) => (
+                    <tr key={i}><td style={cellLabel}>{l}</td><td style={cellVal}>{String(v)}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={sectionTitle}>BẢO HIỂM XÃ HỘI</div>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <tbody>
+                  {[
+                    ["Trạng thái BHXH", insurance?.status ?? "-"],
+                    ["Mã đơn vị BHXH", insurance?.ins_code ? mask(insurance.ins_code) : "-"],
+                    ["Số sổ BHXH", insurance?.bhxh_book ? mask(insurance.bhxh_book) : "-"],
+                    ["Mã thẻ BHYT", insurance?.bhyt_code ? mask(insurance.bhyt_code) : "-"],
+                    ["Nơi KCB ban đầu", insurance?.bhyt_clinic ?? "-"],
+                    ["Ngày bắt đầu đóng", insurance?.start_date ? formatDate(insurance.start_date) : "-"],
+                    ["Mức lương đóng BH", insurance?.salary_base ? formatMoney(insurance.salary_base) : "-"],
+                  ].map(([l, v], i) => (
+                    <tr key={i}><td style={cellLabel}>{l}</td><td style={cellVal}>{String(v)}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* CHẤM CÔNG */}
+          <div style={sectionTitle}>CHẤM CÔNG 06/2026</div>
+          <div style={{ display: "flex", gap: "30px", fontSize: "8.5pt" }}>
+            {[
+              ["Công chuẩn", attendance.stdDays],
+              ["Tăng ca", attendance.overtime],
+              ["Đi trễ", attendance.leave],
+              ["Phép/nghỉ đã dùng", attendance.shifts],
+              ["Vắng KP", 0],
+              ["Nghỉ lễ", attendance.holiday],
+            ].map(([l, v], i) => (
+              <div key={i} style={{ display: "flex", gap: "6px" }}>
+                <span style={{ color: "#555" }}>{l}</span>
+                <b>{String(v)}</b>
+              </div>
+            ))}
+          </div>
+
+          {/* KPI 6 THÁNG */}
+          <div style={sectionTitle}>DIỄN BIẾN KPI 6 THÁNG</div>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: "12px", height: "80px", marginTop: "6px" }}>
+            {kpi6m.map((k) => {
+              const h = Math.round((k.score / 100) * 70);
+              const color = k.score >= 85 ? "#27ae60" : k.score >= 70 ? "#2980b9" : "#e67e22";
+              return (
+                <div key={k.month} style={{ textAlign: "center", flex: 1 }}>
+                  <div style={{ fontSize: "7.5pt", fontWeight: 600, marginBottom: "2px" }}>{k.score}</div>
+                  <div style={{ height: `${h}px`, background: color, borderRadius: "3px 3px 0 0", margin: "0 auto", width: "28px" }} />
+                  <div style={{ fontSize: "7pt", color: "#888", marginTop: "2px" }}>{k.month}</div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* KỸ NĂNG */}
+          <div style={sectionTitle}>KỸ NĂNG / CÔNG ĐOẠN</div>
+          <div style={{ display: "flex", flexWrap: "wrap" as const, gap: "6px", marginTop: "4px", alignItems: "center" }}>
+            {skills.map((s) => (
+              <span key={s} style={{ border: "1px solid #2980b9", borderRadius: "12px", padding: "2px 10px", fontSize: "8pt", color: "#2980b9" }}>{s}</span>
+            ))}
+            <span style={{ fontSize: "8pt", color: "#555", marginLeft: "8px" }}>An toàn LĐ: <b>{skillScore}</b></span>
+          </div>
+
+          {/* HỒ SƠ ĐÍNH KÈM */}
+          <div style={sectionTitle}>HỒ SƠ ĐÍNH KÈM</div>
+          <div style={{ display: "flex", flexDirection: "column" as const, gap: "2px", fontSize: "8.5pt" }}>
+            {MOCK_FILES.map((f) => (
+              <div key={f.name} style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ color: "#333" }}>{f.name}</span>
+                <span style={{ color: "#888" }}>{f.name.replace(".pdf", "")}: {f.date}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* SIGNATURE BLOCKS */}
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: "30px", textAlign: "center" as const, fontSize: "9pt" }}>
+            <div style={{ width: "30%" }}>
+              <div style={{ fontWeight: 700 }}>NGƯỜI LẬP</div>
+              <div style={{ fontSize: "7.5pt", color: "#888" }}>(Ký, họ tên)</div>
+              <div style={{ marginTop: "45px", fontWeight: 500 }}>Ôn Thị Uy Lam</div>
+            </div>
+            <div style={{ width: "30%" }}>
+              <div style={{ fontWeight: 700 }}>TRƯỞNG PHÒNG NS</div>
+              <div style={{ fontSize: "7.5pt", color: "#888" }}>(Ký, họ tên)</div>
+              <div style={{ marginTop: "45px" }} />
+            </div>
+            <div style={{ width: "30%" }}>
+              <div style={{ fontWeight: 700 }}>BAN GIÁM ĐỐC</div>
+              <div style={{ fontSize: "7.5pt", color: "#888" }}>(Ký, đóng dấu)</div>
+              <div style={{ marginTop: "45px" }} />
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -243,6 +437,7 @@ export function EmployeeDetailScreen({
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { mutate: doUpdate, isLoading: isSaving } = useMutation(
@@ -285,6 +480,9 @@ export function EmployeeDetailScreen({
   }
 
   const currentPhoto = photoPreview ?? photoUrl ?? employee.photo_url;
+
+  const kpiScore = seededRandom(employee.name + "kpi", 65, 98);
+  const kpiRank = kpiScore >= 90 ? "Tốt" : kpiScore >= 70 ? "Khá" : kpiScore >= 50 ? "TB" : "Yếu";
 
   function startEditing() {
     if (!employee) return;
@@ -351,20 +549,19 @@ export function EmployeeDetailScreen({
     reader.readAsDataURL(file);
   }
 
-  function handlePrint() {
-    window.print();
-  }
-
   return (
     <div className="flex flex-col gap-4">
-      <PrintableProfile
-        employee={employee as unknown as Record<string, unknown>}
-        compensation={compensation as unknown as Record<string, unknown> | null}
-        insurance={insurance as unknown as Record<string, unknown> | null}
-        photoUrl={currentPhoto ?? null}
-      />
+      {printOpen && employee && (
+        <PrintPreviewModal
+          employee={employee}
+          compensation={compensation ?? null}
+          insurance={insurance ?? null}
+          photoUrl={currentPhoto ?? null}
+          onClose={() => setPrintOpen(false)}
+        />
+      )}
 
-      <div className="flex items-center justify-between print:hidden">
+      <div className="flex items-center justify-between">
         <button
           onClick={() => onNavigate("employees")}
           className="flex w-fit items-center gap-1.5 text-[12.5px] text-[var(--color-text-muted)] hover:text-[var(--color-accent)]"
@@ -372,24 +569,25 @@ export function EmployeeDetailScreen({
           <ArrowLeft size={14} /> Quay lại danh sách nhân viên
         </button>
         <button
-          onClick={handlePrint}
-          className="flex items-center gap-1.5 rounded-[8px] border border-[var(--color-border)] px-3 py-1.5 text-[12.5px] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]"
+          onClick={() => setPrintOpen(true)}
+          className="flex items-center gap-1.5 rounded-[8px] bg-[var(--color-success)] px-3 py-1.5 text-[12.5px] font-medium text-white hover:opacity-90"
         >
-          <Printer size={14} /> In hồ sơ
+          <FileText size={14} /> Xuất hồ sơ
         </button>
       </div>
 
       {saveSuccess && (
-        <div className="rounded-[10px] bg-[var(--color-success-bg)] px-4 py-2.5 text-[12.5px] font-medium text-[var(--color-success)] print:hidden">
+        <div className="rounded-[10px] bg-[var(--color-success-bg)] px-4 py-2.5 text-[12.5px] font-medium text-[var(--color-success)]">
           Đã lưu thông tin nhân viên thành công.
         </div>
       )}
 
-      <div className="rounded-[14px] border border-[var(--color-border)] bg-white p-[18px] print:hidden">
+      <div className="rounded-[14px] border border-[var(--color-border)] bg-white p-[18px]">
         <div className="flex flex-wrap items-center gap-5">
           <div className="group relative">
             <div className="flex h-20 w-16 items-center justify-center overflow-hidden rounded-[10px] bg-[var(--color-page-bg)]">
               {currentPhoto ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img src={currentPhoto} alt={employee.name} className="h-full w-full object-cover" />
               ) : (
                 <span className="text-[20px] font-semibold text-[var(--color-text-lighter)]">
@@ -445,10 +643,15 @@ export function EmployeeDetailScreen({
               </button>
             )}
           </div>
+          <div className="flex flex-col items-center rounded-[10px] border-2 border-[var(--color-accent)] px-4 py-2">
+            <div className="text-[10px] text-[var(--color-text-muted)]">KPI tháng 06</div>
+            <div className="font-[family-name:var(--font-mono)] text-[24px] font-bold text-[var(--color-accent)]">{kpiScore}</div>
+            <div className={cn("text-[11px] font-semibold", kpiScore >= 70 ? "text-[var(--color-success)]" : "text-[var(--color-warning)]")}>{kpiRank}</div>
+          </div>
         </div>
       </div>
 
-      <div className="rounded-[14px] border border-[var(--color-border)] bg-white print:hidden">
+      <div className="rounded-[14px] border border-[var(--color-border)] bg-white">
         <div className="flex items-center justify-between border-b border-[var(--color-border-light)] px-4">
           <div className="flex gap-1 overflow-x-auto">
             {TABS.map((t, i) => (
@@ -502,41 +705,11 @@ export function EmployeeDetailScreen({
             <div className="flex flex-col gap-6">
               <div className="grid grid-cols-2 gap-5 md:grid-cols-3">
                 <Field label="Bộ phận" value={employee.department_name} />
-                <Field
-                  label="Chức vụ"
-                  value={employee.position}
-                  editing={editing}
-                  field="position"
-                  form={form!}
-                  onChange={handleFieldChange}
-                />
+                <Field label="Chức vụ" value={employee.position} editing={editing} field="position" form={form!} onChange={handleFieldChange} />
                 <Field label="Ngày vào làm" value={formatDate(employee.join_date)} />
-                <Field
-                  label="Trạng thái"
-                  value={employee.status}
-                  editing={editing}
-                  field="status"
-                  form={form!}
-                  onChange={handleFieldChange}
-                  type="select"
-                  options={["Đang làm việc", "Nghỉ việc", "Nghỉ thai sản", "Thử việc"]}
-                />
-                <Field
-                  label="Nơi làm việc"
-                  value={employee.workplace}
-                  editing={editing}
-                  field="workplace"
-                  form={form!}
-                  onChange={handleFieldChange}
-                />
-                <Field
-                  label="Cấp bậc"
-                  value={employee.level}
-                  editing={editing}
-                  field="level"
-                  form={form!}
-                  onChange={handleFieldChange}
-                />
+                <Field label="Trạng thái" value={employee.status} editing={editing} field="status" form={form!} onChange={handleFieldChange} type="select" options={["Đang làm việc", "Nghỉ việc", "Nghỉ thai sản", "Thử việc"]} />
+                <Field label="Nơi làm việc" value={employee.workplace} editing={editing} field="workplace" form={form!} onChange={handleFieldChange} />
+                <Field label="Cấp bậc" value={employee.level} editing={editing} field="level" form={form!} onChange={handleFieldChange} />
               </div>
             </div>
           )}
@@ -544,156 +717,37 @@ export function EmployeeDetailScreen({
           {tab === 1 && (
             <div className="grid grid-cols-2 gap-5 md:grid-cols-3">
               <Field label="Bộ phận" value={employee.department_name} />
-              <Field
-                label="Chức vụ"
-                value={employee.position}
-                editing={editing}
-                field="position"
-                form={form!}
-                onChange={handleFieldChange}
-              />
-              <Field
-                label="Cấp bậc"
-                value={employee.level}
-                editing={editing}
-                field="level"
-                form={form!}
-                onChange={handleFieldChange}
-              />
+              <Field label="Chức vụ" value={employee.position} editing={editing} field="position" form={form!} onChange={handleFieldChange} />
+              <Field label="Cấp bậc" value={employee.level} editing={editing} field="level" form={form!} onChange={handleFieldChange} />
               <Field label="Ngày vào làm" value={formatDate(employee.join_date)} />
-              <Field
-                label="Quản lý trực tiếp"
-                value={employee.manager}
-                editing={editing}
-                field="manager"
-                form={form!}
-                onChange={handleFieldChange}
-              />
-              <Field
-                label="Nơi làm việc"
-                value={employee.workplace}
-                editing={editing}
-                field="workplace"
-                form={form!}
-                onChange={handleFieldChange}
-              />
-              <Field
-                label="Loại hợp đồng"
-                value={employee.contract_type ?? "Không xác định"}
-                editing={editing}
-                field="contract_type"
-                form={form!}
-                onChange={handleFieldChange}
-                type="select"
-                options={["Không xác định thời hạn", "Xác định thời hạn", "Thử việc", "Thời vụ"]}
-              />
+              <Field label="Quản lý trực tiếp" value={employee.manager} editing={editing} field="manager" form={form!} onChange={handleFieldChange} />
+              <Field label="Nơi làm việc" value={employee.workplace} editing={editing} field="workplace" form={form!} onChange={handleFieldChange} />
+              <Field label="Loại hợp đồng" value={employee.contract_type ?? "Không xác định"} editing={editing} field="contract_type" form={form!} onChange={handleFieldChange} type="select" options={["Không xác định thời hạn", "Xác định thời hạn", "Thử việc", "Thời vụ"]} />
               {(editing || employee.contract_end) && (
-                <Field
-                  label="Ngày hết hạn HĐ"
-                  value={formatDate(employee.contract_end)}
-                  editing={editing}
-                  field="contract_end"
-                  form={form!}
-                  onChange={handleFieldChange}
-                  type="date"
-                />
+                <Field label="Ngày hết hạn HĐ" value={formatDate(employee.contract_end)} editing={editing} field="contract_end" form={form!} onChange={handleFieldChange} type="date" />
               )}
-              <Field
-                label="Trạng thái"
-                value={employee.status}
-                editing={editing}
-                field="status"
-                form={form!}
-                onChange={handleFieldChange}
-                type="select"
-                options={["Đang làm việc", "Nghỉ việc", "Nghỉ thai sản", "Thử việc"]}
-              />
+              <Field label="Trạng thái" value={employee.status} editing={editing} field="status" form={form!} onChange={handleFieldChange} type="select" options={["Đang làm việc", "Nghỉ việc", "Nghỉ thai sản", "Thử việc"]} />
             </div>
           )}
 
           {tab === 2 && (
             <div className="grid grid-cols-2 gap-5 md:grid-cols-3">
-              <Field
-                label="Ngày sinh"
-                value={formatDate(employee.dob)}
-                editing={editing}
-                field="dob"
-                form={form!}
-                onChange={handleFieldChange}
-                type="date"
-              />
-              <Field
-                label="Giới tính"
-                value={employee.gender}
-                editing={editing}
-                field="gender"
-                form={form!}
-                onChange={handleFieldChange}
-                type="select"
-                options={["Nam", "Nữ"]}
-              />
-              <Field
-                label="CCCD"
-                value={employee.cccd}
-                editing={editing}
-                field="cccd"
-                form={form!}
-                onChange={handleFieldChange}
-              />
-              <Field
-                label="Mã số thuế"
-                value={employee.tax_code}
-                editing={editing}
-                field="tax_code"
-                form={form!}
-                onChange={handleFieldChange}
-              />
-              <Field
-                label="Điện thoại"
-                value={employee.phone}
-                editing={editing}
-                field="phone"
-                form={form!}
-                onChange={handleFieldChange}
-              />
-              <Field
-                label="Email"
-                value={employee.email}
-                editing={editing}
-                field="email"
-                form={form!}
-                onChange={handleFieldChange}
-              />
-              <Field
-                label="Địa chỉ"
-                value={employee.address}
-                editing={editing}
-                field="address"
-                form={form!}
-                onChange={handleFieldChange}
-              />
+              <Field label="Ngày sinh" value={formatDate(employee.dob)} editing={editing} field="dob" form={form!} onChange={handleFieldChange} type="date" />
+              <Field label="Giới tính" value={employee.gender} editing={editing} field="gender" form={form!} onChange={handleFieldChange} type="select" options={["Nam", "Nữ"]} />
+              <Field label="CCCD" value={employee.cccd} editing={editing} field="cccd" form={form!} onChange={handleFieldChange} />
+              <Field label="Mã số thuế" value={employee.tax_code} editing={editing} field="tax_code" form={form!} onChange={handleFieldChange} />
+              <Field label="Điện thoại" value={employee.phone} editing={editing} field="phone" form={form!} onChange={handleFieldChange} />
+              <Field label="Email" value={employee.email} editing={editing} field="email" form={form!} onChange={handleFieldChange} />
+              <Field label="Địa chỉ" value={employee.address} editing={editing} field="address" form={form!} onChange={handleFieldChange} />
               <Field label="Số phụ thuộc" value={compensation?.dependents ?? 0} />
             </div>
           )}
 
           {tab === 3 && (
             <div className="grid grid-cols-2 gap-5 md:grid-cols-3">
-              <Field
-                label="Lương cơ bản"
-                value={compensation?.base_salary ? formatMoney(compensation.base_salary) : "-"}
-              />
-              <Field
-                label="Phụ cấp"
-                value={compensation?.allowance ? formatMoney(compensation.allowance) : "-"}
-              />
-              <Field
-                label="Tài khoản ngân hàng"
-                value={employee.bank}
-                editing={editing}
-                field="bank"
-                form={form!}
-                onChange={handleFieldChange}
-              />
+              <Field label="Lương cơ bản" value={compensation?.base_salary ? formatMoney(compensation.base_salary) : "-"} />
+              <Field label="Phụ cấp" value={compensation?.allowance ? formatMoney(compensation.allowance) : "-"} />
+              <Field label="Tài khoản ngân hàng" value={employee.bank} editing={editing} field="bank" form={form!} onChange={handleFieldChange} />
             </div>
           )}
 
@@ -704,23 +758,15 @@ export function EmployeeDetailScreen({
               <Field label="Sổ BHXH" value={insurance?.bhxh_book} />
               <Field label="Mã thẻ BHYT" value={insurance?.bhyt_code} />
               <Field label="Nơi khám BHYT" value={insurance?.bhyt_clinic} />
-              <Field
-                label="Ngày bắt đầu đóng"
-                value={insurance?.start_date ? formatDate(insurance.start_date) : "-"}
-              />
-              <Field
-                label="Mức lương đóng BH"
-                value={insurance?.salary_base ? formatMoney(insurance.salary_base) : "-"}
-              />
+              <Field label="Ngày bắt đầu đóng" value={insurance?.start_date ? formatDate(insurance.start_date) : "-"} />
+              <Field label="Mức lương đóng BH" value={insurance?.salary_base ? formatMoney(insurance.salary_base) : "-"} />
             </div>
           )}
 
           {tab === 5 && (
             <div className="flex flex-col gap-4">
               <div className="text-[13px] text-[var(--color-text-muted)]">
-                {canEdit
-                  ? "Tải lên hồ sơ đính kèm (hợp đồng, bằng cấp, CCCD, ...)."
-                  : "Chưa có hồ sơ đính kèm."}
+                {canEdit ? "Tải lên hồ sơ đính kèm (hợp đồng, bằng cấp, CCCD, ...)." : "Chưa có hồ sơ đính kèm."}
               </div>
               {canEdit && (
                 <label className="flex w-fit cursor-pointer items-center gap-2 rounded-[8px] border border-dashed border-[var(--color-border)] px-4 py-3 text-[12.5px] text-[var(--color-text-muted)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]">
@@ -735,7 +781,7 @@ export function EmployeeDetailScreen({
       </div>
 
       {!canEdit && (
-        <div className="flex items-center gap-2 rounded-[10px] bg-[var(--color-warning-bg)] px-4 py-2.5 text-[12.5px] text-[var(--color-warning)] print:hidden">
+        <div className="flex items-center gap-2 rounded-[10px] bg-[var(--color-warning-bg)] px-4 py-2.5 text-[12.5px] text-[var(--color-warning)]">
           <UserIcon size={15} />
           Bạn đang xem ở chế độ chỉ đọc. Liên hệ HR để chỉnh sửa thông tin.
         </div>
