@@ -169,7 +169,7 @@ function PrintPreviewModal({
     w.document.write(`<!DOCTYPE html><html><head><title>Hồ sơ ${employee.name}</title>
       <style>
         @page { size: A4 portrait; margin: 12mm 15mm; }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
         body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 9pt; color: #222; line-height: 1.4; }
         .page { width: 100%; }
       </style>
