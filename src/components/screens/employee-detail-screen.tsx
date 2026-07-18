@@ -21,6 +21,7 @@ import { getInitials, cn, formatDate, formatMoney, seededRandom } from "@/lib/ut
 const TABS = ["Tổng hợp", "Công việc", "Cá nhân", "Lương & phụ cấp", "Bảo hiểm", "Hồ sơ đính kèm"];
 
 type EditableFields = {
+  code: string;
   name: string;
   gender: string;
   dob: string;
@@ -28,10 +29,12 @@ type EditableFields = {
   cccd: string;
   address: string;
   email: string;
+  department_name: string;
   position: string;
   workplace: string;
   contract_type: string;
   contract_end: string;
+  join_date: string;
   level: string;
   manager: string;
   status: string;
@@ -497,6 +500,7 @@ export function EmployeeDetailScreen({
   function startEditing() {
     if (!employee) return;
     setForm({
+      code: employee.code ?? "",
       name: employee.name ?? "",
       gender: employee.gender ?? "",
       dob: employee.dob ?? "",
@@ -504,10 +508,12 @@ export function EmployeeDetailScreen({
       cccd: employee.cccd ?? "",
       address: employee.address ?? "",
       email: employee.email ?? "",
+      department_name: employee.department_name ?? "",
       position: employee.position ?? "",
       workplace: employee.workplace ?? "",
       contract_type: employee.contract_type ?? "",
       contract_end: employee.contract_end ?? "",
+      join_date: employee.join_date ?? "",
       level: employee.level ?? "",
       manager: employee.manager ?? "",
       status: employee.status ?? "",
@@ -724,9 +730,11 @@ export function EmployeeDetailScreen({
           {tab === 0 && (
             <div className="flex flex-col gap-6">
               <div className="grid grid-cols-2 gap-5 md:grid-cols-3">
-                <Field label="Bộ phận" value={employee.department_name} editing={editing} field="name" form={form!} onChange={handleFieldChange} />
+                <Field label="Mã thẻ" value={employee.code} editing={editing} field="code" form={form!} onChange={handleFieldChange} />
+                <Field label="Họ và tên" value={employee.name} editing={editing} field="name" form={form!} onChange={handleFieldChange} />
+                <Field label="Bộ phận" value={employee.department_name} editing={editing} field="department_name" form={form!} onChange={handleFieldChange} />
                 <Field label="Chức vụ" value={employee.position} editing={editing} field="position" form={form!} onChange={handleFieldChange} />
-                <Field label="Ngày vào làm" value={formatDate(employee.join_date)} />
+                <Field label="Ngày vào làm" value={formatDate(employee.join_date)} editing={editing} field="join_date" form={form!} onChange={handleFieldChange} type="date" />
                 <Field label="Trạng thái" value={employee.status} editing={editing} field="status" form={form!} onChange={handleFieldChange} type="select" options={["Đang làm việc", "Nghỉ việc", "Nghỉ thai sản", "Thử việc"]} />
                 <Field label="Nơi làm việc" value={employee.workplace} editing={editing} field="workplace" form={form!} onChange={handleFieldChange} />
                 <Field label="Cấp bậc" value={employee.level} editing={editing} field="level" form={form!} onChange={handleFieldChange} />
@@ -736,10 +744,10 @@ export function EmployeeDetailScreen({
 
           {tab === 1 && (
             <div className="grid grid-cols-2 gap-5 md:grid-cols-3">
-              <Field label="Bộ phận" value={employee.department_name} />
+              <Field label="Bộ phận" value={employee.department_name} editing={editing} field="department_name" form={form!} onChange={handleFieldChange} />
               <Field label="Chức vụ" value={employee.position} editing={editing} field="position" form={form!} onChange={handleFieldChange} />
               <Field label="Cấp bậc" value={employee.level} editing={editing} field="level" form={form!} onChange={handleFieldChange} />
-              <Field label="Ngày vào làm" value={formatDate(employee.join_date)} />
+              <Field label="Ngày vào làm" value={formatDate(employee.join_date)} editing={editing} field="join_date" form={form!} onChange={handleFieldChange} type="date" />
               <Field label="Quản lý trực tiếp" value={employee.manager} editing={editing} field="manager" form={form!} onChange={handleFieldChange} />
               <Field label="Nơi làm việc" value={employee.workplace} editing={editing} field="workplace" form={form!} onChange={handleFieldChange} />
               <Field label="Loại hợp đồng" value={employee.contract_type ?? "Không xác định"} editing={editing} field="contract_type" form={form!} onChange={handleFieldChange} type="select" options={["Không xác định thời hạn", "Xác định thời hạn", "Thử việc", "Thời vụ"]} />
