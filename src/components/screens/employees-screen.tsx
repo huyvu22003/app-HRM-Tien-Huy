@@ -1,11 +1,99 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Search, Upload, Download, Plus, ChevronRight, ChevronLeft, Info, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Search, Upload, Download, Plus, ChevronRight, ChevronLeft, Info, Loader2, Phone, Mail, Briefcase, MapPin } from "lucide-react";
 import { fetchEmployees, fetchDepartments, type ApiEmployee, type ApiDepartment } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery } from "@/lib/hooks";
-import { getInitials, cn } from "@/lib/utils";
+import { getInitials, cn, formatDate, seededRandom } from "@/lib/utils";
+
+function EmployeeHoverCard({ employee, anchorRect }: { employee: ApiEmployee; anchorRect: DOMRect }) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  useEffect(() => {
+    const card = cardRef.current;
+    if (!card) return;
+    const ch = card.offsetHeight;
+    const cw = card.offsetWidth;
+    let top = anchorRect.bottom + 8;
+    let left = anchorRect.left;
+    if (top + ch > window.innerHeight) top = anchorRect.top - ch - 8;
+    if (left + cw > window.innerWidth) left = window.innerWidth - cw - 12;
+    if (left < 8) left = 8;
+    setPos({ top, left });
+  }, [anchorRect]);
+
+  const kpiScore = seededRandom(employee.name + "kpi", 65, 98);
+  const kpiRank = kpiScore >= 90 ? "Tốt" : kpiScore >= 70 ? "Khá" : kpiScore >= 50 ? "TB" : "Yếu";
+  const active = employee.status === "Đang làm việc";
+
+  return (
+    <div
+      ref={cardRef}
+      className="fixed z-[100] w-[300px] rounded-[12px] border border-[var(--color-border)] bg-white shadow-xl"
+      style={{ top: pos.top, left: pos.left }}
+    >
+      <div className="flex items-center gap-3 border-b border-[var(--color-border-light)] p-3.5">
+        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--color-accent)]">
+          {employee.photo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={employee.photo_url} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <span className="text-[14px] font-semibold text-white">{getInitials(employee.name)}</span>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[14px] font-semibold text-[var(--color-text-primary)]">{employee.name}</div>
+          <div className="text-[11.5px] text-[var(--color-text-muted)]">
+            {employee.position ?? "Nhân viên"} · {employee.department_name ?? "-"}
+          </div>
+          <div className="mt-0.5 flex items-center gap-2">
+            <span className="font-[family-name:var(--font-mono)] text-[10.5px] text-[var(--color-text-lighter)]">{employee.code}</span>
+            <span className={cn("rounded-[20px] px-1.5 py-0.5 text-[10px] font-medium", active ? "bg-[var(--color-success-bg)] text-[var(--color-success)]" : "bg-[var(--color-page-bg)] text-[var(--color-text-muted)]")}>
+              {employee.status}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2 p-3.5 text-[12px]">
+        {employee.phone && (
+          <div className="flex items-center gap-2 text-[var(--color-text-muted)]">
+            <Phone size={13} className="flex-shrink-0 text-[var(--color-text-lighter)]" />
+            <span>{employee.phone}</span>
+          </div>
+        )}
+        {employee.email && (
+          <div className="flex items-center gap-2 text-[var(--color-text-muted)]">
+            <Mail size={13} className="flex-shrink-0 text-[var(--color-text-lighter)]" />
+            <span className="truncate">{employee.email}</span>
+          </div>
+        )}
+        {employee.workplace && (
+          <div className="flex items-center gap-2 text-[var(--color-text-muted)]">
+            <MapPin size={13} className="flex-shrink-0 text-[var(--color-text-lighter)]" />
+            <span>{employee.workplace}</span>
+          </div>
+        )}
+        {employee.join_date && (
+          <div className="flex items-center gap-2 text-[var(--color-text-muted)]">
+            <Briefcase size={13} className="flex-shrink-0 text-[var(--color-text-lighter)]" />
+            <span>Vào làm: {formatDate(employee.join_date)}</span>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between border-t border-[var(--color-border-light)] px-3.5 py-2.5">
+        <div className="text-[11px] text-[var(--color-text-lighter)]">KPI tháng 06</div>
+        <div className="flex items-center gap-1.5">
+          <span className="font-[family-name:var(--font-mono)] text-[15px] font-bold text-[var(--color-accent)]">{kpiScore}</span>
+          <span className={cn("text-[11px] font-semibold", kpiScore >= 70 ? "text-[var(--color-success)]" : "text-[var(--color-warning)]")}>{kpiRank}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const PAGE_SIZE = 15;
 
@@ -17,6 +105,9 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
   const [search, setSearch] = useState("");
   const [dept, setDept] = useState("all");
   const [page, setPage] = useState(1);
+  const [hoveredEmployee, setHoveredEmployee] = useState<ApiEmployee | null>(null);
+  const [hoverRect, setHoverRect] = useState<DOMRect | null>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const employeeFetcher = useCallback(
     () => fetchEmployees({ page, pageSize: PAGE_SIZE, search: search || undefined }),
@@ -128,7 +219,21 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
                       {e.code}
                     </td>
                     <td className="px-4 py-2.5">
-                      <div className="flex items-center gap-2.5">
+                      <div
+                        className="flex items-center gap-2.5"
+                        onMouseEnter={(ev) => {
+                          const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+                          hoverTimer.current = setTimeout(() => {
+                            setHoveredEmployee(e);
+                            setHoverRect(rect);
+                          }, 350);
+                        }}
+                        onMouseLeave={() => {
+                          if (hoverTimer.current) clearTimeout(hoverTimer.current);
+                          setHoveredEmployee(null);
+                          setHoverRect(null);
+                        }}
+                      >
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-accent)] text-[11px] font-semibold text-white">
                           {getInitials(e.name)}
                         </div>
@@ -169,6 +274,10 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
           </table>
         )}
       </div>
+
+      {hoveredEmployee && hoverRect && (
+        <EmployeeHoverCard employee={hoveredEmployee} anchorRect={hoverRect} />
+      )}
 
       <div className="flex items-center justify-between text-[12.5px] text-[var(--color-text-muted)]">
         <div>

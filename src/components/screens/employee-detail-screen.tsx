@@ -21,13 +21,6 @@ import { getInitials, cn, formatDate, formatMoney, seededRandom } from "@/lib/ut
 const TABS = ["Tổng hợp", "Công việc", "Cá nhân", "Lương & phụ cấp", "Bảo hiểm", "Hồ sơ đính kèm"];
 
 type EditableFields = {
-  name: string;
-  gender: string;
-  dob: string;
-  phone: string;
-  cccd: string;
-  address: string;
-  email: string;
   position: string;
   workplace: string;
   contract_type: string;
@@ -37,6 +30,9 @@ type EditableFields = {
   status: string;
   bank: string;
   tax_code: string;
+  address: string;
+  email: string;
+  phone: string;
 };
 
 function Field({
@@ -487,13 +483,6 @@ export function EmployeeDetailScreen({
   function startEditing() {
     if (!employee) return;
     setForm({
-      name: employee.name ?? "",
-      gender: employee.gender ?? "",
-      dob: employee.dob ?? "",
-      phone: employee.phone ?? "",
-      cccd: employee.cccd ?? "",
-      address: employee.address ?? "",
-      email: employee.email ?? "",
       position: employee.position ?? "",
       workplace: employee.workplace ?? "",
       contract_type: employee.contract_type ?? "",
@@ -503,6 +492,9 @@ export function EmployeeDetailScreen({
       status: employee.status ?? "",
       bank: employee.bank ?? "",
       tax_code: employee.tax_code ?? "",
+      address: employee.address ?? "",
+      email: employee.email ?? "",
+      phone: employee.phone ?? "",
     });
     setEditing(true);
     setSaveSuccess(false);
@@ -732,9 +724,9 @@ export function EmployeeDetailScreen({
 
           {tab === 2 && (
             <div className="grid grid-cols-2 gap-5 md:grid-cols-3">
-              <Field label="Ngày sinh" value={formatDate(employee.dob)} editing={editing} field="dob" form={form!} onChange={handleFieldChange} type="date" />
-              <Field label="Giới tính" value={employee.gender} editing={editing} field="gender" form={form!} onChange={handleFieldChange} type="select" options={["Nam", "Nữ"]} />
-              <Field label="CCCD" value={employee.cccd} editing={editing} field="cccd" form={form!} onChange={handleFieldChange} />
+              <Field label="Ngày sinh" value={formatDate(employee.dob)} />
+              <Field label="Giới tính" value={employee.gender} />
+              <Field label="CCCD" value={employee.cccd} />
               <Field label="Mã số thuế" value={employee.tax_code} editing={editing} field="tax_code" form={form!} onChange={handleFieldChange} />
               <Field label="Điện thoại" value={employee.phone} editing={editing} field="phone" form={form!} onChange={handleFieldChange} />
               <Field label="Email" value={employee.email} editing={editing} field="email" form={form!} onChange={handleFieldChange} />
