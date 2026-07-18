@@ -6,6 +6,9 @@ import { fetchEmployees, fetchDepartments, type ApiEmployee, type ApiDepartment 
 import { useAuth } from "@/lib/auth-context";
 import { useQuery } from "@/lib/hooks";
 import { getInitials, cn, formatDate, seededRandom } from "@/lib/utils";
+import { useColumnPrefs, type ColumnDef } from "@/lib/table-prefs";
+import { ColumnMenu } from "@/components/ui/column-menu";
+import { exportToCsv } from "@/lib/export";
 
 function EmployeeHoverCard({ employee, anchorRect }: { employee: ApiEmployee; anchorRect: DOMRect }) {
   const cardRef = useRef<HTMLDivElement>(null);
@@ -137,6 +140,154 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
     setPage(1);
   }, [search, dept]);
 
+  const columns: ColumnDef<ApiEmployee>[] = [
+    {
+      id: "code",
+      label: "Mã thẻ",
+      cellClass: "font-[family-name:var(--font-mono)] text-[var(--color-text-muted)]",
+      cell: (e) => e.code,
+      exportValue: (e) => e.code,
+    },
+    {
+      id: "name",
+      label: "Họ và tên",
+      locked: true,
+      cell: (e) => (
+        <div
+          className="flex items-center gap-2.5"
+          onMouseEnter={(ev) => {
+            const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+            hoverTimer.current = setTimeout(() => {
+              setHoveredEmployee(e);
+              setHoverRect(rect);
+            }, 350);
+          }}
+          onMouseLeave={() => {
+            if (hoverTimer.current) clearTimeout(hoverTimer.current);
+            setHoveredEmployee(null);
+            setHoverRect(null);
+          }}
+        >
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-accent)] text-[11px] font-semibold text-white">
+            {getInitials(e.name)}
+          </div>
+          <span className="font-medium text-[var(--color-text-primary)]">{e.name}</span>
+        </div>
+      ),
+      exportValue: (e) => e.name,
+    },
+    {
+      id: "department_name",
+      label: "Bộ phận",
+      cellClass: "text-[var(--color-text-muted)]",
+      cell: (e) => e.department_name ?? "-",
+      exportValue: (e) => e.department_name ?? "",
+    },
+    {
+      id: "position",
+      label: "Chức vụ",
+      cellClass: "text-[var(--color-text-muted)]",
+      cell: (e) => e.position ?? "-",
+      exportValue: (e) => e.position ?? "",
+    },
+    {
+      id: "phone",
+      label: "Điện thoại",
+      cellClass: "font-[family-name:var(--font-mono)] text-[var(--color-text-muted)]",
+      cell: (e) => e.phone ?? "-",
+      exportValue: (e) => e.phone ?? "",
+    },
+    {
+      id: "email",
+      label: "Email",
+      defaultHidden: true,
+      cellClass: "text-[var(--color-text-muted)]",
+      cell: (e) => e.email ?? "-",
+      exportValue: (e) => e.email ?? "",
+    },
+    {
+      id: "gender",
+      label: "Giới tính",
+      defaultHidden: true,
+      cellClass: "text-[var(--color-text-muted)]",
+      cell: (e) => e.gender ?? "-",
+      exportValue: (e) => e.gender ?? "",
+    },
+    {
+      id: "join_date",
+      label: "Ngày vào làm",
+      defaultHidden: true,
+      cellClass: "text-[var(--color-text-muted)]",
+      cell: (e) => formatDate(e.join_date),
+      exportValue: (e) => formatDate(e.join_date),
+    },
+    {
+      id: "workplace",
+      label: "Nơi làm việc",
+      defaultHidden: true,
+      cellClass: "text-[var(--color-text-muted)]",
+      cell: (e) => e.workplace ?? "-",
+      exportValue: (e) => e.workplace ?? "",
+    },
+    {
+      id: "level",
+      label: "Cấp bậc",
+      defaultHidden: true,
+      cellClass: "text-[var(--color-text-muted)]",
+      cell: (e) => e.level ?? "-",
+      exportValue: (e) => e.level ?? "",
+    },
+    {
+      id: "manager",
+      label: "Quản lý",
+      defaultHidden: true,
+      cellClass: "text-[var(--color-text-muted)]",
+      cell: (e) => e.manager ?? "-",
+      exportValue: (e) => e.manager ?? "",
+    },
+    {
+      id: "contract_type",
+      label: "Loại HĐ",
+      defaultHidden: true,
+      cellClass: "text-[var(--color-text-muted)]",
+      cell: (e) => e.contract_type ?? "-",
+      exportValue: (e) => e.contract_type ?? "",
+    },
+    {
+      id: "status",
+      label: "Trạng thái",
+      cell: (e) => (
+        <span
+          className={cn(
+            "rounded-[20px] px-2 py-0.5 text-[11px] font-medium",
+            e.status === "Đang làm việc"
+              ? "bg-[var(--color-success-bg)] text-[var(--color-success)]"
+              : "bg-[var(--color-page-bg)] text-[var(--color-text-muted)]",
+          )}
+        >
+          {e.status}
+        </span>
+      ),
+      exportValue: (e) => e.status,
+    },
+    {
+      id: "actions",
+      label: "",
+      locked: true,
+      align: "right",
+      cell: () => <ChevronRight size={15} className="text-[var(--color-text-lighter)]" />,
+    },
+  ];
+
+  const { hidden, toggle, reset, visibleColumns } = useColumnPrefs("employees", columns);
+
+  function handleExport() {
+    const cols = visibleColumns.filter((c) => c.exportValue);
+    const headers = cols.map((c) => c.label);
+    const rows = items.map((e: ApiEmployee, i: number) => cols.map((c) => c.exportValue!(e, i)));
+    exportToCsv(`nhan-vien-${new Date().toISOString().slice(0, 10)}`, headers, rows);
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {isLeadOrStaff && (
@@ -171,13 +322,17 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
         </select>
 
         <div className="ml-auto flex gap-2">
+          <ColumnMenu columns={columns} hidden={hidden} onToggle={toggle} onReset={reset} />
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-1.5 rounded-[8px] border border-[var(--color-border)] px-3 py-1.5 text-[12.5px] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]"
+          >
+            <Download size={14} /> Xuất Excel
+          </button>
           {canEdit && (
             <>
               <button className="flex items-center gap-1.5 rounded-[8px] border border-[var(--color-border)] px-3 py-1.5 text-[12.5px] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]">
                 <Upload size={14} /> Import
-              </button>
-              <button className="flex items-center gap-1.5 rounded-[8px] border border-[var(--color-border)] px-3 py-1.5 text-[12.5px] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]">
-                <Download size={14} /> Export
               </button>
               <button className="flex items-center gap-1.5 rounded-[8px] bg-[var(--color-accent)] px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-[var(--color-accent-hover)]">
                 <Plus size={14} /> Thêm mới
@@ -197,75 +352,45 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
           <table className="w-full min-w-[900px] text-[13px]">
             <thead>
               <tr className="text-left text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">
-                <th className="px-4 py-3 font-medium">Mã thẻ</th>
-                <th className="px-4 py-3 font-medium">Họ và tên</th>
-                <th className="px-4 py-3 font-medium">Bộ phận</th>
-                <th className="px-4 py-3 font-medium">Chức vụ</th>
-                <th className="px-4 py-3 font-medium">Điện thoại</th>
-                <th className="px-4 py-3 font-medium">Trạng thái</th>
-                <th className="px-4 py-3"></th>
+                {visibleColumns.map((c) => (
+                  <th
+                    key={c.id}
+                    className={cn(
+                      "px-4 py-3 font-medium",
+                      c.align === "right" && "text-right",
+                      c.align === "center" && "text-center",
+                    )}
+                  >
+                    {c.label}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {items.map((e: ApiEmployee) => {
-                const active = e.status === "Đang làm việc";
-                return (
-                  <tr
-                    key={e.id}
-                    onClick={() => onNavigate("employee-detail", String(e.id))}
-                    className="cursor-pointer border-t border-[var(--color-border-light)] hover:bg-[var(--color-page-bg)]"
-                  >
-                    <td className="px-4 py-2.5 font-[family-name:var(--font-mono)] text-[var(--color-text-muted)]">
-                      {e.code}
+              {items.map((e: ApiEmployee, i: number) => (
+                <tr
+                  key={e.id}
+                  onClick={() => onNavigate("employee-detail", String(e.id))}
+                  className="cursor-pointer border-t border-[var(--color-border-light)] hover:bg-[var(--color-page-bg)]"
+                >
+                  {visibleColumns.map((c) => (
+                    <td
+                      key={c.id}
+                      className={cn(
+                        "px-4 py-2.5",
+                        c.align === "right" && "text-right",
+                        c.align === "center" && "text-center",
+                        c.cellClass,
+                      )}
+                    >
+                      {c.cell(e, i)}
                     </td>
-                    <td className="px-4 py-2.5">
-                      <div
-                        className="flex items-center gap-2.5"
-                        onMouseEnter={(ev) => {
-                          const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect();
-                          hoverTimer.current = setTimeout(() => {
-                            setHoveredEmployee(e);
-                            setHoverRect(rect);
-                          }, 350);
-                        }}
-                        onMouseLeave={() => {
-                          if (hoverTimer.current) clearTimeout(hoverTimer.current);
-                          setHoveredEmployee(null);
-                          setHoverRect(null);
-                        }}
-                      >
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-accent)] text-[11px] font-semibold text-white">
-                          {getInitials(e.name)}
-                        </div>
-                        <span className="font-medium text-[var(--color-text-primary)]">{e.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-2.5 text-[var(--color-text-muted)]">{e.department_name ?? "-"}</td>
-                    <td className="px-4 py-2.5 text-[var(--color-text-muted)]">{e.position ?? "-"}</td>
-                    <td className="px-4 py-2.5 font-[family-name:var(--font-mono)] text-[var(--color-text-muted)]">
-                      {e.phone ?? "-"}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <span
-                        className={cn(
-                          "rounded-[20px] px-2 py-0.5 text-[11px] font-medium",
-                          active
-                            ? "bg-[var(--color-success-bg)] text-[var(--color-success)]"
-                            : "bg-[var(--color-page-bg)] text-[var(--color-text-muted)]"
-                        )}
-                      >
-                        {e.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5 text-right">
-                      <ChevronRight size={15} className="text-[var(--color-text-lighter)]" />
-                    </td>
-                  </tr>
-                );
-              })}
+                  ))}
+                </tr>
+              ))}
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-[var(--color-text-muted)]">
+                  <td colSpan={visibleColumns.length} className="px-4 py-12 text-center text-[var(--color-text-muted)]">
                     Không tìm thấy nhân viên nào.
                   </td>
                 </tr>
