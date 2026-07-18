@@ -11,7 +11,7 @@ import { ColumnMenu } from "@/components/ui/column-menu";
 import { exportStyledExcel } from "@/lib/excel-export";
 import { getEmployeePhoto } from "@/lib/photo-store";
 import { parseCsvObjects } from "@/lib/csv";
-import { X, CheckCircle2, FileDown, Settings2, Trash2 } from "lucide-react";
+import { X, CheckCircle2, FileDown, Settings2, Trash2, Lock, Unlock, MoreVertical, GripVertical } from "lucide-react";
 import {
   getCustomFields,
   addCustomField,
@@ -191,6 +191,59 @@ function downloadImportTemplate() {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+function ColumnFilterButton({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+  const active = value.trim().length > 0;
+  return (
+    <div className="relative inline-flex" ref={ref}>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+        className={cn(
+          "flex h-5 w-5 items-center justify-center rounded hover:bg-[var(--color-border-light)]",
+          active ? "text-[var(--color-accent)]" : "text-[var(--color-text-lighter)]",
+        )}
+        title={`Lọc theo ${label}`}
+      >
+        <MoreVertical size={13} />
+      </button>
+      {open && (
+        <div
+          className="absolute left-0 top-full z-40 mt-1 w-[200px] rounded-[10px] border border-[var(--color-border)] bg-white p-2 shadow-lg normal-case tracking-normal"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="mb-1 text-[10.5px] uppercase tracking-wide text-[var(--color-text-lighter)]">Lọc: {label}</div>
+          <div className="flex items-center gap-1">
+            <input
+              autoFocus
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder="Nhập để lọc..."
+              className="h-8 w-full rounded-[6px] border border-[var(--color-border)] px-2 text-[12.5px] normal-case tracking-normal outline-none focus:border-[var(--color-accent)]"
+            />
+            {active && (
+              <button onClick={() => onChange("")} className="text-[var(--color-text-lighter)] hover:text-[var(--color-danger)]" title="Xoá lọc">
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function Avatar({ id, name, photoUrl, className }: { id: number; name: string; photoUrl?: string | null; className?: string }) {
@@ -429,6 +482,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
   const [search, setSearch] = useState("");
   const [dept, setDept] = useState("all");
   const [page, setPage] = useState(1);
+  const [colFilters, setColFilters] = useState<Record<string, string>>({});
   const [hoveredEmployee, setHoveredEmployee] = useState<ApiEmployee | null>(null);
   const [hoverRect, setHoverRect] = useState<DOMRect | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -441,25 +495,13 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
     return deptData.data.map((d: ApiDepartment) => d.name);
   }, [deptData]);
 
-  // Resolve the selected department name → id so filtering happens server-side
-  // (across all pages), not just within the current paginated slice.
-  const deptId = useMemo(() => {
-    if (dept === "all" || !deptData?.data) return undefined;
-    return deptData.data.find((d: ApiDepartment) => d.name === dept)?.id;
-  }, [dept, deptData]);
+  // Fetch the full list once; search, department, per-column filters, sorting
+  // and pagination are all applied client-side so per-column filters work
+  // across every row (not just the current page).
+  const employeeFetcher = useCallback(() => fetchEmployees({ page: 1, pageSize: 1000 }), []);
+  const { data: empData, isLoading, refetch } = useQuery(employeeFetcher, []);
+  const allItems = useMemo(() => empData?.data ?? [], [empData]);
 
-  const employeeFetcher = useCallback(
-    () =>
-      fetchEmployees({
-        page,
-        pageSize: PAGE_SIZE,
-        search: search || undefined,
-        departmentId: deptId,
-      }),
-    [page, search, deptId],
-  );
-
-  const { data: empData, isLoading, refetch } = useQuery(employeeFetcher, [page, search, deptId]);
   const [importOpen, setImportOpen] = useState(false);
   const [fieldsOpen, setFieldsOpen] = useState(false);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
@@ -468,14 +510,11 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
     setCustomFields(getCustomFields());
   }, []);
 
-  const items = useMemo(() => empData?.data ?? [], [empData]);
-
-  const totalPages = empData?.totalPages ?? 1;
-
+  const colFilterKey = JSON.stringify(colFilters);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reset page on filter change
     setPage(1);
-  }, [search, dept]);
+  }, [search, dept, colFilterKey]);
 
   const columns: ColumnDef<ApiEmployee>[] = [
     {
@@ -609,6 +648,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
       id: "actions",
       label: "",
       locked: true,
+      noReorder: true,
       align: "right",
       cell: () => <ChevronRight size={15} className="text-[var(--color-text-lighter)]" />,
     },
@@ -630,7 +670,38 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
       ? [...columns.slice(0, actionsIdx), ...customColumns, ...columns.slice(actionsIdx)]
       : [...columns, ...customColumns];
 
-  const { hidden, toggle, reset, visibleColumns } = useColumnPrefs("employees", displayColumns);
+  const { hidden, toggle, reset, visibleColumns, reorderLocked, toggleReorderLock, moveColumn } =
+    useColumnPrefs("employees", displayColumns);
+
+  // Apply search + department + per-column filters, then paginate — all client-side.
+  const filtered = useMemo(() => {
+    let list = allItems;
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter(
+        (e: ApiEmployee) => e.name.toLowerCase().includes(q) || e.code.toLowerCase().includes(q),
+      );
+    }
+    if (dept !== "all") {
+      list = list.filter((e: ApiEmployee) => e.department_name === dept);
+    }
+    for (const [colId, text] of Object.entries(colFilters)) {
+      if (!text.trim()) continue;
+      const col = displayColumns.find((c) => c.id === colId);
+      if (!col?.exportValue) continue;
+      const q = text.toLowerCase();
+      list = list.filter((e: ApiEmployee, i: number) =>
+        String(col.exportValue!(e, i)).toLowerCase().includes(q),
+      );
+    }
+    return list;
+  }, [allItems, search, dept, colFilters, displayColumns]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const items = useMemo(
+    () => filtered.slice((page - 1) * PAGE_SIZE, (page - 1) * PAGE_SIZE + PAGE_SIZE),
+    [filtered, page],
+  );
 
   const [exporting, setExporting] = useState(false);
   const EMPTY_NEW = { code: "", name: "", department_name: "", position: "", phone: "", status: "Đang làm việc" };
@@ -653,18 +724,11 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
   }
 
   async function handleExport() {
-    const cols = visibleColumns.filter((c) => c.exportValue);
+    const cols = visibleColumns.filter((c) => c.exportValue && c.id !== "actions");
     setExporting(true);
     try {
-      // Export the full filtered set (all pages), not just the current page,
-      // and group employees by department so teammates sit together.
-      const all = await fetchEmployees({
-        page: 1,
-        pageSize: 1000,
-        search: search || undefined,
-        departmentId: deptId,
-      });
-      const sorted = [...(all.data ?? [])].sort(
+      // Export the current filtered set (all matching rows), grouped by department.
+      const sorted = [...filtered].sort(
         (a: ApiEmployee, b: ApiEmployee) =>
           (a.department_name ?? "").localeCompare(b.department_name ?? "", "vi") ||
           a.code.localeCompare(b.code, "vi"),
@@ -736,6 +800,19 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
 
         <div className="ml-auto flex gap-2">
           <ColumnMenu columns={displayColumns} hidden={hidden} onToggle={toggle} onReset={reset} />
+          <button
+            onClick={toggleReorderLock}
+            className={cn(
+              "flex items-center gap-1.5 rounded-[8px] border px-3 py-1.5 text-[12.5px] transition-colors",
+              reorderLocked
+                ? "border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]"
+                : "border-[var(--color-accent)] bg-[var(--color-accent)] text-white",
+            )}
+            title={reorderLocked ? "Mở khoá để kéo sắp xếp cột" : "Đang mở khoá — kéo tiêu đề cột để sắp xếp. Bấm để khoá lại"}
+          >
+            {reorderLocked ? <Lock size={14} /> : <Unlock size={14} />}
+            {reorderLocked ? "Khoá cột" : "Đang sắp xếp"}
+          </button>
           {canEdit && (
             <button
               onClick={() => setFieldsOpen(true)}
@@ -785,24 +862,55 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
           <table className="w-full min-w-[900px] text-[13px]">
             <thead>
               <tr className="text-left text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">
-                {visibleColumns.map((c) => (
-                  <th
-                    key={c.id}
-                    className={cn(
-                      "px-4 py-3 font-medium",
-                      c.align === "right" && "text-right",
-                      c.align === "center" && "text-center",
-                    )}
-                  >
-                    {c.label}
-                  </th>
-                ))}
+                {/* Fixed STT column — always first, never reordered */}
+                <th className="w-12 px-4 py-3 text-center font-medium">STT</th>
+                {visibleColumns.map((c) => {
+                  const canDrag = !reorderLocked && !c.noReorder;
+                  const canFilter = !!c.exportValue && !c.noReorder;
+                  return (
+                    <th
+                      key={c.id}
+                      draggable={canDrag}
+                      onDragStart={(e) => {
+                        if (!canDrag) return;
+                        e.dataTransfer.setData("text/plain", c.id);
+                      }}
+                      onDragOver={(e) => {
+                        if (!reorderLocked && !c.noReorder) e.preventDefault();
+                      }}
+                      onDrop={(e) => {
+                        if (reorderLocked || c.noReorder) return;
+                        e.preventDefault();
+                        const dragId = e.dataTransfer.getData("text/plain");
+                        if (dragId) moveColumn(dragId, c.id);
+                      }}
+                      className={cn(
+                        "px-4 py-3 font-medium",
+                        c.align === "right" && "text-right",
+                        c.align === "center" && "text-center",
+                        canDrag && "cursor-move select-none bg-[var(--color-page-bg)]",
+                      )}
+                    >
+                      <span className={cn("inline-flex items-center gap-1", c.align === "right" && "flex-row-reverse")}>
+                        {canDrag && <GripVertical size={12} className="text-[var(--color-text-lighter)]" />}
+                        {c.label}
+                        {canFilter && (
+                          <ColumnFilterButton
+                            label={c.label}
+                            value={colFilters[c.id] ?? ""}
+                            onChange={(v) => setColFilters((s) => ({ ...s, [c.id]: v }))}
+                          />
+                        )}
+                      </span>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
               {adding && (
                 <tr className="border-t border-[var(--color-accent)] bg-[var(--color-page-bg)]">
-                  <td colSpan={visibleColumns.length} className="px-4 py-3">
+                  <td colSpan={visibleColumns.length + 1} className="px-4 py-3">
                     <div className="flex flex-wrap items-end gap-2">
                       <input
                         autoFocus
@@ -874,6 +982,9 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
                   onClick={() => onNavigate("employee-detail", String(e.id))}
                   className="cursor-pointer border-t border-[var(--color-border-light)] hover:bg-[var(--color-page-bg)]"
                 >
+                  <td className="px-4 py-2.5 text-center font-[family-name:var(--font-mono)] text-[var(--color-text-lighter)]">
+                    {(page - 1) * PAGE_SIZE + i + 1}
+                  </td>
                   {visibleColumns.map((c) => (
                     <td
                       key={c.id}
@@ -891,7 +1002,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
               ))}
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={visibleColumns.length} className="px-4 py-12 text-center text-[var(--color-text-muted)]">
+                  <td colSpan={visibleColumns.length + 1} className="px-4 py-12 text-center text-[var(--color-text-muted)]">
                     Không tìm thấy nhân viên nào.
                   </td>
                 </tr>
@@ -907,7 +1018,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
 
       <div className="flex items-center justify-between text-[12.5px] text-[var(--color-text-muted)]">
         <div>
-          Hiển thị {items.length} / {empData?.total ?? 0} nhân viên
+          Hiển thị {items.length} / {filtered.length} nhân viên
         </div>
         <div className="flex items-center gap-1">
           <button
