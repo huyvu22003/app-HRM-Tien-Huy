@@ -1,10 +1,13 @@
 "use client";
 
 import { useMemo, useState, useRef } from "react";
-import { X, Printer } from "lucide-react";
+import { X, Printer, Download } from "lucide-react";
 import { fetchSalary, fetchDepartments, type ApiSalaryRow } from "@/lib/api";
 import { useQuery } from "@/lib/hooks";
 import { formatMoney, cn } from "@/lib/utils";
+import { useColumnPrefs, type ColumnDef } from "@/lib/table-prefs";
+import { ColumnMenu } from "@/components/ui/column-menu";
+import { exportToCsv } from "@/lib/export";
 
 const STD_DAYS = 26;
 const HOURS_PER_DAY = 8;
@@ -137,6 +140,24 @@ function computeSalary(row: ApiSalaryRow): SalaryComputed {
 }
 
 type SalaryDisplayRow = { row: ApiSalaryRow; s: SalaryComputed };
+
+function totalOtOf(s: SalaryComputed): number {
+  return s.otWeekday + s.otWeekdayExempt + s.otSunday + s.otSundayExempt + s.otHoliday;
+}
+
+const SAL_COLUMNS: ColumnDef<SalaryDisplayRow>[] = [
+  { id: "name", label: "Nhân viên", locked: true, cell: (d) => d.row.name, exportValue: (d) => `${d.row.name} (${d.row.code})` },
+  { id: "department_name", label: "Bộ phận", cell: (d) => d.row.department_name ?? "-", exportValue: (d) => d.row.department_name ?? "" },
+  { id: "cong", label: "Công", align: "right", cell: (d) => `${d.s.actualDays}/${STD_DAYS}`, exportValue: (d) => d.s.actualDays },
+  { id: "workSalary", label: "Lương công", align: "right", cell: (d) => formatMoney(d.s.workSalary), exportValue: (d) => d.s.workSalary },
+  { id: "responsibilityActual", label: "Trách nhiệm", align: "right", cell: (d) => formatMoney(d.s.responsibilityActual), exportValue: (d) => d.s.responsibilityActual },
+  { id: "overtime", label: "Tăng ca", align: "right", cell: (d) => (totalOtOf(d.s) > 0 ? formatMoney(totalOtOf(d.s)) : "-"), exportValue: (d) => totalOtOf(d.s) },
+  { id: "totalIncome", label: "Tổng TN", align: "right", cell: (d) => formatMoney(d.s.totalIncome), exportValue: (d) => d.s.totalIncome },
+  { id: "insuranceTotal", label: "Bảo hiểm", align: "right", cell: (d) => `-${formatMoney(d.s.insuranceTotal)}`, exportValue: (d) => -d.s.insuranceTotal },
+  { id: "pit", label: "Thuế", align: "right", cell: (d) => (d.s.pit > 0 ? `-${formatMoney(d.s.pit)}` : "0"), exportValue: (d) => -d.s.pit },
+  { id: "advance", label: "Tạm ứng", align: "right", cell: (d) => (d.s.advance > 0 ? `-${formatMoney(d.s.advance)}` : "-"), exportValue: (d) => -d.s.advance },
+  { id: "netPay", label: "Thực nhận", align: "right", cell: (d) => formatMoney(d.s.netPay), exportValue: (d) => d.s.netPay },
+];
 
 function PayslipModal({ data, period, onClose }: { data: SalaryDisplayRow; period: string; onClose: () => void }) {
   const { row, s } = data;
@@ -408,6 +429,15 @@ export function SalaryScreen() {
     return `${m}/${y}`;
   })();
 
+  const { hidden, toggle, reset, isVisible } = useColumnPrefs("salary", SAL_COLUMNS);
+
+  function handleExport() {
+    const cols = SAL_COLUMNS.filter((c) => isVisible(c.id) && c.exportValue);
+    const headers = cols.map((c) => c.label);
+    const body = rows.map((d, i) => cols.map((c) => c.exportValue!(d, i)));
+    exportToCsv(`bang-luong-${period}`, headers, body);
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between rounded-[14px] border border-[var(--color-border)] bg-white p-[14px]">
@@ -431,6 +461,13 @@ export function SalaryScreen() {
           </select>
         </div>
         <div className="flex items-center gap-2">
+          <ColumnMenu columns={SAL_COLUMNS} hidden={hidden} onToggle={toggle} onReset={reset} />
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-1.5 rounded-[8px] border border-[var(--color-border)] px-3 py-1.5 text-[12.5px] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]"
+          >
+            <Download size={14} /> Xuất Excel
+          </button>
           <PrintPayslips rows={rows} period={period} />
           <span className="rounded-[20px] bg-[var(--color-success-bg)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--color-success)]">
             {rows.length} nhân viên
@@ -463,17 +500,14 @@ export function SalaryScreen() {
           <table className="w-full min-w-[1400px] text-[13px]">
             <thead>
               <tr className="text-left text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">
-                <th className="px-3 py-3 font-medium">Nhân viên</th>
-                <th className="px-3 py-3 font-medium">Bộ phận</th>
-                <th className="px-3 py-3 text-right font-medium">Công</th>
-                <th className="px-3 py-3 text-right font-medium">Lương công</th>
-                <th className="px-3 py-3 text-right font-medium">Trách nhiệm</th>
-                <th className="px-3 py-3 text-right font-medium">Tăng ca</th>
-                <th className="px-3 py-3 text-right font-medium">Tổng TN</th>
-                <th className="px-3 py-3 text-right font-medium">Bảo hiểm</th>
-                <th className="px-3 py-3 text-right font-medium">Thuế</th>
-                <th className="px-3 py-3 text-right font-medium">Tạm ứng</th>
-                <th className="px-3 py-3 text-right font-medium">Thực nhận</th>
+                {SAL_COLUMNS.filter((c) => isVisible(c.id)).map((c) => (
+                  <th
+                    key={c.id}
+                    className={cn("px-3 py-3 font-medium", c.align === "right" && "text-right")}
+                  >
+                    {c.label}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -485,34 +519,56 @@ export function SalaryScreen() {
                     onClick={() => setSelected({ row, s })}
                     className="cursor-pointer border-t border-[var(--color-border-light)] hover:bg-[var(--color-page-bg)]"
                   >
-                    <td className="px-3 py-2.5">
-                      <div className="font-medium text-[var(--color-text-primary)]">{row.name}</div>
-                      <div className="text-[11px] text-[var(--color-text-lighter)]">{row.code}</div>
-                    </td>
-                    <td className="px-3 py-2.5 text-[12px] text-[var(--color-text-muted)]">{row.department_name}</td>
-                    <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)] text-[12px]">
-                      {s.actualDays}/{STD_DAYS}
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)]">{formatMoney(s.workSalary)}</td>
-                    <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)]">{formatMoney(s.responsibilityActual)}</td>
-                    <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)]">
-                      {totalOT > 0 ? formatMoney(totalOT) : "-"}
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)] font-medium">
-                      {formatMoney(s.totalIncome)}
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)] text-[var(--color-danger)]">
-                      -{formatMoney(s.insuranceTotal)}
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)] text-[var(--color-danger)]">
-                      {s.pit > 0 ? `-${formatMoney(s.pit)}` : "0"}
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)]">
-                      {s.advance > 0 ? `-${formatMoney(s.advance)}` : "-"}
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)] font-semibold text-[var(--color-success)]">
-                      {formatMoney(s.netPay)}
-                    </td>
+                    {isVisible("name") && (
+                      <td className="px-3 py-2.5">
+                        <div className="font-medium text-[var(--color-text-primary)]">{row.name}</div>
+                        <div className="text-[11px] text-[var(--color-text-lighter)]">{row.code}</div>
+                      </td>
+                    )}
+                    {isVisible("department_name") && (
+                      <td className="px-3 py-2.5 text-[12px] text-[var(--color-text-muted)]">{row.department_name}</td>
+                    )}
+                    {isVisible("cong") && (
+                      <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)] text-[12px]">
+                        {s.actualDays}/{STD_DAYS}
+                      </td>
+                    )}
+                    {isVisible("workSalary") && (
+                      <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)]">{formatMoney(s.workSalary)}</td>
+                    )}
+                    {isVisible("responsibilityActual") && (
+                      <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)]">{formatMoney(s.responsibilityActual)}</td>
+                    )}
+                    {isVisible("overtime") && (
+                      <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)]">
+                        {totalOT > 0 ? formatMoney(totalOT) : "-"}
+                      </td>
+                    )}
+                    {isVisible("totalIncome") && (
+                      <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)] font-medium">
+                        {formatMoney(s.totalIncome)}
+                      </td>
+                    )}
+                    {isVisible("insuranceTotal") && (
+                      <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)] text-[var(--color-danger)]">
+                        -{formatMoney(s.insuranceTotal)}
+                      </td>
+                    )}
+                    {isVisible("pit") && (
+                      <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)] text-[var(--color-danger)]">
+                        {s.pit > 0 ? `-${formatMoney(s.pit)}` : "0"}
+                      </td>
+                    )}
+                    {isVisible("advance") && (
+                      <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)]">
+                        {s.advance > 0 ? `-${formatMoney(s.advance)}` : "-"}
+                      </td>
+                    )}
+                    {isVisible("netPay") && (
+                      <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)] font-semibold text-[var(--color-success)]">
+                        {formatMoney(s.netPay)}
+                      </td>
+                    )}
                   </tr>
                 );
               })}
