@@ -14,6 +14,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useQuery, useMutation } from "@/lib/hooks";
 import { BLOCKS } from "@/lib/data/departments";
 import { getInitials, cn } from "@/lib/utils";
+import { getEmployeePhoto } from "@/lib/photo-store";
 
 interface DeptEntry {
   dept: string;
@@ -322,8 +323,13 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
                     onClick={() => onNavigate("employee-detail", String(s.id))}
                     className="flex items-center gap-2.5 rounded-[10px] border border-[var(--color-border-light)] p-2.5 text-left hover:border-[var(--color-accent)]"
                   >
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-accent)] text-[11px] font-semibold text-white">
-                      {getInitials(s.name ?? "?")}
+                    <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[var(--color-accent)] text-[11px] font-semibold text-white">
+                      {getEmployeePhoto(s.id) ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={getEmployeePhoto(s.id)!} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        getInitials(s.name ?? "?")
+                      )}
                     </div>
                     <div className="min-w-0">
                       <div className="truncate text-[12.5px] font-medium text-[var(--color-text-primary)]">
