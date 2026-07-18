@@ -13,6 +13,7 @@ import {
   BarChart3,
   Search,
   Filter,
+  Download,
 } from "lucide-react";
 import {
   fetchKpi,
@@ -22,6 +23,7 @@ import {
 } from "@/lib/api";
 import { useQuery, useMutation } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
+import { exportStyledExcel } from "@/lib/excel-export";
 import { useAuth } from "@/lib/auth-context";
 import { DEPARTMENTS } from "@/lib/data/departments";
 
@@ -108,6 +110,39 @@ export function KpiScreen() {
     const reportBased = allRows.filter((r) => r.bc > 0 || r.ns > 0 || r.cl > 0).length;
     return { total, avg, excellent, good, fair, pass, low, reportBased };
   }, [allRows]);
+
+  async function handleExport() {
+    const sorted = [...rows].sort(
+      (a, b) => (a.department_name ?? "").localeCompare(b.department_name ?? "", "vi") || b.score - a.score,
+    );
+    await exportStyledExcel({
+      filename: `kpi-${period}`,
+      title: `BẢNG KPI KỲ ${period.split("-")[1]}/${period.split("-")[0]}`,
+      meta: [`Ngày xuất: ${new Date().toLocaleDateString("vi-VN")}`, `Số lượng: ${sorted.length} nhân viên`],
+      columns: [
+        { label: "Mã NV" },
+        { label: "Họ và tên" },
+        { label: "Bộ phận" },
+        { label: "BC/25", align: "right", format: "int" },
+        { label: "NS/30", align: "right", format: "int" },
+        { label: "CL/25", align: "right", format: "int" },
+        { label: "ĐG/20", align: "right", format: "int" },
+        { label: "Tổng", align: "right", format: "int" },
+        { label: "Xếp loại" },
+      ],
+      rows: sorted.map((r) => [
+        r.employee_code,
+        r.employee_name,
+        r.department_name ?? "-",
+        r.bc,
+        r.ns,
+        r.cl,
+        r.dg,
+        r.score,
+        kpiClass(r.score),
+      ]),
+    });
+  }
 
   const periodLabel = (() => {
     const [y, m] = period.split("-");
@@ -258,6 +293,12 @@ export function KpiScreen() {
             </div>
           )}
         </div>
+        <button
+          onClick={handleExport}
+          className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-white px-3 py-1.5 text-[12.5px] text-[var(--color-text-secondary)] transition hover:border-[var(--color-primary)]"
+        >
+          <Download size={13} /> Xuất Excel
+        </button>
         <div className="text-[12px] text-[var(--color-text-muted)]">
           Hiển thị {rows.length} / {allRows.length}
         </div>
