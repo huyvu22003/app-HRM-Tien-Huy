@@ -33,7 +33,100 @@ function toApiEmployee(e: (typeof EMPLOYEES)[number], idx: number) {
   };
 }
 
-const apiEmployees = EMPLOYEES.map(toApiEmployee);
+type ApiEmp = {
+  id: number;
+  code: string;
+  name: string;
+  gender: string | null;
+  dob: string | null;
+  phone: string | null;
+  cccd: string | null;
+  address: string | null;
+  email: string | null;
+  department_id: number | null;
+  department_name: string | null;
+  position: string | null;
+  workplace: string | null;
+  contract_type: string | null;
+  contract_end: string | null;
+  join_date: string | null;
+  resign_request_date: string | null;
+  resign_date: string | null;
+  status: string;
+  manager: string | null;
+  level: string | null;
+  photo_url: string | null;
+  bank: string | null;
+  tax_code: string | null;
+};
+
+const baseEmployees: ApiEmp[] = EMPLOYEES.map(toApiEmployee);
+
+// Employees added at runtime (e.g. via import) — persisted so demo survives reload.
+const ADDED_EMP_KEY = "hrm_demo_added_employees";
+let _addedEmployees: ApiEmp[] | null = null;
+
+function loadAddedEmployees(): ApiEmp[] {
+  try {
+    const raw = window.localStorage.getItem(ADDED_EMP_KEY);
+    if (raw) return JSON.parse(raw) as ApiEmp[];
+  } catch {
+    /* ignore */
+  }
+  return [];
+}
+
+function addedEmployees(): ApiEmp[] {
+  if (!_addedEmployees) _addedEmployees = loadAddedEmployees();
+  return _addedEmployees;
+}
+
+function persistAddedEmployees() {
+  try {
+    window.localStorage.setItem(ADDED_EMP_KEY, JSON.stringify(addedEmployees()));
+  } catch {
+    /* ignore */
+  }
+}
+
+function allEmployees(): ApiEmp[] {
+  return baseEmployees.concat(addedEmployees());
+}
+
+function nextEmployeeId(): number {
+  return allEmployees().reduce((max, e) => Math.max(max, e.id), 0) + 1;
+}
+
+function makeImportedEmployee(input: Record<string, unknown>, id: number): ApiEmp {
+  const deptName = String(input.department_name ?? input.department ?? "").trim();
+  const dept = getDepartments().find((d) => d.name === deptName);
+  return {
+    id,
+    code: String(input.code ?? `NV${id}`),
+    name: String(input.name ?? ""),
+    gender: (input.gender as string) || null,
+    dob: (input.dob as string) || null,
+    phone: (input.phone as string) || null,
+    cccd: (input.cccd as string) || null,
+    address: (input.address as string) || null,
+    email: (input.email as string) || null,
+    department_id: dept?.id ?? null,
+    department_name: deptName || null,
+    position: (input.position as string) || null,
+    workplace: (input.workplace as string) || null,
+    contract_type: (input.contract_type as string) || null,
+    contract_end: (input.contract_end as string) || null,
+    join_date: (input.join_date as string) || null,
+    resign_request_date: null,
+    resign_date: null,
+    status: (input.status as string) || "Đang làm việc",
+    manager: (input.manager as string) || null,
+    level: (input.level as string) || null,
+    photo_url: null,
+    bank: (input.bank as string) || null,
+    tax_code: (input.tax_code as string) || null,
+  };
+}
 
 function toApiDepartment(d: (typeof DEPARTMENTS)[number], idx: number) {
   return {
@@ -371,12 +464,13 @@ const MOCK_ROUTES: MockRoute[] = [
   },
   {
     match: /^\/employees$/,
+    method: "GET",
     handler: (_path, params) => {
       const page = Number(params.get("page") || 1);
       const pageSize = Number(params.get("pageSize") || 20);
       const search = params.get("search")?.toLowerCase();
       const departmentId = params.get("departmentId");
-      let list = apiEmployees;
+      let list = allEmployees();
       if (search) {
         list = list.filter(
           (e) => e.name.toLowerCase().includes(search) || e.code.toLowerCase().includes(search),
@@ -397,13 +491,54 @@ const MOCK_ROUTES: MockRoute[] = [
     },
   },
   {
+    match: /^\/employees$/,
+    method: "POST",
+    handler: (_path, _params, body) => {
+      const b = parseBody(body);
+      const emp = makeImportedEmployee(b, nextEmployeeId());
+      addedEmployees().push(emp);
+      persistAddedEmployees();
+      return { id: emp.id };
+    },
+  },
+  {
+    match: /^\/employees\/import$/,
+    method: "POST",
+    handler: (_path, _params, body) => {
+      const b = parseBody(body);
+      const incoming = Array.isArray(b.employees) ? (b.employees as Record<string, unknown>[]) : [];
+      let created = 0;
+      let updated = 0;
+      for (const input of incoming) {
+        const code = String(input.code ?? "").trim();
+        const existing = code ? allEmployees().find((e) => e.code === code) : undefined;
+        if (existing) {
+          // Update in-place only if it's a runtime-added record (base is immutable in demo)
+          const added = addedEmployees().find((e) => e.code === code);
+          if (added) {
+            Object.assign(added, makeImportedEmployee({ ...added, ...input }, added.id));
+            updated++;
+          } else {
+            updated++; // base record — treated as matched, left as-is in demo
+          }
+        } else {
+          addedEmployees().push(makeImportedEmployee(input, nextEmployeeId()));
+          created++;
+        }
+      }
+      persistAddedEmployees();
+      return { success: true, created, updated };
+    },
+  },
+  {
     match: /^\/employees\/(\d+)$/,
+    method: "GET",
     handler: (path) => {
       const id = Number(path.split("/").pop());
-      const emp = apiEmployees[id - 1];
+      const emp = allEmployees().find((e) => e.id === id);
       const src = EMPLOYEES[id - 1];
       return {
-        employee: emp ?? apiEmployees[0],
+        employee: emp ?? baseEmployees[0],
         compensation: src
           ? {
               id: 1,
@@ -428,6 +563,29 @@ const MOCK_ROUTES: MockRoute[] = [
             }
           : null,
       };
+    },
+  },
+  {
+    match: /^\/employees\/(\d+)$/,
+    method: "PUT",
+    handler: (path, _params, body) => {
+      const id = Number(path.split("/").pop());
+      const added = addedEmployees().find((e) => e.id === id);
+      if (added) {
+        const b = parseBody(body);
+        if (b.name !== undefined) added.name = String(b.name);
+        if (b.departmentName !== undefined) {
+          const dept = getDepartments().find((d) => d.name === b.departmentName);
+          added.department_name = (b.departmentName as string) || null;
+          added.department_id = dept?.id ?? null;
+        }
+        for (const k of ["gender", "dob", "phone", "cccd", "address", "email", "position", "workplace", "status", "manager", "level", "bank"] as const) {
+          if (b[k] !== undefined) (added as Record<string, unknown>)[k] = b[k];
+        }
+        if (b.taxCode !== undefined) added.tax_code = (b.taxCode as string) || null;
+        persistAddedEmployees();
+      }
+      return { success: true };
     },
   },
   {

@@ -4,7 +4,7 @@ import { corsHeaders, handlePreflight } from "./middleware/cors";
 import { error, parseIdFromPath } from "./utils";
 
 import { login, logout, me } from "./handlers/auth";
-import { listEmployees, getEmployee, createEmployee, updateEmployee } from "./handlers/employees";
+import { listEmployees, getEmployee, createEmployee, updateEmployee, importEmployees } from "./handlers/employees";
 import {
   listDepartments,
   createDepartment,
@@ -75,6 +75,7 @@ export default {
 
       // --- Employees ---
       if (method === "GET" && pathname === "/api/employees") return withCors(await listEmployees(request, env));
+      if (method === "POST" && pathname === "/api/employees/import") return withCors(await importEmployees(request, env));
       if (method === "POST" && pathname === "/api/employees") return withCors(await createEmployee(request, env));
       if (method === "GET" && pathname.startsWith("/api/employees/")) {
         const id = parseIdFromPath(pathname, "/api/employees/");
