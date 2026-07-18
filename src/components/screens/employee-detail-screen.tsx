@@ -12,6 +12,7 @@ import {
   Upload,
   User as UserIcon,
   FileText,
+  Lock,
 } from "lucide-react";
 import { fetchEmployee, updateEmployee, type ApiEmployee, type ApiCompensation, type ApiInsurance } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -44,6 +45,7 @@ function Field({
   onChange,
   type = "text",
   options,
+  locked,
 }: {
   label: string;
   value: React.ReactNode;
@@ -53,6 +55,7 @@ function Field({
   onChange?: (field: keyof EditableFields, value: string) => void;
   type?: "text" | "date" | "select";
   options?: string[];
+  locked?: boolean;
 }) {
   if (editing && field && form && onChange) {
     const inputVal = form[field] ?? "";
@@ -81,6 +84,20 @@ function Field({
           onChange={(e) => onChange(field, e.target.value)}
           className="mt-1 h-9 w-full rounded-[8px] border border-[var(--color-accent)] px-2.5 text-[13px] outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
         />
+      </div>
+    );
+  }
+
+  if (locked) {
+    return (
+      <div>
+        <div className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">
+          {label}
+          <Lock size={10} className="text-[var(--color-text-lighter)]" />
+        </div>
+        <div className="mt-1 flex h-9 items-center rounded-[8px] bg-[var(--color-page-bg)] px-2.5 text-[13px] text-[var(--color-text-muted)]">
+          {value ?? "-"}
+        </div>
       </div>
     );
   }
@@ -696,9 +713,9 @@ export function EmployeeDetailScreen({
           {tab === 0 && (
             <div className="flex flex-col gap-6">
               <div className="grid grid-cols-2 gap-5 md:grid-cols-3">
-                <Field label="Bộ phận" value={employee.department_name} />
+                <Field label="Bộ phận" value={employee.department_name} locked={editing} />
                 <Field label="Chức vụ" value={employee.position} editing={editing} field="position" form={form!} onChange={handleFieldChange} />
-                <Field label="Ngày vào làm" value={formatDate(employee.join_date)} />
+                <Field label="Ngày vào làm" value={formatDate(employee.join_date)} locked={editing} />
                 <Field label="Trạng thái" value={employee.status} editing={editing} field="status" form={form!} onChange={handleFieldChange} type="select" options={["Đang làm việc", "Nghỉ việc", "Nghỉ thai sản", "Thử việc"]} />
                 <Field label="Nơi làm việc" value={employee.workplace} editing={editing} field="workplace" form={form!} onChange={handleFieldChange} />
                 <Field label="Cấp bậc" value={employee.level} editing={editing} field="level" form={form!} onChange={handleFieldChange} />
@@ -708,10 +725,10 @@ export function EmployeeDetailScreen({
 
           {tab === 1 && (
             <div className="grid grid-cols-2 gap-5 md:grid-cols-3">
-              <Field label="Bộ phận" value={employee.department_name} />
+              <Field label="Bộ phận" value={employee.department_name} locked={editing} />
               <Field label="Chức vụ" value={employee.position} editing={editing} field="position" form={form!} onChange={handleFieldChange} />
               <Field label="Cấp bậc" value={employee.level} editing={editing} field="level" form={form!} onChange={handleFieldChange} />
-              <Field label="Ngày vào làm" value={formatDate(employee.join_date)} />
+              <Field label="Ngày vào làm" value={formatDate(employee.join_date)} locked={editing} />
               <Field label="Quản lý trực tiếp" value={employee.manager} editing={editing} field="manager" form={form!} onChange={handleFieldChange} />
               <Field label="Nơi làm việc" value={employee.workplace} editing={editing} field="workplace" form={form!} onChange={handleFieldChange} />
               <Field label="Loại hợp đồng" value={employee.contract_type ?? "Không xác định"} editing={editing} field="contract_type" form={form!} onChange={handleFieldChange} type="select" options={["Không xác định thời hạn", "Xác định thời hạn", "Thử việc", "Thời vụ"]} />
@@ -724,34 +741,34 @@ export function EmployeeDetailScreen({
 
           {tab === 2 && (
             <div className="grid grid-cols-2 gap-5 md:grid-cols-3">
-              <Field label="Ngày sinh" value={formatDate(employee.dob)} />
-              <Field label="Giới tính" value={employee.gender} />
-              <Field label="CCCD" value={employee.cccd} />
+              <Field label="Ngày sinh" value={formatDate(employee.dob)} locked={editing} />
+              <Field label="Giới tính" value={employee.gender} locked={editing} />
+              <Field label="CCCD" value={employee.cccd} locked={editing} />
               <Field label="Mã số thuế" value={employee.tax_code} editing={editing} field="tax_code" form={form!} onChange={handleFieldChange} />
               <Field label="Điện thoại" value={employee.phone} editing={editing} field="phone" form={form!} onChange={handleFieldChange} />
               <Field label="Email" value={employee.email} editing={editing} field="email" form={form!} onChange={handleFieldChange} />
               <Field label="Địa chỉ" value={employee.address} editing={editing} field="address" form={form!} onChange={handleFieldChange} />
-              <Field label="Số phụ thuộc" value={compensation?.dependents ?? 0} />
+              <Field label="Số phụ thuộc" value={compensation?.dependents ?? 0} locked={editing} />
             </div>
           )}
 
           {tab === 3 && (
             <div className="grid grid-cols-2 gap-5 md:grid-cols-3">
-              <Field label="Lương cơ bản" value={compensation?.base_salary ? formatMoney(compensation.base_salary) : "-"} />
-              <Field label="Phụ cấp" value={compensation?.allowance ? formatMoney(compensation.allowance) : "-"} />
+              <Field label="Lương cơ bản" value={compensation?.base_salary ? formatMoney(compensation.base_salary) : "-"} locked={editing} />
+              <Field label="Phụ cấp" value={compensation?.allowance ? formatMoney(compensation.allowance) : "-"} locked={editing} />
               <Field label="Tài khoản ngân hàng" value={employee.bank} editing={editing} field="bank" form={form!} onChange={handleFieldChange} />
             </div>
           )}
 
           {tab === 4 && (
             <div className="grid grid-cols-2 gap-5 md:grid-cols-3">
-              <Field label="Tình trạng BHXH" value={insurance?.status ?? "Chưa tham gia"} />
-              <Field label="Mã BHXH" value={insurance?.ins_code} />
-              <Field label="Sổ BHXH" value={insurance?.bhxh_book} />
-              <Field label="Mã thẻ BHYT" value={insurance?.bhyt_code} />
-              <Field label="Nơi khám BHYT" value={insurance?.bhyt_clinic} />
-              <Field label="Ngày bắt đầu đóng" value={insurance?.start_date ? formatDate(insurance.start_date) : "-"} />
-              <Field label="Mức lương đóng BH" value={insurance?.salary_base ? formatMoney(insurance.salary_base) : "-"} />
+              <Field label="Tình trạng BHXH" value={insurance?.status ?? "Chưa tham gia"} locked={editing} />
+              <Field label="Mã BHXH" value={insurance?.ins_code} locked={editing} />
+              <Field label="Sổ BHXH" value={insurance?.bhxh_book} locked={editing} />
+              <Field label="Mã thẻ BHYT" value={insurance?.bhyt_code} locked={editing} />
+              <Field label="Nơi khám BHYT" value={insurance?.bhyt_clinic} locked={editing} />
+              <Field label="Ngày bắt đầu đóng" value={insurance?.start_date ? formatDate(insurance.start_date) : "-"} locked={editing} />
+              <Field label="Mức lương đóng BH" value={insurance?.salary_base ? formatMoney(insurance.salary_base) : "-"} locked={editing} />
             </div>
           )}
 
