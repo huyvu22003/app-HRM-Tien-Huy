@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Pencil,
@@ -18,6 +18,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useQuery, useMutation } from "@/lib/hooks";
 import { getInitials, cn, formatDate, formatMoney, seededRandom } from "@/lib/utils";
 import { getEmployeePhoto, setEmployeePhoto } from "@/lib/photo-store";
+import { getCustomFields, getCustomValues, setCustomValues, type CustomField } from "@/lib/custom-fields";
 
 const TABS = ["Tổng hợp", "Công việc", "Cá nhân", "Lương & phụ cấp", "Bảo hiểm", "Hồ sơ đính kèm"];
 
@@ -460,6 +461,15 @@ export function EmployeeDetailScreen({
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [customVals, setCustomVals] = useState<Record<string, string>>({});
+  const [customSaved, setCustomSaved] = useState(false);
+  const empIdNum = data?.employee?.id;
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- load custom fields/values from storage
+    setCustomFields(getCustomFields());
+    if (empIdNum != null) setCustomVals(getCustomValues(empIdNum));
+  }, [empIdNum]);
 
   const { mutate: doUpdate, isLoading: isSaving } = useMutation(
     (id: string, payload: Record<string, unknown>) => updateEmployee(id, payload),
@@ -617,6 +627,13 @@ export function EmployeeDetailScreen({
   function cancelPhoto() {
     setPhotoDraft(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function saveCustom() {
+    if (empIdNum == null) return;
+    setCustomValues(empIdNum, customVals);
+    setCustomSaved(true);
+    setTimeout(() => setCustomSaved(false), 3000);
   }
 
   function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -890,6 +907,55 @@ export function EmployeeDetailScreen({
           )}
         </div>
       </div>
+
+      {customFields.length > 0 && (
+        <div className="rounded-[14px] border border-[var(--color-border)] bg-white p-[18px]">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="text-[13px] font-semibold text-[var(--color-text-primary)]">Thông tin bổ sung</div>
+            {canEdit && (
+              <div className="flex items-center gap-2">
+                {customSaved && <span className="text-[11px] font-medium text-[var(--color-success)]">Đã lưu ✓</span>}
+                <button
+                  onClick={saveCustom}
+                  className="flex items-center gap-1.5 rounded-[8px] bg-[var(--color-success)] px-3 py-1.5 text-[12px] font-medium text-white hover:opacity-90"
+                >
+                  <Save size={13} /> Lưu
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-5 md:grid-cols-3">
+            {customFields.map((f) => (
+              <div key={f.id}>
+                <div className="text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">{f.label}</div>
+                {canEdit ? (
+                  f.type === "select" ? (
+                    <select
+                      value={customVals[f.id] ?? ""}
+                      onChange={(e) => setCustomVals((s) => ({ ...s, [f.id]: e.target.value }))}
+                      className="mt-1 h-9 w-full rounded-[8px] border border-[var(--color-accent)] bg-white px-2.5 text-[13px] outline-none"
+                    >
+                      <option value="">--</option>
+                      {(f.options ?? []).map((o) => (
+                        <option key={o} value={o}>{o}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type={f.type === "number" ? "number" : "text"}
+                      value={customVals[f.id] ?? ""}
+                      onChange={(e) => setCustomVals((s) => ({ ...s, [f.id]: e.target.value }))}
+                      className="mt-1 h-9 w-full rounded-[8px] border border-[var(--color-accent)] px-2.5 text-[13px] outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                    />
+                  )
+                ) : (
+                  <div className="mt-1 text-[13.5px] text-[var(--color-text-primary)]">{customVals[f.id] || "-"}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {!canEdit && (
         <div className="flex items-center gap-2 rounded-[10px] bg-[var(--color-warning-bg)] px-4 py-2.5 text-[12.5px] text-[var(--color-warning)]">

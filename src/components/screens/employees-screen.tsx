@@ -11,7 +11,125 @@ import { ColumnMenu } from "@/components/ui/column-menu";
 import { exportStyledExcel } from "@/lib/excel-export";
 import { getEmployeePhoto } from "@/lib/photo-store";
 import { parseCsvObjects } from "@/lib/csv";
-import { X, CheckCircle2, FileDown } from "lucide-react";
+import { X, CheckCircle2, FileDown, Settings2, Trash2 } from "lucide-react";
+import {
+  getCustomFields,
+  addCustomField,
+  removeCustomField,
+  getCustomValue,
+  type CustomField,
+  type CustomFieldType,
+} from "@/lib/custom-fields";
+
+function CustomFieldsModal({
+  fields,
+  onClose,
+  onChanged,
+}: {
+  fields: CustomField[];
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [label, setLabel] = useState("");
+  const [type, setType] = useState<CustomFieldType>("text");
+  const [options, setOptions] = useState("");
+
+  function add() {
+    if (!label.trim()) return;
+    addCustomField({
+      label: label.trim(),
+      type,
+      options: type === "select" ? options.split(",").map((o) => o.trim()).filter(Boolean) : undefined,
+    });
+    setLabel("");
+    setOptions("");
+    setType("text");
+    onChanged();
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-[480px] rounded-[14px] bg-white p-5 shadow-xl">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="text-[15px] font-semibold text-[var(--color-text-primary)]">Cột tùy chỉnh</div>
+          <button onClick={onClose} className="text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="mb-3 flex flex-col gap-1">
+          {fields.length === 0 && (
+            <div className="rounded-[8px] bg-[var(--color-page-bg)] px-3 py-2.5 text-[12.5px] text-[var(--color-text-muted)]">
+              Chưa có cột tùy chỉnh. Thêm cột riêng của bạn bên dưới (VD: Tay nghề, Ca làm việc, Ghi chú HR).
+            </div>
+          )}
+          {fields.map((f) => (
+            <div key={f.id} className="flex items-center justify-between rounded-[8px] border border-[var(--color-border-light)] px-3 py-2">
+              <div className="text-[12.5px]">
+                <span className="font-medium text-[var(--color-text-primary)]">{f.label}</span>
+                <span className="ml-2 text-[11px] text-[var(--color-text-lighter)]">
+                  {f.type === "text" ? "Văn bản" : f.type === "number" ? "Số" : "Lựa chọn"}
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  removeCustomField(f.id);
+                  onChanged();
+                }}
+                className="text-[var(--color-text-lighter)] hover:text-[var(--color-danger)]"
+                title="Xóa cột"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div className="rounded-[10px] bg-[var(--color-page-bg)] p-3">
+          <div className="mb-2 text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">Thêm cột mới</div>
+          <div className="flex flex-wrap items-end gap-2">
+            <input
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="Tên cột"
+              className="h-8 flex-1 min-w-[140px] rounded-[6px] border border-[var(--color-border)] px-2 text-[12.5px] outline-none focus:border-[var(--color-accent)]"
+            />
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value as CustomFieldType)}
+              className="h-8 rounded-[6px] border border-[var(--color-border)] bg-white px-2 text-[12.5px] outline-none"
+            >
+              <option value="text">Văn bản</option>
+              <option value="number">Số</option>
+              <option value="select">Lựa chọn</option>
+            </select>
+            <button
+              onClick={add}
+              disabled={!label.trim()}
+              className="flex h-8 items-center gap-1.5 rounded-[6px] bg-[var(--color-accent)] px-3 text-[12.5px] font-medium text-white disabled:opacity-60"
+            >
+              <Plus size={13} /> Thêm
+            </button>
+          </div>
+          {type === "select" && (
+            <input
+              value={options}
+              onChange={(e) => setOptions(e.target.value)}
+              placeholder="Các lựa chọn, phân cách bằng dấu phẩy (VD: A, B, C)"
+              className="mt-2 h-8 w-full rounded-[6px] border border-[var(--color-border)] px-2 text-[12.5px] outline-none focus:border-[var(--color-accent)]"
+            />
+          )}
+        </div>
+
+        <div className="mt-4 flex justify-end">
+          <button onClick={onClose} className="rounded-[8px] bg-[var(--color-accent)] px-4 py-1.5 text-[12.5px] font-medium text-white">
+            Xong
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // Map Vietnamese column headers → employee field keys used by the API.
 const IMPORT_HEADER_MAP: Record<string, string> = {
@@ -343,6 +461,12 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
 
   const { data: empData, isLoading, refetch } = useQuery(employeeFetcher, [page, search, deptId]);
   const [importOpen, setImportOpen] = useState(false);
+  const [fieldsOpen, setFieldsOpen] = useState(false);
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- load from storage on mount
+    setCustomFields(getCustomFields());
+  }, []);
 
   const items = useMemo(() => empData?.data ?? [], [empData]);
 
@@ -490,7 +614,23 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
     },
   ];
 
-  const { hidden, toggle, reset, visibleColumns } = useColumnPrefs("employees", columns);
+  const customColumns: ColumnDef<ApiEmployee>[] = customFields.map((f) => ({
+    id: f.id,
+    label: f.label,
+    cellClass: "text-[var(--color-text-muted)]",
+    cell: (e) => getCustomValue(e.id, f.id) || "-",
+    exportValue: (e) => getCustomValue(e.id, f.id),
+    exportFormat: f.type === "number" ? "int" : "text",
+  }));
+
+  // Insert custom columns just before the trailing actions column.
+  const actionsIdx = columns.findIndex((c) => c.id === "actions");
+  const displayColumns =
+    actionsIdx >= 0
+      ? [...columns.slice(0, actionsIdx), ...customColumns, ...columns.slice(actionsIdx)]
+      : [...columns, ...customColumns];
+
+  const { hidden, toggle, reset, visibleColumns } = useColumnPrefs("employees", displayColumns);
 
   const [exporting, setExporting] = useState(false);
   const EMPTY_NEW = { code: "", name: "", department_name: "", position: "", phone: "", status: "Đang làm việc" };
@@ -556,6 +696,13 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
           }}
         />
       )}
+      {fieldsOpen && (
+        <CustomFieldsModal
+          fields={customFields}
+          onClose={() => setFieldsOpen(false)}
+          onChanged={() => setCustomFields(getCustomFields())}
+        />
+      )}
       {isLeadOrStaff && (
         <div className="flex items-center gap-2 rounded-[10px] bg-[var(--color-warning-bg)] px-4 py-2.5 text-[12.5px] text-[var(--color-warning)]">
           <Info size={15} />
@@ -588,7 +735,16 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
         </select>
 
         <div className="ml-auto flex gap-2">
-          <ColumnMenu columns={columns} hidden={hidden} onToggle={toggle} onReset={reset} />
+          <ColumnMenu columns={displayColumns} hidden={hidden} onToggle={toggle} onReset={reset} />
+          {canEdit && (
+            <button
+              onClick={() => setFieldsOpen(true)}
+              className="flex items-center gap-1.5 rounded-[8px] border border-[var(--color-border)] px-3 py-1.5 text-[12.5px] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]"
+              title="Quản lý cột tùy chỉnh"
+            >
+              <Settings2 size={14} /> Cột tùy chỉnh
+            </button>
+          )}
           <button
             onClick={handleExport}
             disabled={exporting}
