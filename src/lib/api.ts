@@ -1,6 +1,6 @@
 "use client";
 
-import { mockResolve, isDemoMode, enableDemoMode } from "@/lib/mock-api";
+import { mockResolve, isDemoMode, enableDemoMode, setDemoUser } from "@/lib/mock-api";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api";
 const TOKEN_KEY = "hrm_tien_huy_token";
@@ -132,22 +132,24 @@ export async function apiLogin(phone: string, password: string) {
     setToken(res.token);
     return res;
   } catch {
-    const { findAccountByPhone } = await import("@/lib/data/accounts");
+    const { findAccountByPhone, ACCOUNTS } = await import("@/lib/data/accounts");
     const acc = findAccountByPhone(phone);
     if (acc && acc.password === password) {
       enableDemoMode();
       const token = "demo-" + Date.now();
       setToken(token);
-      return {
-        token,
-        user: {
-          id: 1,
-          employee_id: 1,
-          phone: acc.phone,
-          role: acc.role as ApiUser["role"],
-          name: acc.name,
-        },
+      const accountKeys = Object.keys(ACCOUNTS);
+      const accountIdx = accountKeys.indexOf(phone);
+      const userId = accountIdx >= 0 ? accountIdx + 1 : 1;
+      const demoUser = {
+        id: userId,
+        employee_id: userId,
+        phone: acc.phone,
+        role: acc.role as ApiUser["role"],
+        name: acc.name,
       };
+      setDemoUser(demoUser);
+      return { token, user: demoUser };
     }
     throw new ApiError(401, "Số điện thoại hoặc mật khẩu không đúng");
   }
@@ -158,6 +160,7 @@ export async function apiLogout() {
     await api.post("/auth/logout");
   } finally {
     clearToken();
+    setDemoUser(null);
   }
 }
 

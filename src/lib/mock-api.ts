@@ -281,22 +281,14 @@ const MOCK_ROUTES: MockRoute[] = [
   {
     match: /^\/auth\/login$/,
     handler: () => {
-      const acc = Object.values(ACCOUNTS)[0];
-      return {
-        token: "mock-token-" + Date.now(),
-        user: {
-          id: 1,
-          employee_id: 1,
-          phone: acc.phone,
-          role: acc.role,
-          name: acc.name,
-        },
-      };
+      return null;
     },
   },
   {
     match: /^\/auth\/me$/,
     handler: () => {
+      const du = getDemoUser();
+      if (du) return { user: du };
       const acc = Object.values(ACCOUNTS)[0];
       return {
         user: {
@@ -453,6 +445,8 @@ export function mockResolve(fullPath: string): unknown | null {
 }
 
 let _demoMode = false;
+type DemoUser = { id: number; employee_id: number | null; phone: string; role: string; name: string };
+let _demoUser: DemoUser | null = null;
 
 export function isDemoMode(): boolean {
   return _demoMode;
@@ -460,4 +454,24 @@ export function isDemoMode(): boolean {
 
 export function enableDemoMode() {
   _demoMode = true;
+}
+
+export function setDemoUser(user: DemoUser | null) {
+  _demoUser = user;
+  try {
+    if (user) window.localStorage.setItem("hrm_demo_user", JSON.stringify(user));
+    else window.localStorage.removeItem("hrm_demo_user");
+  } catch { /* ignore */ }
+}
+
+export function getDemoUser(): DemoUser | null {
+  if (_demoUser) return _demoUser;
+  try {
+    const stored = window.localStorage.getItem("hrm_demo_user");
+    if (stored) {
+      _demoUser = JSON.parse(stored);
+      return _demoUser;
+    }
+  } catch { /* ignore */ }
+  return null;
 }
