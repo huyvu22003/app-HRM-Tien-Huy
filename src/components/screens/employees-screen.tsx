@@ -11,7 +11,7 @@ import { ColumnMenu } from "@/components/ui/column-menu";
 import { exportStyledExcel } from "@/lib/excel-export";
 import { getEmployeePhoto } from "@/lib/photo-store";
 import { parseCsvObjects } from "@/lib/csv";
-import { X, CheckCircle2, FileDown, Settings2, Trash2 } from "lucide-react";
+import { X, CheckCircle2, FileDown, Settings2, Trash2, Lock, Unlock, MoreVertical, GripVertical, ArrowDownAZ, ArrowUpAZ, Pencil } from "lucide-react";
 import {
   getCustomFields,
   addCustomField,
@@ -191,6 +191,136 @@ function downloadImportTemplate() {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+function ColumnHeaderMenu({
+  label,
+  value,
+  onFilter,
+  onSort,
+  onRename,
+  onClear,
+  sortDir,
+}: {
+  label: string;
+  value: string;
+  onFilter: (v: string) => void;
+  onSort: (dir: "asc" | "desc") => void;
+  onRename: (label: string) => void;
+  onClear: () => void;
+  sortDir: "asc" | "desc" | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [renameText, setRenameText] = useState(label);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const ref = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (ref.current?.contains(t)) return;
+      if (menuRef.current?.contains(t)) return;
+      setOpen(false);
+      setRenaming(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+  const active = value.trim().length > 0 || sortDir !== null;
+
+  const item = "flex w-full items-center gap-2 rounded-[6px] px-2 py-1.5 text-left text-[12.5px] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]";
+
+  return (
+    <div className="relative inline-flex" ref={ref}>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          const width = 210;
+          setPos({
+            top: rect.bottom + 4,
+            left: Math.min(rect.left, window.innerWidth - width - 12),
+          });
+          setOpen((o) => !o);
+          setRenameText(label);
+        }}
+        className={cn(
+          "flex h-5 w-5 items-center justify-center rounded hover:bg-[var(--color-border-light)]",
+          active ? "text-[var(--color-accent)]" : "text-[var(--color-text-lighter)]",
+        )}
+        title={`Tùy chọn cột ${label}`}
+      >
+        <MoreVertical size={13} />
+      </button>
+      {open && (
+        <div
+          ref={menuRef}
+          style={{ position: "fixed", top: pos.top, left: pos.left }}
+          className="z-50 w-[210px] rounded-[10px] border border-[var(--color-border)] bg-white p-1.5 shadow-lg normal-case tracking-normal"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-1 pb-1.5">
+            <div className="mb-1 text-[10.5px] uppercase tracking-wide text-[var(--color-text-lighter)]">Lọc dữ liệu</div>
+            <div className="flex items-center gap-1">
+              <input
+                autoFocus
+                value={value}
+                onChange={(e) => onFilter(e.target.value)}
+                placeholder="Nhập để lọc..."
+                className="h-8 w-full rounded-[6px] border border-[var(--color-border)] px-2 text-[12.5px] outline-none focus:border-[var(--color-accent)]"
+              />
+            </div>
+          </div>
+          <div className="my-1 h-px bg-[var(--color-border-light)]" />
+          <button className={item} onClick={() => onSort("asc")}>
+            <ArrowDownAZ size={14} className={cn(sortDir === "asc" && "text-[var(--color-accent)]")} /> Sắp xếp A → Z
+          </button>
+          <button className={item} onClick={() => onSort("desc")}>
+            <ArrowUpAZ size={14} className={cn(sortDir === "desc" && "text-[var(--color-accent)]")} /> Sắp xếp Z → A
+          </button>
+          {renaming ? (
+            <div className="flex items-center gap-1 px-1 py-1">
+              <input
+                autoFocus
+                value={renameText}
+                onChange={(e) => setRenameText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    onRename(renameText);
+                    setRenaming(false);
+                  }
+                }}
+                className="h-8 w-full rounded-[6px] border border-[var(--color-accent)] px-2 text-[12.5px] outline-none"
+              />
+              <button
+                onClick={() => {
+                  onRename(renameText);
+                  setRenaming(false);
+                }}
+                className="rounded-[6px] bg-[var(--color-success)] px-2 py-1 text-[11px] font-medium text-white"
+              >
+                Lưu
+              </button>
+            </div>
+          ) : (
+            <button className={item} onClick={() => setRenaming(true)}>
+              <Pencil size={14} /> Đổi tên cột
+            </button>
+          )}
+          <div className="my-1 h-px bg-[var(--color-border-light)]" />
+          <button
+            className={cn(item, !active && "opacity-50")}
+            disabled={!active}
+            onClick={onClear}
+          >
+            <X size={14} /> Xóa lọc & sắp xếp
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function Avatar({ id, name, photoUrl, className }: { id: number; name: string; photoUrl?: string | null; className?: string }) {
@@ -429,6 +559,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
   const [search, setSearch] = useState("");
   const [dept, setDept] = useState("all");
   const [page, setPage] = useState(1);
+  const [colFilters, setColFilters] = useState<Record<string, string>>({});
   const [hoveredEmployee, setHoveredEmployee] = useState<ApiEmployee | null>(null);
   const [hoverRect, setHoverRect] = useState<DOMRect | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -441,25 +572,13 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
     return deptData.data.map((d: ApiDepartment) => d.name);
   }, [deptData]);
 
-  // Resolve the selected department name → id so filtering happens server-side
-  // (across all pages), not just within the current paginated slice.
-  const deptId = useMemo(() => {
-    if (dept === "all" || !deptData?.data) return undefined;
-    return deptData.data.find((d: ApiDepartment) => d.name === dept)?.id;
-  }, [dept, deptData]);
+  // Fetch the full list once; search, department, per-column filters, sorting
+  // and pagination are all applied client-side so per-column filters work
+  // across every row (not just the current page).
+  const employeeFetcher = useCallback(() => fetchEmployees({ page: 1, pageSize: 1000 }), []);
+  const { data: empData, isLoading, refetch } = useQuery(employeeFetcher, []);
+  const allItems = useMemo(() => empData?.data ?? [], [empData]);
 
-  const employeeFetcher = useCallback(
-    () =>
-      fetchEmployees({
-        page,
-        pageSize: PAGE_SIZE,
-        search: search || undefined,
-        departmentId: deptId,
-      }),
-    [page, search, deptId],
-  );
-
-  const { data: empData, isLoading, refetch } = useQuery(employeeFetcher, [page, search, deptId]);
   const [importOpen, setImportOpen] = useState(false);
   const [fieldsOpen, setFieldsOpen] = useState(false);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
@@ -468,14 +587,11 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
     setCustomFields(getCustomFields());
   }, []);
 
-  const items = useMemo(() => empData?.data ?? [], [empData]);
-
-  const totalPages = empData?.totalPages ?? 1;
-
+  const colFilterKey = JSON.stringify(colFilters);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reset page on filter change
     setPage(1);
-  }, [search, dept]);
+  }, [search, dept, colFilterKey]);
 
   const columns: ColumnDef<ApiEmployee>[] = [
     {
@@ -609,6 +725,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
       id: "actions",
       label: "",
       locked: true,
+      noReorder: true,
       align: "right",
       cell: () => <ChevronRight size={15} className="text-[var(--color-text-lighter)]" />,
     },
@@ -630,7 +747,52 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
       ? [...columns.slice(0, actionsIdx), ...customColumns, ...columns.slice(actionsIdx)]
       : [...columns, ...customColumns];
 
-  const { hidden, toggle, reset, visibleColumns } = useColumnPrefs("employees", displayColumns);
+  const { hidden, toggle, reset, visibleColumns, reorderLocked, toggleReorderLock, moveColumn, renameColumn } =
+    useColumnPrefs("employees", displayColumns);
+
+  const [sortState, setSortState] = useState<{ colId: string; dir: "asc" | "desc" } | null>(null);
+
+  // Apply search + department + per-column filters + sort, then paginate — all client-side.
+  const filtered = useMemo(() => {
+    let list = allItems;
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter(
+        (e: ApiEmployee) => e.name.toLowerCase().includes(q) || e.code.toLowerCase().includes(q),
+      );
+    }
+    if (dept !== "all") {
+      list = list.filter((e: ApiEmployee) => e.department_name === dept);
+    }
+    for (const [colId, text] of Object.entries(colFilters)) {
+      if (!text.trim()) continue;
+      const col = displayColumns.find((c) => c.id === colId);
+      if (!col?.exportValue) continue;
+      const q = text.toLowerCase();
+      list = list.filter((e: ApiEmployee, i: number) =>
+        String(col.exportValue!(e, i)).toLowerCase().includes(q),
+      );
+    }
+    if (sortState) {
+      const col = displayColumns.find((c) => c.id === sortState.colId);
+      if (col?.exportValue) {
+        const dir = sortState.dir === "asc" ? 1 : -1;
+        list = [...list].sort((a, b) => {
+          const va = col.exportValue!(a, 0);
+          const vb = col.exportValue!(b, 0);
+          if (typeof va === "number" && typeof vb === "number") return (va - vb) * dir;
+          return String(va).localeCompare(String(vb), "vi") * dir;
+        });
+      }
+    }
+    return list;
+  }, [allItems, search, dept, colFilters, displayColumns, sortState]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const items = useMemo(
+    () => filtered.slice((page - 1) * PAGE_SIZE, (page - 1) * PAGE_SIZE + PAGE_SIZE),
+    [filtered, page],
+  );
 
   const [exporting, setExporting] = useState(false);
   const EMPTY_NEW = { code: "", name: "", department_name: "", position: "", phone: "", status: "Đang làm việc" };
@@ -653,18 +815,11 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
   }
 
   async function handleExport() {
-    const cols = visibleColumns.filter((c) => c.exportValue);
+    const cols = visibleColumns.filter((c) => c.exportValue && c.id !== "actions");
     setExporting(true);
     try {
-      // Export the full filtered set (all pages), not just the current page,
-      // and group employees by department so teammates sit together.
-      const all = await fetchEmployees({
-        page: 1,
-        pageSize: 1000,
-        search: search || undefined,
-        departmentId: deptId,
-      });
-      const sorted = [...(all.data ?? [])].sort(
+      // Export the current filtered set (all matching rows), grouped by department.
+      const sorted = [...filtered].sort(
         (a: ApiEmployee, b: ApiEmployee) =>
           (a.department_name ?? "").localeCompare(b.department_name ?? "", "vi") ||
           a.code.localeCompare(b.code, "vi"),
@@ -736,6 +891,19 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
 
         <div className="ml-auto flex gap-2">
           <ColumnMenu columns={displayColumns} hidden={hidden} onToggle={toggle} onReset={reset} />
+          <button
+            onClick={toggleReorderLock}
+            className={cn(
+              "flex items-center gap-1.5 rounded-[8px] border px-3 py-1.5 text-[12.5px] transition-colors",
+              reorderLocked
+                ? "border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]"
+                : "border-[var(--color-accent)] bg-[var(--color-accent)] text-white",
+            )}
+            title={reorderLocked ? "Mở khoá để kéo sắp xếp cột" : "Đang mở khoá — kéo tiêu đề cột để sắp xếp. Bấm để khoá lại"}
+          >
+            {reorderLocked ? <Lock size={14} /> : <Unlock size={14} />}
+            {reorderLocked ? "Khoá cột" : "Đang sắp xếp"}
+          </button>
           {canEdit && (
             <button
               onClick={() => setFieldsOpen(true)}
@@ -785,24 +953,65 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
           <table className="w-full min-w-[900px] text-[13px]">
             <thead>
               <tr className="text-left text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">
-                {visibleColumns.map((c) => (
-                  <th
-                    key={c.id}
-                    className={cn(
-                      "px-4 py-3 font-medium",
-                      c.align === "right" && "text-right",
-                      c.align === "center" && "text-center",
-                    )}
-                  >
-                    {c.label}
-                  </th>
-                ))}
+                {/* Fixed STT column — always first, never reordered */}
+                <th className="w-12 px-4 py-3 text-center font-medium">STT</th>
+                {visibleColumns.map((c) => {
+                  const canDrag = !reorderLocked && !c.noReorder;
+                  const canMenu = !!c.exportValue && !c.noReorder;
+                  return (
+                    <th
+                      key={c.id}
+                      onDragOver={(e) => {
+                        if (!reorderLocked && !c.noReorder) e.preventDefault();
+                      }}
+                      onDrop={(e) => {
+                        if (reorderLocked || c.noReorder) return;
+                        e.preventDefault();
+                        const dragId = e.dataTransfer.getData("text/plain");
+                        if (dragId) moveColumn(dragId, c.id);
+                      }}
+                      className={cn(
+                        "border-l border-[var(--color-border-light)] px-3 py-3 font-medium",
+                        c.align === "right" && "text-right",
+                        c.align === "center" && "text-center",
+                      )}
+                    >
+                      <span className={cn("inline-flex items-center gap-1", c.align === "right" && "flex-row-reverse")}>
+                        {canDrag && (
+                          <span
+                            draggable
+                            onDragStart={(e) => e.dataTransfer.setData("text/plain", c.id)}
+                            className="cursor-grab text-[var(--color-text-lighter)] hover:text-[var(--color-accent)] active:cursor-grabbing"
+                            title="Kéo để đổi vị trí cột"
+                          >
+                            <GripVertical size={13} />
+                          </span>
+                        )}
+                        {c.label}
+                        {canMenu && (
+                          <ColumnHeaderMenu
+                            label={c.label}
+                            value={colFilters[c.id] ?? ""}
+                            sortDir={sortState?.colId === c.id ? sortState.dir : null}
+                            onFilter={(v) => setColFilters((s) => ({ ...s, [c.id]: v }))}
+                            onSort={(dir) => setSortState({ colId: c.id, dir })}
+                            onRename={(label) => renameColumn(c.id, label)}
+                            onClear={() => {
+                              setColFilters((s) => ({ ...s, [c.id]: "" }));
+                              setSortState((s) => (s?.colId === c.id ? null : s));
+                            }}
+                          />
+                        )}
+                      </span>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
               {adding && (
                 <tr className="border-t border-[var(--color-accent)] bg-[var(--color-page-bg)]">
-                  <td colSpan={visibleColumns.length} className="px-4 py-3">
+                  <td colSpan={visibleColumns.length + 1} className="px-4 py-3">
                     <div className="flex flex-wrap items-end gap-2">
                       <input
                         autoFocus
@@ -874,11 +1083,14 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
                   onClick={() => onNavigate("employee-detail", String(e.id))}
                   className="cursor-pointer border-t border-[var(--color-border-light)] hover:bg-[var(--color-page-bg)]"
                 >
+                  <td className="px-4 py-2.5 text-center font-[family-name:var(--font-mono)] text-[var(--color-text-lighter)]">
+                    {(page - 1) * PAGE_SIZE + i + 1}
+                  </td>
                   {visibleColumns.map((c) => (
                     <td
                       key={c.id}
                       className={cn(
-                        "px-4 py-2.5",
+                        "border-l border-[var(--color-border-light)] px-3 py-2.5",
                         c.align === "right" && "text-right",
                         c.align === "center" && "text-center",
                         c.cellClass,
@@ -891,7 +1103,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
               ))}
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={visibleColumns.length} className="px-4 py-12 text-center text-[var(--color-text-muted)]">
+                  <td colSpan={visibleColumns.length + 1} className="px-4 py-12 text-center text-[var(--color-text-muted)]">
                     Không tìm thấy nhân viên nào.
                   </td>
                 </tr>
@@ -907,7 +1119,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
 
       <div className="flex items-center justify-between text-[12.5px] text-[var(--color-text-muted)]">
         <div>
-          Hiển thị {items.length} / {empData?.total ?? 0} nhân viên
+          Hiển thị {items.length} / {filtered.length} nhân viên
         </div>
         <div className="flex items-center gap-1">
           <button

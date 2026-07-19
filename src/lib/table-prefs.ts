@@ -3,11 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 
 /**
- * Per-table column visibility preferences, persisted to localStorage so each
- * user's choice of which columns to show/hide survives reloads.
+ * Per-table column preferences (visibility + order + reorder lock), persisted
+ * to localStorage so each user's layout survives reloads.
  */
 
-const STORE_PREFIX = "hrm_cols_";
+const HIDE_PREFIX = "hrm_cols_";
+const ORDER_PREFIX = "hrm_colorder_";
+const LOCK_PREFIX = "hrm_collock_";
+const LABEL_PREFIX = "hrm_collabels_";
 
 export interface ColumnDef<Row> {
   id: string;
@@ -26,37 +29,94 @@ export interface ColumnDef<Row> {
   exportValue?: (row: Row, index: number) => string | number;
   /** Number format for styled Excel export. */
   exportFormat?: "money" | "int" | "text";
+  /** Excludes the column from drag-reordering and per-column filtering (e.g. actions). */
+  noReorder?: boolean;
 }
 
-function loadHidden(tableKey: string): Set<string> {
+function readJson<T>(key: string, fallback: T): T {
   try {
-    const raw = window.localStorage.getItem(STORE_PREFIX + tableKey);
-    if (raw) return new Set(JSON.parse(raw) as string[]);
+    const raw = window.localStorage.getItem(key);
+    if (raw) return JSON.parse(raw) as T;
   } catch {
     /* ignore */
   }
-  return new Set();
+  return fallback;
+}
+
+/** Order a column list by a saved id order; unknown ids keep their natural spot. */
+function applyOrder<Row>(columns: ColumnDef<Row>[], order: string[]): ColumnDef<Row>[] {
+  if (order.length === 0) return columns;
+  const byId = new Map(columns.map((c) => [c.id, c]));
+  const seen = new Set<string>();
+  const out: ColumnDef<Row>[] = [];
+  for (const id of order) {
+    const c = byId.get(id);
+    if (c) {
+      out.push(c);
+      seen.add(id);
+    }
+  }
+  // Append any columns not present in the saved order (new/custom columns)
+  for (const c of columns) if (!seen.has(c.id)) out.push(c);
+  return out;
 }
 
 export function useColumnPrefs<Row>(tableKey: string, columns: ColumnDef<Row>[]) {
   const [hidden, setHidden] = useState<Set<string>>(() => new Set());
+  const [order, setOrderState] = useState<string[]>([]);
+  const [reorderLocked, setReorderLocked] = useState(true);
+  const [labels, setLabels] = useState<Record<string, string>>({});
 
-  // Load persisted prefs after mount (avoids SSR/localStorage mismatch)
   useEffect(() => {
-    const stored = loadHidden(tableKey);
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- init from storage
+    const storedHidden = readJson<string[]>(HIDE_PREFIX + tableKey, []);
+    const storedOrder = readJson<string[]>(ORDER_PREFIX + tableKey, []);
+    const storedLock = readJson<boolean>(LOCK_PREFIX + tableKey, true);
+    const storedLabels = readJson<Record<string, string>>(LABEL_PREFIX + tableKey, {});
+    /* eslint-disable react-hooks/set-state-in-effect -- init from storage */
     setHidden(
-      stored.size
-        ? stored
+      storedHidden.length
+        ? new Set(storedHidden)
         : new Set(columns.filter((c) => c.defaultHidden && !c.locked).map((c) => c.id)),
     );
+    setOrderState(storedOrder);
+    setReorderLocked(storedLock);
+    setLabels(storedLabels);
+    /* eslint-enable react-hooks/set-state-in-effect */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableKey]);
 
-  const persist = useCallback(
+  const renameColumn = useCallback(
+    (id: string, label: string) => {
+      setLabels((prev) => {
+        const next = { ...prev };
+        if (label.trim()) next[id] = label.trim();
+        else delete next[id];
+        try {
+          window.localStorage.setItem(LABEL_PREFIX + tableKey, JSON.stringify(next));
+        } catch {
+          /* ignore */
+        }
+        return next;
+      });
+    },
+    [tableKey],
+  );
+
+  const persistHidden = useCallback(
     (next: Set<string>) => {
       try {
-        window.localStorage.setItem(STORE_PREFIX + tableKey, JSON.stringify([...next]));
+        window.localStorage.setItem(HIDE_PREFIX + tableKey, JSON.stringify([...next]));
+      } catch {
+        /* ignore */
+      }
+    },
+    [tableKey],
+  );
+
+  const persistOrder = useCallback(
+    (next: string[]) => {
+      try {
+        window.localStorage.setItem(ORDER_PREFIX + tableKey, JSON.stringify(next));
       } catch {
         /* ignore */
       }
@@ -70,21 +130,72 @@ export function useColumnPrefs<Row>(tableKey: string, columns: ColumnDef<Row>[])
         const next = new Set(prev);
         if (next.has(id)) next.delete(id);
         else next.add(id);
-        persist(next);
+        persistHidden(next);
         return next;
       });
     },
-    [persist],
+    [persistHidden],
   );
 
   const reset = useCallback(() => {
     const next = new Set(columns.filter((c) => c.defaultHidden && !c.locked).map((c) => c.id));
     setHidden(next);
-    persist(next);
-  }, [columns, persist]);
+    persistHidden(next);
+    setOrderState([]);
+    persistOrder([]);
+    setLabels({});
+    try {
+      window.localStorage.removeItem(LABEL_PREFIX + tableKey);
+    } catch {
+      /* ignore */
+    }
+  }, [columns, persistHidden, persistOrder, tableKey]);
+
+  const toggleReorderLock = useCallback(() => {
+    setReorderLocked((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(LOCK_PREFIX + tableKey, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, [tableKey]);
+
+  const ordered = applyOrder(columns, order).map((c) =>
+    labels[c.id] ? { ...c, label: labels[c.id] } : c,
+  );
+
+  /** Move column `dragId` to sit where `targetId` is. */
+  const moveColumn = useCallback(
+    (dragId: string, targetId: string) => {
+      if (dragId === targetId) return;
+      const ids = ordered.map((c) => c.id);
+      const from = ids.indexOf(dragId);
+      const to = ids.indexOf(targetId);
+      if (from < 0 || to < 0) return;
+      ids.splice(from, 1);
+      ids.splice(to, 0, dragId);
+      setOrderState(ids);
+      persistOrder(ids);
+    },
+    [ordered, persistOrder],
+  );
 
   const isVisible = useCallback((id: string) => !hidden.has(id), [hidden]);
-  const visibleColumns = columns.filter((c) => !hidden.has(c.id));
+  const visibleColumns = ordered.filter((c) => !hidden.has(c.id));
 
-  return { hidden, toggle, reset, isVisible, visibleColumns };
+  return {
+    hidden,
+    toggle,
+    reset,
+    isVisible,
+    visibleColumns,
+    orderedColumns: ordered,
+    reorderLocked,
+    toggleReorderLock,
+    moveColumn,
+    renameColumn,
+  };
 }
