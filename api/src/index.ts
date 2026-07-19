@@ -30,6 +30,7 @@ import {
 import { getConfig, updateConfig } from "./handlers/config";
 import { getPermissions, updatePermissions } from "./handlers/permissions";
 import { uploadFile, downloadFile } from "./handlers/files";
+import { updateHierarchy } from "./handlers/org";
 
 export type { Env };
 
@@ -60,11 +61,13 @@ export default {
 
     try {
       let userId = 0;
+      let userRole = "";
       if (!isPublicRoute(method, pathname)) {
         if (pathname.startsWith("/api/")) {
           const auth = await authMiddleware(request, env);
           if (!auth) return withCors(error("Unauthorized", 401));
           userId = auth.userId;
+          userRole = auth.role;
         }
       }
 
@@ -74,6 +77,7 @@ export default {
       if (method === "GET" && pathname === "/api/auth/me") return withCors(await me(request, env));
 
       // --- Employees ---
+      if (method === "POST" && pathname === "/api/org/hierarchy") return withCors(await updateHierarchy(request, env, userId, userRole));
       if (method === "GET" && pathname === "/api/employees") return withCors(await listEmployees(request, env));
       if (method === "POST" && pathname === "/api/employees/import") return withCors(await importEmployees(request, env));
       if (method === "POST" && pathname === "/api/employees") return withCors(await createEmployee(request, env));

@@ -3,6 +3,11 @@
 import { EMPLOYEES } from "@/lib/data/employees";
 import { DEPARTMENTS, BLOCK_ORDER } from "@/lib/data/departments";
 import { ACCOUNTS } from "@/lib/data/accounts";
+import {
+  insertManagerPreview,
+  removeManagerPreview,
+  type OrgPerson,
+} from "@/lib/org-hierarchy";
 
 function toApiEmployee(e: (typeof EMPLOYEES)[number], idx: number) {
   return {
@@ -26,10 +31,13 @@ function toApiEmployee(e: (typeof EMPLOYEES)[number], idx: number) {
     resign_date: e.resignDate || null,
     status: e.status || "active",
     manager: e.manager || null,
+    manager_employee_id: null,
+    manager_name: e.manager && e.manager !== "-" ? e.manager : null,
     level: e.level || null,
     photo_url: null,
     bank: e.bank || null,
     tax_code: e.taxCode || null,
+    updated_at: "2026-07-19 00:00:00",
   };
 }
 
@@ -54,13 +62,38 @@ type ApiEmp = {
   resign_date: string | null;
   status: string;
   manager: string | null;
+  manager_employee_id: number | null;
+  manager_name: string | null;
   level: string | null;
   photo_url: string | null;
   bank: string | null;
   tax_code: string | null;
+  updated_at: string | null;
 };
 
 const baseEmployees: ApiEmp[] = EMPLOYEES.map(toApiEmployee);
+for (const employee of baseEmployees) {
+  if (!employee.manager_name) continue;
+  const matches = baseEmployees.filter((candidate) => candidate.name === employee.manager_name);
+  if (matches.length === 1) employee.manager_employee_id = matches[0].id;
+}
+
+const HIERARCHY_OVERRIDE_KEY = "hrm_demo_hierarchy_overrides";
+function loadHierarchyOverrides(): Record<string, number | null> {
+  try {
+    return JSON.parse(window.localStorage.getItem(HIERARCHY_OVERRIDE_KEY) || "{}") as Record<string, number | null>;
+  } catch {
+    return {};
+  }
+}
+
+function saveHierarchyOverrides(value: Record<string, number | null>) {
+  try {
+    window.localStorage.setItem(HIERARCHY_OVERRIDE_KEY, JSON.stringify(value));
+  } catch {
+    /* ignore */
+  }
+}
 
 // Employees added at runtime (e.g. via import) — persisted so demo survives reload.
 const ADDED_EMP_KEY = "hrm_demo_added_employees";
@@ -90,7 +123,19 @@ function persistAddedEmployees() {
 }
 
 function allEmployees(): ApiEmp[] {
-  return baseEmployees.concat(addedEmployees());
+  const overrides = loadHierarchyOverrides();
+  const all = baseEmployees.concat(addedEmployees());
+  const names = new Map(all.map((employee) => [employee.id, employee.name]));
+  return all.map((employee) => {
+    if (!(String(employee.id) in overrides)) return employee;
+    const managerId = overrides[String(employee.id)] ?? null;
+    return {
+      ...employee,
+      manager_employee_id: managerId,
+      manager_name: managerId ? names.get(managerId) ?? null : null,
+      manager: managerId ? names.get(managerId) ?? null : null,
+    };
+  });
 }
 
 function nextEmployeeId(): number {
@@ -121,10 +166,13 @@ function makeImportedEmployee(input: Record<string, unknown>, id: number): ApiEm
     resign_date: null,
     status: (input.status as string) || "Đang làm việc",
     manager: (input.manager as string) || null,
+    manager_employee_id: null,
+    manager_name: (input.manager as string) || null,
     level: (input.level as string) || null,
     photo_url: null,
     bank: (input.bank as string) || null,
     tax_code: (input.tax_code as string) || null,
+    updated_at: new Date().toISOString(),
   };
 }
 
@@ -461,6 +509,43 @@ const MOCK_ROUTES: MockRoute[] = [
   {
     match: /^\/auth\/logout$/,
     handler: () => ({ success: true }),
+  },
+  {
+    match: /^\/org\/hierarchy$/,
+    method: "POST",
+    handler: (_path, _params, body) => {
+      const input = parseBody(body);
+      const employees = allEmployees();
+      const people: OrgPerson[] = employees.map((employee) => ({
+        id: employee.id,
+        name: employee.name,
+        departmentId: employee.department_id,
+        departmentName: employee.department_name,
+        position: employee.position,
+        level: employee.level,
+        managerEmployeeId: employee.manager_employee_id,
+        managerName: employee.manager_name,
+        phone: employee.phone,
+      }));
+      let updates: Array<{ employeeId: number; managerEmployeeId: number | null }> = [];
+      if (input.action === "move") {
+        updates = [{
+          employeeId: Number(input.employeeId),
+          managerEmployeeId: input.managerEmployeeId == null ? null : Number(input.managerEmployeeId),
+        }];
+      } else if (input.action === "insert") {
+        updates = insertManagerPreview(people, {
+          candidateId: Number(input.candidateId),
+          branchRootId: Number(input.branchRootId),
+        }).updates;
+      } else if (input.action === "remove-level") {
+        updates = removeManagerPreview(people, Number(input.employeeId)).updates;
+      }
+      const overrides = loadHierarchyOverrides();
+      for (const update of updates) overrides[String(update.employeeId)] = update.managerEmployeeId;
+      saveHierarchyOverrides(overrides);
+      return { success: true, affectedEmployeeIds: updates.map((update) => update.employeeId) };
+    },
   },
   {
     match: /^\/employees$/,

@@ -34,9 +34,10 @@ export async function listEmployees(request: Request, env: Env): Promise<Respons
   const offset = (Math.min(page, totalPages) - 1) * pageSize;
 
   const { results } = await env.DB.prepare(
-    `SELECT e.*, d.name as department_name
+    `SELECT e.*, d.name as department_name, manager_employee.name as manager_name
      FROM employees e
      LEFT JOIN departments d ON d.id = e.department_id
+     LEFT JOIN employees manager_employee ON manager_employee.id = e.manager_employee_id
      ${where}
      ORDER BY e.id
      LIMIT ? OFFSET ?`
@@ -49,8 +50,9 @@ export async function listEmployees(request: Request, env: Env): Promise<Respons
 
 export async function getEmployee(request: Request, env: Env, id: string): Promise<Response> {
   const employee = await env.DB.prepare(
-    `SELECT e.*, d.name as department_name
+    `SELECT e.*, d.name as department_name, manager_employee.name as manager_name
      FROM employees e LEFT JOIN departments d ON d.id = e.department_id
+     LEFT JOIN employees manager_employee ON manager_employee.id = e.manager_employee_id
      WHERE e.id = ?`
   )
     .bind(id)
