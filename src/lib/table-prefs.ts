@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
 /**
  * Per-table column preferences (visibility + order + reorder lock), persisted
@@ -34,13 +34,27 @@ export interface ColumnDef<Row> {
 }
 
 function readJson<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
   try {
     const raw = window.localStorage.getItem(key);
-    if (raw) return JSON.parse(raw) as T;
+    if (raw !== null) return JSON.parse(raw) as T;
   } catch {
     /* ignore */
   }
   return fallback;
+}
+
+/** Distinguish "never saved" from "saved empty" for the hidden set. */
+function loadHidden<Row>(tableKey: string, columns: ColumnDef<Row>[]): Set<string> {
+  const defaults = () => new Set(columns.filter((c) => c.defaultHidden && !c.locked).map((c) => c.id));
+  if (typeof window === "undefined") return defaults();
+  const raw = window.localStorage.getItem(HIDE_PREFIX + tableKey);
+  if (raw === null) return defaults(); // never saved → apply defaults
+  try {
+    return new Set(JSON.parse(raw) as string[]); // saved (even if empty) → honour it
+  } catch {
+    return defaults();
+  }
 }
 
 /** Order a column list by a saved id order; unknown ids keep their natural spot. */
@@ -62,28 +76,14 @@ function applyOrder<Row>(columns: ColumnDef<Row>[], order: string[]): ColumnDef<
 }
 
 export function useColumnPrefs<Row>(tableKey: string, columns: ColumnDef<Row>[]) {
-  const [hidden, setHidden] = useState<Set<string>>(() => new Set());
-  const [order, setOrderState] = useState<string[]>([]);
-  const [reorderLocked, setReorderLocked] = useState(true);
-  const [labels, setLabels] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    const storedHidden = readJson<string[]>(HIDE_PREFIX + tableKey, []);
-    const storedOrder = readJson<string[]>(ORDER_PREFIX + tableKey, []);
-    const storedLock = readJson<boolean>(LOCK_PREFIX + tableKey, true);
-    const storedLabels = readJson<Record<string, string>>(LABEL_PREFIX + tableKey, {});
-    /* eslint-disable react-hooks/set-state-in-effect -- init from storage */
-    setHidden(
-      storedHidden.length
-        ? new Set(storedHidden)
-        : new Set(columns.filter((c) => c.defaultHidden && !c.locked).map((c) => c.id)),
-    );
-    setOrderState(storedOrder);
-    setReorderLocked(storedLock);
-    setLabels(storedLabels);
-    /* eslint-enable react-hooks/set-state-in-effect */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tableKey]);
+  // Initialise synchronously from localStorage (this screen only renders
+  // client-side, so there is no SSR/hydration mismatch to worry about).
+  const [hidden, setHidden] = useState<Set<string>>(() => loadHidden(tableKey, columns));
+  const [order, setOrderState] = useState<string[]>(() => readJson<string[]>(ORDER_PREFIX + tableKey, []));
+  const [reorderLocked, setReorderLocked] = useState(() => readJson<boolean>(LOCK_PREFIX + tableKey, true));
+  const [labels, setLabels] = useState<Record<string, string>>(() =>
+    readJson<Record<string, string>>(LABEL_PREFIX + tableKey, {}),
+  );
 
   const renameColumn = useCallback(
     (id: string, label: string) => {
