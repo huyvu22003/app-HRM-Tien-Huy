@@ -12,6 +12,19 @@ describe("buildElbowPath", () => {
       "M 100 40 V 90 H 260 V 140",
     );
   });
+
+  it("keeps the midpoint finite for large finite coordinates", () => {
+    const path = buildElbowPath(
+      { x: 100, y: Number.MAX_VALUE },
+      { x: 260, y: Number.MAX_VALUE },
+    );
+
+    assert.equal(
+      path,
+      `M 100 ${Number.MAX_VALUE} V ${Number.MAX_VALUE} H 260 V ${Number.MAX_VALUE}`,
+    );
+    assert.equal(path.includes("Infinity"), false);
+  });
 });
 
 describe("getResponsiveColumnCount", () => {

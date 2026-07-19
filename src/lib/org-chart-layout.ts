@@ -4,7 +4,7 @@ export interface ChartPoint {
 }
 
 export function buildElbowPath(source: ChartPoint, target: ChartPoint): string {
-  const midpointY = (source.y + target.y) / 2;
+  const midpointY = source.y / 2 + target.y / 2;
   return `M ${source.x} ${source.y} V ${midpointY} H ${target.x} V ${target.y}`;
 }
 
