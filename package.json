@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test --experimental-strip-types --test-isolation=none src/lib/org-hierarchy.test.ts",
+    "test": "node --test --experimental-strip-types --test-isolation=none src/lib/org-hierarchy.test.ts src/lib/org-chart-layout.test.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
