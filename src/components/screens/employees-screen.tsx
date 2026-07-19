@@ -213,14 +213,17 @@ function ColumnHeaderMenu({
   const [open, setOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameText, setRenameText] = useState(label);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
   const ref = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-        setRenaming(false);
-      }
+      const t = e.target as Node;
+      if (ref.current?.contains(t)) return;
+      if (menuRef.current?.contains(t)) return;
+      setOpen(false);
+      setRenaming(false);
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
@@ -234,6 +237,12 @@ function ColumnHeaderMenu({
       <button
         onClick={(e) => {
           e.stopPropagation();
+          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          const width = 210;
+          setPos({
+            top: rect.bottom + 4,
+            left: Math.min(rect.left, window.innerWidth - width - 12),
+          });
           setOpen((o) => !o);
           setRenameText(label);
         }}
@@ -247,7 +256,9 @@ function ColumnHeaderMenu({
       </button>
       {open && (
         <div
-          className="absolute left-0 top-full z-40 mt-1 w-[210px] rounded-[10px] border border-[var(--color-border)] bg-white p-1.5 shadow-lg normal-case tracking-normal"
+          ref={menuRef}
+          style={{ position: "fixed", top: pos.top, left: pos.left }}
+          className="z-50 w-[210px] rounded-[10px] border border-[var(--color-border)] bg-white p-1.5 shadow-lg normal-case tracking-normal"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="px-1 pb-1.5">
