@@ -2,6 +2,7 @@
 
 import {
   useCallback,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -54,6 +55,15 @@ function visibleEdges(nodes: CompactOrgNode[], collapsed: Set<number>): Connecto
   return edges;
 }
 
+function findNode(nodes: CompactOrgNode[], personId: number): CompactOrgNode | null {
+  for (const node of nodes) {
+    if (node.person.id === personId) return node;
+    const descendant = findNode(node.children, personId);
+    if (descendant) return descendant;
+  }
+  return null;
+}
+
 function ManagementNode({
   node,
   collapsed,
@@ -69,7 +79,7 @@ function ManagementNode({
   onToggle: (id: number) => void;
   onSelect: (person: OrgPerson) => void;
   onEdit?: (person: OrgPerson) => void;
-  onOpenEmployees: (node: CompactOrgNode) => void;
+  onOpenEmployees: (managerId: number) => void;
 }) {
   const isCollapsed = collapsed.has(node.person.id);
   const photo = getEmployeePhoto(node.person.id);
@@ -135,7 +145,7 @@ function ManagementNode({
       {node.employees.length > 0 && (
         <button
           type="button"
-          onClick={() => onOpenEmployees(node)}
+          onClick={() => onOpenEmployees(node.person.id)}
           aria-label={`Xem ${node.employees.length} nhân viên do ${node.person.name} quản lý`}
           className="relative z-10 mt-5 rounded-[8px] border border-dashed border-[var(--color-accent)] bg-white px-3 py-1.5 text-[11px] font-medium text-[var(--color-accent)] transition hover:bg-[var(--color-page-bg)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
         >
@@ -179,8 +189,9 @@ export function DepartmentManagementChart({
     moved: boolean;
   } | null>(null);
   const suppressClickRef = useRef(false);
+  const suppressClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [collapsed, setCollapsed] = useState<Set<number>>(() => new Set());
-  const [employeeGroup, setEmployeeGroup] = useState<CompactOrgNode | null>(null);
+  const [employeeGroupManagerId, setEmployeeGroupManagerId] = useState<number | null>(null);
   const allRoots = useMemo(
     () => [
       ...(tree.root ? [tree.root] : []),
@@ -191,7 +202,25 @@ export function DepartmentManagementChart({
   );
   const edges = useMemo(() => visibleEdges(allRoots, collapsed), [allRoots, collapsed]);
   const collapsibleIds = useMemo(() => collectCollapsibleIds(allRoots), [allRoots]);
+  const employeeGroup = useMemo(
+    () => employeeGroupManagerId === null
+      ? null
+      : findNode(allRoots, employeeGroupManagerId),
+    [allRoots, employeeGroupManagerId],
+  );
   const { containerRef, registerNode, paths, measure } = useChartConnectors(edges);
+
+  useEffect(() => {
+    if (employeeGroupManagerId === null || employeeGroup !== null) return;
+    const timer = setTimeout(() => setEmployeeGroupManagerId(null), 0);
+    return () => clearTimeout(timer);
+  }, [employeeGroup, employeeGroupManagerId]);
+
+  useEffect(() => () => {
+    if (suppressClickTimerRef.current !== null) {
+      clearTimeout(suppressClickTimerRef.current);
+    }
+  }, []);
 
   useLayoutEffect(() => {
     const frame = requestAnimationFrame(measure);
@@ -241,13 +270,36 @@ export function DepartmentManagementChart({
     }
   };
 
-  const endDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+  const releaseDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
     const canvas = scrollRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    suppressClickRef.current = drag.moved;
+    if (!drag || drag.pointerId !== event.pointerId) return null;
     dragRef.current = null;
     if (canvas?.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+    return drag;
+  };
+
+  const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = releaseDrag(event);
+    if (!drag?.moved) return;
+    suppressClickRef.current = true;
+    if (suppressClickTimerRef.current !== null) {
+      clearTimeout(suppressClickTimerRef.current);
+    }
+    suppressClickTimerRef.current = setTimeout(() => {
+      suppressClickRef.current = false;
+      suppressClickTimerRef.current = null;
+    }, 0);
+  };
+
+  const cancelDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = releaseDrag(event);
+    if (!drag) return;
+    suppressClickRef.current = false;
+    if (suppressClickTimerRef.current !== null) {
+      clearTimeout(suppressClickTimerRef.current);
+      suppressClickTimerRef.current = null;
+    }
   };
 
   const warningRoots = [...tree.additionalRoots, ...tree.unassigned];
@@ -270,14 +322,18 @@ export function DepartmentManagementChart({
         ref={scrollRef}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-        onLostPointerCapture={endDrag}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={cancelDrag}
+        onLostPointerCapture={cancelDrag}
         onClickCapture={(event) => {
           if (!suppressClickRef.current) return;
           event.preventDefault();
           event.stopPropagation();
           suppressClickRef.current = false;
+          if (suppressClickTimerRef.current !== null) {
+            clearTimeout(suppressClickTimerRef.current);
+            suppressClickTimerRef.current = null;
+          }
         }}
         className="min-h-[420px] max-h-[72vh] touch-none cursor-grab overflow-scroll rounded-[10px] bg-[var(--color-page-bg)] active:cursor-grabbing"
       >
@@ -297,7 +353,7 @@ export function DepartmentManagementChart({
                   onToggle={toggle}
                   onSelect={onSelectEmployee}
                   onEdit={onEditEmployee}
-                  onOpenEmployees={setEmployeeGroup}
+                  onOpenEmployees={setEmployeeGroupManagerId}
                 />
               </ul>
             </div>
@@ -325,7 +381,7 @@ export function DepartmentManagementChart({
                     onToggle={toggle}
                     onSelect={onSelectEmployee}
                     onEdit={onEditEmployee}
-                    onOpenEmployees={setEmployeeGroup}
+                    onOpenEmployees={setEmployeeGroupManagerId}
                   />
                 ))}
               </ul>
@@ -338,7 +394,7 @@ export function DepartmentManagementChart({
         <EmployeeGroupPanel
           manager={employeeGroup.person}
           employees={employeeGroup.employees}
-          onClose={() => setEmployeeGroup(null)}
+          onClose={() => setEmployeeGroupManagerId(null)}
           onSelectEmployee={onSelectEmployee}
         />
       )}
