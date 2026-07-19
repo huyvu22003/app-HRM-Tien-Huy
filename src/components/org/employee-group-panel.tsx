@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Phone, Search, X } from "lucide-react";
 import { normalizePersonName, type OrgPerson } from "@/lib/org-hierarchy";
-import { getEmployeePhoto } from "@/lib/photo-store";
+import { getEmployeePhotos } from "@/lib/photo-store";
 import { getInitials } from "@/lib/utils";
 
 function normalizeSearchValue(value: string): string {
@@ -25,7 +25,16 @@ export function EmployeeGroupPanel({
   onSelectEmployee: (employee: OrgPerson) => void;
 }) {
   const [search, setSearch] = useState("");
+  const panelRef = useRef<HTMLElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const onCloseRef = useRef(onClose);
   const normalizedSearch = normalizeSearchValue(search);
+  const searchDigits = search.replace(/\D/g, "");
+  const isDigitsOnlySearch = /^\d+$/.test(normalizedSearch);
+  const employeePhotos = useMemo(
+    () => getEmployeePhotos(employees.map((employee) => employee.id)),
+    [employees],
+  );
   const filteredEmployees = useMemo(() => {
     if (!normalizedSearch) return employees;
 
@@ -36,17 +45,62 @@ export function EmployeeGroupPanel({
         employee.position ?? "",
         employee.phone ?? "",
       ].join(" ");
-      return normalizeSearchValue(searchableValue).includes(normalizedSearch);
+      const generalMatch = normalizeSearchValue(searchableValue).includes(normalizedSearch);
+      const phoneDigits = employee.phone?.replace(/\D/g, "") ?? "";
+      return generalMatch
+        || (isDigitsOnlySearch && phoneDigits.includes(searchDigits));
     });
-  }, [employees, normalizedSearch]);
+  }, [employees, isDigitsOnlySearch, normalizedSearch, searchDigits]);
 
   useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    searchInputRef.current?.focus();
+
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab" || !panelRef.current) return;
+
+      const focusable = Array.from(
+        panelRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((element) => !element.hasAttribute("hidden"));
+      if (focusable.length === 0) {
+        event.preventDefault();
+        panelRef.current.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const activeElement = document.activeElement;
+      if (!panelRef.current.contains(activeElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      opener?.focus();
+    };
+  }, []);
 
   return (
     <div
@@ -54,9 +108,11 @@ export function EmployeeGroupPanel({
       onMouseDown={onClose}
     >
       <section
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="employee-group-title"
+        tabIndex={-1}
         onMouseDown={(event) => event.stopPropagation()}
         className="fixed inset-y-0 right-0 flex w-full max-w-none flex-col bg-white shadow-xl md:absolute md:w-[360px] md:max-w-[360px]"
       >
@@ -86,8 +142,8 @@ export function EmployeeGroupPanel({
           <div className="flex items-center gap-2 rounded-[8px] border border-[var(--color-border)] px-3 focus-within:border-[var(--color-accent)]">
             <Search size={15} className="shrink-0 text-[var(--color-text-light)]" aria-hidden="true" />
             <input
+              ref={searchInputRef}
               id="employee-group-search"
-              autoFocus
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Tên, mã, vị trí hoặc điện thoại"
@@ -100,7 +156,7 @@ export function EmployeeGroupPanel({
           {filteredEmployees.length > 0 ? (
             <ul>
               {filteredEmployees.map((employee) => {
-                const photo = getEmployeePhoto(employee.id);
+                const photo = employeePhotos.get(employee.id);
                 return (
                   <li key={employee.id}>
                     <button
