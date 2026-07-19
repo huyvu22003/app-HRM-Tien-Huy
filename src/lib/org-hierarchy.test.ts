@@ -141,6 +141,20 @@ describe("selectDepartmentHeadId", () => {
       null,
     );
   });
+
+  it("returns null when multiple root managers share the best role rank", () => {
+    const managers = [
+      person(10, "A", "Trưởng phòng"),
+      person(11, "B", "Trưởng phòng"),
+      person(12, "C", "Phó phòng"),
+    ];
+
+    assert.equal(selectDepartmentHeadId(managers, { departmentId: 2 }), null);
+    assert.equal(
+      selectDepartmentHeadId([...managers].reverse(), { departmentId: 2 }),
+      null,
+    );
+  });
 });
 
 describe("compact department hierarchy", () => {

@@ -206,15 +206,14 @@ export function selectDepartmentHeadId(
   }
 
   const staffIds = new Set(staff.map((person) => person.id));
-  return staff
-    .filter(
-      (person) => {
-        const managerId = resolveLegacyManager(person, staff).id;
-        return isManagementRole(person)
-          && (managerId === null || !staffIds.has(managerId));
-      },
-    )
-    .sort(comparePeople)[0]?.id ?? null;
+  const candidates = staff.filter((person) => {
+    const managerId = resolveLegacyManager(person, staff).id;
+    return isManagementRole(person)
+      && (managerId === null || !staffIds.has(managerId));
+  });
+  const bestRank = Math.min(...candidates.map(roleRank));
+  const bestCandidates = candidates.filter((person) => roleRank(person) === bestRank);
+  return bestCandidates.length === 1 ? bestCandidates[0].id : null;
 }
 
 function projectCompactNode(node: OrgNode): CompactOrgNode {
