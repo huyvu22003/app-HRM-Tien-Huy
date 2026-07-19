@@ -25,6 +25,12 @@ import type {
 
 const nodeId = (person: OrgPerson) => `department-manager-${person.id}`;
 
+export interface DepartmentManagementChartProps {
+  tree: CompactDepartmentTreeResult;
+  onSelectEmployee: (person: OrgPerson) => void;
+  onEditEmployee?: (person: OrgPerson) => void;
+}
+
 function collectCollapsibleIds(nodes: CompactOrgNode[]): Set<number> {
   const result = new Set<number>();
   const visit = (node: CompactOrgNode) => {
@@ -161,11 +167,7 @@ export function DepartmentManagementChart({
   tree,
   onSelectEmployee,
   onEditEmployee,
-}: {
-  tree: CompactDepartmentTreeResult;
-  onSelectEmployee: (employee: OrgPerson) => void;
-  onEditEmployee?: (employee: OrgPerson) => void;
-}) {
+}: DepartmentManagementChartProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
