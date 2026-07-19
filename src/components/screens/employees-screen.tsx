@@ -11,7 +11,7 @@ import { ColumnMenu } from "@/components/ui/column-menu";
 import { exportStyledExcel } from "@/lib/excel-export";
 import { getEmployeePhoto } from "@/lib/photo-store";
 import { parseCsvObjects } from "@/lib/csv";
-import { X, CheckCircle2, FileDown, Settings2, Trash2, Lock, Unlock, MoreVertical, GripVertical } from "lucide-react";
+import { X, CheckCircle2, FileDown, Settings2, Trash2, Lock, Unlock, MoreVertical, GripVertical, ArrowDownAZ, ArrowUpAZ, Pencil } from "lucide-react";
 import {
   getCustomFields,
   addCustomField,
@@ -193,53 +193,119 @@ function downloadImportTemplate() {
   URL.revokeObjectURL(url);
 }
 
-function ColumnFilterButton({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
+function ColumnHeaderMenu({
+  label,
+  value,
+  onFilter,
+  onSort,
+  onRename,
+  onClear,
+  sortDir,
+}: {
+  label: string;
+  value: string;
+  onFilter: (v: string) => void;
+  onSort: (dir: "asc" | "desc") => void;
+  onRename: (label: string) => void;
+  onClear: () => void;
+  sortDir: "asc" | "desc" | null;
+}) {
   const [open, setOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [renameText, setRenameText] = useState(label);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setRenaming(false);
+      }
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
-  const active = value.trim().length > 0;
+  const active = value.trim().length > 0 || sortDir !== null;
+
+  const item = "flex w-full items-center gap-2 rounded-[6px] px-2 py-1.5 text-left text-[12.5px] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]";
+
   return (
     <div className="relative inline-flex" ref={ref}>
       <button
         onClick={(e) => {
           e.stopPropagation();
           setOpen((o) => !o);
+          setRenameText(label);
         }}
         className={cn(
           "flex h-5 w-5 items-center justify-center rounded hover:bg-[var(--color-border-light)]",
           active ? "text-[var(--color-accent)]" : "text-[var(--color-text-lighter)]",
         )}
-        title={`Lọc theo ${label}`}
+        title={`Tùy chọn cột ${label}`}
       >
         <MoreVertical size={13} />
       </button>
       {open && (
         <div
-          className="absolute left-0 top-full z-40 mt-1 w-[200px] rounded-[10px] border border-[var(--color-border)] bg-white p-2 shadow-lg normal-case tracking-normal"
+          className="absolute left-0 top-full z-40 mt-1 w-[210px] rounded-[10px] border border-[var(--color-border)] bg-white p-1.5 shadow-lg normal-case tracking-normal"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="mb-1 text-[10.5px] uppercase tracking-wide text-[var(--color-text-lighter)]">Lọc: {label}</div>
-          <div className="flex items-center gap-1">
-            <input
-              autoFocus
-              value={value}
-              onChange={(e) => onChange(e.target.value)}
-              placeholder="Nhập để lọc..."
-              className="h-8 w-full rounded-[6px] border border-[var(--color-border)] px-2 text-[12.5px] normal-case tracking-normal outline-none focus:border-[var(--color-accent)]"
-            />
-            {active && (
-              <button onClick={() => onChange("")} className="text-[var(--color-text-lighter)] hover:text-[var(--color-danger)]" title="Xoá lọc">
-                <X size={14} />
-              </button>
-            )}
+          <div className="px-1 pb-1.5">
+            <div className="mb-1 text-[10.5px] uppercase tracking-wide text-[var(--color-text-lighter)]">Lọc dữ liệu</div>
+            <div className="flex items-center gap-1">
+              <input
+                autoFocus
+                value={value}
+                onChange={(e) => onFilter(e.target.value)}
+                placeholder="Nhập để lọc..."
+                className="h-8 w-full rounded-[6px] border border-[var(--color-border)] px-2 text-[12.5px] outline-none focus:border-[var(--color-accent)]"
+              />
+            </div>
           </div>
+          <div className="my-1 h-px bg-[var(--color-border-light)]" />
+          <button className={item} onClick={() => onSort("asc")}>
+            <ArrowDownAZ size={14} className={cn(sortDir === "asc" && "text-[var(--color-accent)]")} /> Sắp xếp A → Z
+          </button>
+          <button className={item} onClick={() => onSort("desc")}>
+            <ArrowUpAZ size={14} className={cn(sortDir === "desc" && "text-[var(--color-accent)]")} /> Sắp xếp Z → A
+          </button>
+          {renaming ? (
+            <div className="flex items-center gap-1 px-1 py-1">
+              <input
+                autoFocus
+                value={renameText}
+                onChange={(e) => setRenameText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    onRename(renameText);
+                    setRenaming(false);
+                  }
+                }}
+                className="h-8 w-full rounded-[6px] border border-[var(--color-accent)] px-2 text-[12.5px] outline-none"
+              />
+              <button
+                onClick={() => {
+                  onRename(renameText);
+                  setRenaming(false);
+                }}
+                className="rounded-[6px] bg-[var(--color-success)] px-2 py-1 text-[11px] font-medium text-white"
+              >
+                Lưu
+              </button>
+            </div>
+          ) : (
+            <button className={item} onClick={() => setRenaming(true)}>
+              <Pencil size={14} /> Đổi tên cột
+            </button>
+          )}
+          <div className="my-1 h-px bg-[var(--color-border-light)]" />
+          <button
+            className={cn(item, !active && "opacity-50")}
+            disabled={!active}
+            onClick={onClear}
+          >
+            <X size={14} /> Xóa lọc & sắp xếp
+          </button>
         </div>
       )}
     </div>
@@ -670,10 +736,12 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
       ? [...columns.slice(0, actionsIdx), ...customColumns, ...columns.slice(actionsIdx)]
       : [...columns, ...customColumns];
 
-  const { hidden, toggle, reset, visibleColumns, reorderLocked, toggleReorderLock, moveColumn } =
+  const { hidden, toggle, reset, visibleColumns, reorderLocked, toggleReorderLock, moveColumn, renameColumn } =
     useColumnPrefs("employees", displayColumns);
 
-  // Apply search + department + per-column filters, then paginate — all client-side.
+  const [sortState, setSortState] = useState<{ colId: string; dir: "asc" | "desc" } | null>(null);
+
+  // Apply search + department + per-column filters + sort, then paginate — all client-side.
   const filtered = useMemo(() => {
     let list = allItems;
     if (search) {
@@ -694,8 +762,20 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
         String(col.exportValue!(e, i)).toLowerCase().includes(q),
       );
     }
+    if (sortState) {
+      const col = displayColumns.find((c) => c.id === sortState.colId);
+      if (col?.exportValue) {
+        const dir = sortState.dir === "asc" ? 1 : -1;
+        list = [...list].sort((a, b) => {
+          const va = col.exportValue!(a, 0);
+          const vb = col.exportValue!(b, 0);
+          if (typeof va === "number" && typeof vb === "number") return (va - vb) * dir;
+          return String(va).localeCompare(String(vb), "vi") * dir;
+        });
+      }
+    }
     return list;
-  }, [allItems, search, dept, colFilters, displayColumns]);
+  }, [allItems, search, dept, colFilters, displayColumns, sortState]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const items = useMemo(
@@ -866,15 +946,10 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
                 <th className="w-12 px-4 py-3 text-center font-medium">STT</th>
                 {visibleColumns.map((c) => {
                   const canDrag = !reorderLocked && !c.noReorder;
-                  const canFilter = !!c.exportValue && !c.noReorder;
+                  const canMenu = !!c.exportValue && !c.noReorder;
                   return (
                     <th
                       key={c.id}
-                      draggable={canDrag}
-                      onDragStart={(e) => {
-                        if (!canDrag) return;
-                        e.dataTransfer.setData("text/plain", c.id);
-                      }}
                       onDragOver={(e) => {
                         if (!reorderLocked && !c.noReorder) e.preventDefault();
                       }}
@@ -885,20 +960,35 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
                         if (dragId) moveColumn(dragId, c.id);
                       }}
                       className={cn(
-                        "px-4 py-3 font-medium",
+                        "border-l border-[var(--color-border-light)] px-3 py-3 font-medium",
                         c.align === "right" && "text-right",
                         c.align === "center" && "text-center",
-                        canDrag && "cursor-move select-none bg-[var(--color-page-bg)]",
                       )}
                     >
                       <span className={cn("inline-flex items-center gap-1", c.align === "right" && "flex-row-reverse")}>
-                        {canDrag && <GripVertical size={12} className="text-[var(--color-text-lighter)]" />}
+                        {canDrag && (
+                          <span
+                            draggable
+                            onDragStart={(e) => e.dataTransfer.setData("text/plain", c.id)}
+                            className="cursor-grab text-[var(--color-text-lighter)] hover:text-[var(--color-accent)] active:cursor-grabbing"
+                            title="Kéo để đổi vị trí cột"
+                          >
+                            <GripVertical size={13} />
+                          </span>
+                        )}
                         {c.label}
-                        {canFilter && (
-                          <ColumnFilterButton
+                        {canMenu && (
+                          <ColumnHeaderMenu
                             label={c.label}
                             value={colFilters[c.id] ?? ""}
-                            onChange={(v) => setColFilters((s) => ({ ...s, [c.id]: v }))}
+                            sortDir={sortState?.colId === c.id ? sortState.dir : null}
+                            onFilter={(v) => setColFilters((s) => ({ ...s, [c.id]: v }))}
+                            onSort={(dir) => setSortState({ colId: c.id, dir })}
+                            onRename={(label) => renameColumn(c.id, label)}
+                            onClear={() => {
+                              setColFilters((s) => ({ ...s, [c.id]: "" }));
+                              setSortState((s) => (s?.colId === c.id ? null : s));
+                            }}
                           />
                         )}
                       </span>
@@ -989,7 +1079,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
                     <td
                       key={c.id}
                       className={cn(
-                        "px-4 py-2.5",
+                        "border-l border-[var(--color-border-light)] px-3 py-2.5",
                         c.align === "right" && "text-right",
                         c.align === "center" && "text-center",
                         c.cellClass,

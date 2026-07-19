@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from "react";
 const HIDE_PREFIX = "hrm_cols_";
 const ORDER_PREFIX = "hrm_colorder_";
 const LOCK_PREFIX = "hrm_collock_";
+const LABEL_PREFIX = "hrm_collabels_";
 
 export interface ColumnDef<Row> {
   id: string;
@@ -64,11 +65,13 @@ export function useColumnPrefs<Row>(tableKey: string, columns: ColumnDef<Row>[])
   const [hidden, setHidden] = useState<Set<string>>(() => new Set());
   const [order, setOrderState] = useState<string[]>([]);
   const [reorderLocked, setReorderLocked] = useState(true);
+  const [labels, setLabels] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const storedHidden = readJson<string[]>(HIDE_PREFIX + tableKey, []);
     const storedOrder = readJson<string[]>(ORDER_PREFIX + tableKey, []);
     const storedLock = readJson<boolean>(LOCK_PREFIX + tableKey, true);
+    const storedLabels = readJson<Record<string, string>>(LABEL_PREFIX + tableKey, {});
     /* eslint-disable react-hooks/set-state-in-effect -- init from storage */
     setHidden(
       storedHidden.length
@@ -77,9 +80,27 @@ export function useColumnPrefs<Row>(tableKey: string, columns: ColumnDef<Row>[])
     );
     setOrderState(storedOrder);
     setReorderLocked(storedLock);
+    setLabels(storedLabels);
     /* eslint-enable react-hooks/set-state-in-effect */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableKey]);
+
+  const renameColumn = useCallback(
+    (id: string, label: string) => {
+      setLabels((prev) => {
+        const next = { ...prev };
+        if (label.trim()) next[id] = label.trim();
+        else delete next[id];
+        try {
+          window.localStorage.setItem(LABEL_PREFIX + tableKey, JSON.stringify(next));
+        } catch {
+          /* ignore */
+        }
+        return next;
+      });
+    },
+    [tableKey],
+  );
 
   const persistHidden = useCallback(
     (next: Set<string>) => {
@@ -122,7 +143,13 @@ export function useColumnPrefs<Row>(tableKey: string, columns: ColumnDef<Row>[])
     persistHidden(next);
     setOrderState([]);
     persistOrder([]);
-  }, [columns, persistHidden, persistOrder]);
+    setLabels({});
+    try {
+      window.localStorage.removeItem(LABEL_PREFIX + tableKey);
+    } catch {
+      /* ignore */
+    }
+  }, [columns, persistHidden, persistOrder, tableKey]);
 
   const toggleReorderLock = useCallback(() => {
     setReorderLocked((prev) => {
@@ -136,7 +163,9 @@ export function useColumnPrefs<Row>(tableKey: string, columns: ColumnDef<Row>[])
     });
   }, [tableKey]);
 
-  const ordered = applyOrder(columns, order);
+  const ordered = applyOrder(columns, order).map((c) =>
+    labels[c.id] ? { ...c, label: labels[c.id] } : c,
+  );
 
   /** Move column `dragId` to sit where `targetId` is. */
   const moveColumn = useCallback(
@@ -167,5 +196,6 @@ export function useColumnPrefs<Row>(tableKey: string, columns: ColumnDef<Row>[])
     reorderLocked,
     toggleReorderLock,
     moveColumn,
+    renameColumn,
   };
 }
