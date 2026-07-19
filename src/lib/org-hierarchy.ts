@@ -31,6 +31,20 @@ export interface OrgTreeResult {
   warnings: OrgWarning[];
 }
 
+export interface CompactOrgNode {
+  person: OrgPerson;
+  children: CompactOrgNode[];
+  employees: OrgPerson[];
+  descendantIds: number[];
+}
+
+export interface CompactDepartmentTreeResult {
+  root: CompactOrgNode | null;
+  additionalRoots: CompactOrgNode[];
+  unassigned: CompactOrgNode[];
+  warnings: OrgWarning[];
+}
+
 export interface RelationshipUpdate {
   employeeId: number;
   managerEmployeeId: number | null;
@@ -66,18 +80,19 @@ export function isManagementRole(person: Pick<OrgPerson, "position" | "level">):
   return /(giám đốc|trưởng phòng|phó phòng|quản lý|xưởng trưởng|tổ trưởng|tổ phó|trưởng nhóm)/.test(value);
 }
 
+function roleRank(person: Pick<OrgPerson, "position" | "level">): number {
+  const value = `${person.position ?? ""} ${person.level ?? ""}`.toLocaleLowerCase("vi");
+  if (value.includes("giám đốc")) return 0;
+  if (value.includes("trưởng phòng")) return 1;
+  if (value.includes("phó phòng")) return 2;
+  if (value.includes("quản lý") || value.includes("xưởng trưởng")) return 3;
+  if (value.includes("tổ trưởng") || value.includes("trưởng nhóm")) return 4;
+  if (value.includes("tổ phó")) return 5;
+  return 10;
+}
+
 function comparePeople(a: OrgPerson, b: OrgPerson): number {
-  const rank = (person: OrgPerson) => {
-    const value = `${person.position ?? ""} ${person.level ?? ""}`.toLocaleLowerCase("vi");
-    if (value.includes("giám đốc")) return 0;
-    if (value.includes("trưởng phòng")) return 1;
-    if (value.includes("phó phòng")) return 2;
-    if (value.includes("quản lý") || value.includes("xưởng trưởng")) return 3;
-    if (value.includes("tổ trưởng") || value.includes("trưởng nhóm")) return 4;
-    if (value.includes("tổ phó")) return 5;
-    return 10;
-  };
-  return rank(a) - rank(b)
+  return roleRank(a) - roleRank(b)
     || (a.position ?? "").localeCompare(b.position ?? "", "vi")
     || a.name.localeCompare(b.name, "vi")
     || a.id - b.id;
@@ -177,6 +192,72 @@ export function buildDepartmentHierarchy(
     allPeople.filter((person) => person.departmentId === department.departmentId),
     department.headEmployeeId,
   );
+}
+
+export function selectDepartmentHeadId(
+  allPeople: OrgPerson[],
+  department: { departmentId: number; headEmployeeId?: number | null },
+): number | null {
+  const staff = allPeople.filter(
+    (person) => person.departmentId === department.departmentId,
+  );
+  if (staff.some((person) => person.id === department.headEmployeeId)) {
+    return department.headEmployeeId ?? null;
+  }
+
+  const staffIds = new Set(staff.map((person) => person.id));
+  return staff
+    .filter(
+      (person) => {
+        const managerId = resolveLegacyManager(person, staff).id;
+        return isManagementRole(person)
+          && (managerId === null || !staffIds.has(managerId));
+      },
+    )
+    .sort(comparePeople)[0]?.id ?? null;
+}
+
+function projectCompactNode(node: OrgNode): CompactOrgNode {
+  const children: CompactOrgNode[] = [];
+  const employees: OrgPerson[] = [];
+
+  for (const child of node.children) {
+    if (isManagementRole(child.person) || child.children.length > 0) {
+      children.push(projectCompactNode(child));
+    } else {
+      employees.push(child.person);
+    }
+  }
+
+  return {
+    person: node.person,
+    children,
+    employees,
+    descendantIds: [...node.descendantIds],
+  };
+}
+
+export function buildCompactDepartmentHierarchy(
+  allPeople: OrgPerson[],
+  department: { departmentId: number; headEmployeeId?: number | null },
+): CompactDepartmentTreeResult {
+  const headEmployeeId = selectDepartmentHeadId(allPeople, department);
+  const hierarchy = buildDepartmentHierarchy(allPeople, {
+    departmentId: department.departmentId,
+    headEmployeeId,
+  });
+  const rootNode = headEmployeeId === null
+    ? null
+    : hierarchy.roots.find((node) => node.person.id === headEmployeeId) ?? null;
+
+  return {
+    root: rootNode ? projectCompactNode(rootNode) : null,
+    additionalRoots: hierarchy.roots
+      .filter((node) => node !== rootNode)
+      .map(projectCompactNode),
+    unassigned: hierarchy.unassigned.map(projectCompactNode),
+    warnings: hierarchy.warnings,
+  };
 }
 
 export function buildCompanyHierarchy(
