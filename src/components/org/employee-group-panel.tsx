@@ -50,7 +50,7 @@ export function EmployeeGroupPanel({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/30 sm:absolute"
+      className="fixed inset-0 z-50 bg-black/30 md:absolute"
       onMouseDown={onClose}
     >
       <section
@@ -58,7 +58,7 @@ export function EmployeeGroupPanel({
         aria-modal="true"
         aria-labelledby="employee-group-title"
         onMouseDown={(event) => event.stopPropagation()}
-        className="fixed inset-y-0 right-0 flex w-full max-w-[360px] flex-col bg-white shadow-xl sm:absolute"
+        className="fixed inset-y-0 right-0 flex w-full max-w-none flex-col bg-white shadow-xl md:absolute md:w-[360px] md:max-w-[360px]"
       >
         <header className="flex items-start justify-between gap-3 border-b border-[var(--color-border-light)] px-4 py-4">
           <div className="min-w-0">
