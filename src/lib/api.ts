@@ -191,10 +191,13 @@ export interface ApiEmployee {
   resign_date: string | null;
   status: string;
   manager: string | null;
+  manager_employee_id: number | null;
+  manager_name: string | null;
   level: string | null;
   photo_url: string | null;
   bank: string | null;
   tax_code: string | null;
+  updated_at: string | null;
 }
 
 export interface ApiCompensation {
@@ -253,6 +256,15 @@ export function createEmployee(data: Record<string, unknown>) {
 
 export function updateEmployee(id: number | string, data: Record<string, unknown>) {
   return api.put<{ success: boolean }>(`/employees/${id}`, data);
+}
+
+export type HierarchyMutation =
+  | { action: "move"; employeeId: number; managerEmployeeId: number | null; expectedUpdatedAt?: string | null }
+  | { action: "insert"; candidateId: number; branchRootId: number; expectedUpdatedAt?: string | null }
+  | { action: "remove-level"; employeeId: number; expectedUpdatedAt?: string | null };
+
+export function updateHierarchy(data: HierarchyMutation) {
+  return api.post<{ success: boolean; affectedEmployeeIds: number[] }>("/org/hierarchy", data);
 }
 
 export function importEmployees(employees: Record<string, unknown>[]) {

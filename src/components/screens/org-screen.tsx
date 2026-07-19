@@ -1,20 +1,31 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { ChevronRight, ChevronDown, Users, Loader2, Plus, Pencil, Trash2, X, Save } from "lucide-react";
+import { ChevronRight, ChevronDown, Users, Loader2, Plus, Pencil, Trash2, X, Save, Network } from "lucide-react";
 import {
   fetchDepartments,
   fetchEmployees,
   createDepartment,
   updateDepartment,
   deleteDepartment,
+  updateHierarchy,
   type ApiEmployee,
+  type ApiDepartment,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery, useMutation } from "@/lib/hooks";
 import { BLOCKS } from "@/lib/data/departments";
-import { getInitials, cn } from "@/lib/utils";
-import { getEmployeePhoto } from "@/lib/photo-store";
+import { cn } from "@/lib/utils";
+import {
+  apiEmployeeToOrgPerson,
+  buildCompanyHierarchy,
+  buildDepartmentHierarchy,
+  filterManagerCandidates,
+  isManagementRole,
+  type OrgPerson,
+} from "@/lib/org-hierarchy";
+import { OrgChartCanvas } from "@/components/org/org-chart-canvas";
+import { DepartmentInfoModal, EmployeeQuickProfileModal } from "@/components/org/org-profile-modals";
 
 interface DeptEntry {
   dept: string;
@@ -110,7 +121,7 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
   const empFetcher = useCallback(() => fetchEmployees({ pageSize: 200 }), []);
 
   const { data: deptData, isLoading: deptLoading, refetch: refetchDepts } = useQuery(deptFetcher);
-  const { data: empData, isLoading: empLoading } = useQuery(empFetcher);
+  const { data: empData, isLoading: empLoading, refetch: refetchEmployees } = useQuery(empFetcher);
 
   const isLoading = deptLoading || empLoading;
 
@@ -144,9 +155,66 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [activeDept, setActiveDept] = useState<{ block: string; dept: string; staff: ApiEmployee[] } | null>(null);
+  const [overviewTab, setOverviewTab] = useState<"people" | "departments">("people");
+  const [selectedEmployee, setSelectedEmployee] = useState<ApiEmployee | null>(null);
+  const [selectedDepartment, setSelectedDepartment] = useState<ApiDepartment | null>(null);
+  const [editingPerson, setEditingPerson] = useState<OrgPerson | null>(null);
+  const [editAction, setEditAction] = useState<"move" | "insert" | "remove-level">("move");
+  const [candidateId, setCandidateId] = useState("");
+  const [savingHierarchy, setSavingHierarchy] = useState(false);
 
-  const firstDept = structure[0]?.departments[0];
-  const selected = activeDept ?? (firstDept ? { block: structure[0].block, dept: firstDept.dept, staff: firstDept.staff } : null);
+  const people = useMemo(() => (empData?.data ?? []).map(apiEmployeeToOrgPerson), [empData]);
+  const departments = useMemo(() => deptData?.data ?? [], [deptData]);
+  const inferredHeads = useMemo(
+    () => departments.map((department) => {
+      const staff = people.filter((person) => person.departmentId === department.id);
+      const explicit = department.head_employee_id;
+      const fallback = staff
+        .filter((person) => person.managerEmployeeId === null && (!person.managerName || person.managerName === "-"))
+        .sort((a, b) => Number(isManagementRole(b)) - Number(isManagementRole(a)))[0]?.id ?? null;
+      return { id: department.id, headEmployeeId: explicit ?? fallback };
+    }),
+    [departments, people],
+  );
+  const companyTree = useMemo(() => buildCompanyHierarchy(people, inferredHeads), [people, inferredHeads]);
+  const activeDepartment = activeDept ? departments.find((department) => department.name === activeDept.dept) ?? null : null;
+  const departmentTree = useMemo(
+    () => activeDepartment
+      ? buildDepartmentHierarchy(people, {
+          departmentId: activeDepartment.id,
+          headEmployeeId: inferredHeads.find((department) => department.id === activeDepartment.id)?.headEmployeeId,
+        })
+      : null,
+    [activeDepartment, inferredHeads, people],
+  );
+
+  function closePanels() {
+    setSelectedEmployee(null);
+    setSelectedDepartment(null);
+    setEditingPerson(null);
+  }
+
+  async function saveHierarchy() {
+    if (!editingPerson) return;
+    setSavingHierarchy(true);
+    setActionError(null);
+    try {
+      if (editAction === "remove-level") {
+        await updateHierarchy({ action: "remove-level", employeeId: editingPerson.id });
+      } else if (editAction === "insert") {
+        await updateHierarchy({ action: "insert", candidateId: Number(candidateId), branchRootId: editingPerson.id });
+      } else {
+        await updateHierarchy({ action: "move", employeeId: editingPerson.id, managerEmployeeId: candidateId ? Number(candidateId) : null });
+      }
+      setEditingPerson(null);
+      setCandidateId("");
+      refetchEmployees();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Không thể cập nhật sơ đồ");
+    } finally {
+      setSavingHierarchy(false);
+    }
+  }
 
   async function handleSaveDept(f: DeptForm) {
     setActionError(null);
@@ -172,7 +240,7 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
     setActionError(null);
     try {
       await deleteMut.mutate(deptId);
-      if (selected?.dept === deptName) setActiveDept(null);
+      if (activeDept?.dept === deptName) setActiveDept(null);
       refetchDepts();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Xóa phòng ban thất bại");
@@ -197,6 +265,56 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
           onSave={handleSaveDept}
           onClose={() => setModal(null)}
         />
+      )}
+      {selectedEmployee && (
+        <EmployeeQuickProfileModal
+          employee={selectedEmployee}
+          onClose={() => setSelectedEmployee(null)}
+          onViewFullProfile={(id) => onNavigate("employee-detail", String(id))}
+        />
+      )}
+      {selectedDepartment && (
+        <DepartmentInfoModal
+          department={selectedDepartment}
+          employees={(empData?.data ?? []).filter((employee) => employee.department_id === selectedDepartment.id)}
+          head={(empData?.data ?? []).find((employee) => employee.id === (selectedDepartment.head_employee_id ?? inferredHeads.find((item) => item.id === selectedDepartment.id)?.headEmployeeId))}
+          onClose={() => setSelectedDepartment(null)}
+          onViewDepartment={(id) => {
+            const entry = structure.flatMap((block) => block.departments.map((department) => ({ ...department, block: block.block }))).find((department) => department.deptId === id);
+            if (entry) setActiveDept({ block: entry.block, dept: entry.dept, staff: entry.staff });
+            setSelectedDepartment(null);
+          }}
+        />
+      )}
+      {editingPerson && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onMouseDown={() => setEditingPerson(null)}>
+          <div className="w-full max-w-[480px] rounded-[14px] bg-white p-5 shadow-xl" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between"><div className="font-semibold">Sửa nhánh · {editingPerson.name}</div><button onClick={() => setEditingPerson(null)}><X size={18} /></button></div>
+            <select value={editAction} onChange={(event) => { setEditAction(event.target.value as typeof editAction); setCandidateId(""); }} className="h-9 w-full rounded-[8px] border border-[var(--color-border)] px-2.5 text-[12.5px]">
+              <option value="move">Đổi quản lý</option>
+              <option value="insert">Chèn cấp quản lý</option>
+              <option value="remove-level">Gỡ cấp quản lý</option>
+            </select>
+            {editAction !== "remove-level" && (
+              <div className="mt-3">
+                <div className="mb-1 text-[11px] uppercase text-[var(--color-text-light)]">Chọn người quản lý đã có trong danh mục</div>
+                <select value={candidateId} onChange={(event) => setCandidateId(event.target.value)} className="h-9 w-full rounded-[8px] border border-[var(--color-border)] px-2.5 text-[12.5px]">
+                  <option value="">-- Chọn quản lý --</option>
+                  {(editAction === "insert"
+                    ? people.filter((person) => person.departmentId === editingPerson.departmentId && person.id !== editingPerson.id && isManagementRole(person))
+                    : filterManagerCandidates(editingPerson.id, people)
+                  ).map((person) => <option key={person.id} value={person.id}>{person.name} — {person.position}</option>)}
+                </select>
+              </div>
+            )}
+            <div className="mt-3 rounded-[8px] bg-[var(--color-page-bg)] p-3 text-[12px] text-[var(--color-text-muted)]">
+              {editAction === "remove-level"
+                ? "Cấp dưới trực tiếp sẽ chuyển lên quản lý phía trên. Hồ sơ nhân viên không bị xóa."
+                : "Hệ thống chỉ hiển thị nhân viên có chức vụ quản lý phù hợp và không tạo vòng lặp."}
+            </div>
+            <div className="mt-5 flex justify-end gap-2"><button onClick={() => setEditingPerson(null)} className="rounded-[8px] border px-4 py-2 text-[12px]">Huỷ</button><button disabled={savingHierarchy || (editAction !== "remove-level" && !candidateId)} onClick={saveHierarchy} className="rounded-[8px] bg-[var(--color-accent)] px-4 py-2 text-[12px] font-medium text-white disabled:opacity-50">{savingHierarchy ? "Đang lưu..." : "Xác nhận thay đổi"}</button></div>
+          </div>
+        </div>
       )}
 
       {canEdit && (
@@ -223,6 +341,12 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
         <div className="rounded-[14px] border border-[var(--color-border)] bg-white p-[14px]">
           <div className="mb-2 text-[13px] font-semibold text-[var(--color-text-primary)]">Cơ cấu tổ chức</div>
           <div className="flex flex-col gap-1">
+            <button
+              onClick={() => { setActiveDept(null); closePanels(); }}
+              className={cn("mb-1 flex w-full items-center gap-2 rounded-[8px] px-2 py-2 text-left text-[13px] font-medium", !activeDept ? "bg-[var(--color-accent)] text-white" : "text-[var(--color-text-primary)] hover:bg-[var(--color-page-bg)]")}
+            >
+              <Network size={15} /> Sơ đồ tổng
+            </button>
             {structure.map((b) => {
               const isOpen = expanded[b.block] ?? true;
               const total = b.departments.reduce((sum, d) => sum + d.staff.length, 0);
@@ -245,13 +369,13 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
                           key={d.dept}
                           className={cn(
                             "group flex items-center justify-between rounded-[8px] px-2 py-1.5 text-[12.5px]",
-                            selected?.dept === d.dept
+                            activeDept?.dept === d.dept
                               ? "bg-[var(--color-accent)] text-white"
                               : "text-[var(--color-text-muted)] hover:bg-[var(--color-page-bg)]"
                           )}
                         >
                           <button
-                            onClick={() => setActiveDept({ block: b.block, dept: d.dept, staff: d.staff })}
+                            onClick={() => { setActiveDept({ block: b.block, dept: d.dept, staff: d.staff }); closePanels(); }}
                             className="flex min-w-0 flex-1 items-center justify-between text-left"
                           >
                             <span className="truncate">{d.dept}</span>
@@ -264,7 +388,7 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
                                 title="Sửa"
                                 className={cn(
                                   "rounded p-0.5",
-                                  selected?.dept === d.dept ? "hover:bg-white/20" : "hover:bg-[var(--color-border-light)]"
+                                  activeDept?.dept === d.dept ? "hover:bg-white/20" : "hover:bg-[var(--color-border-light)]"
                                 )}
                               >
                                 <Pencil size={12} />
@@ -274,7 +398,7 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
                                 title="Xóa"
                                 className={cn(
                                   "rounded p-0.5",
-                                  selected?.dept === d.dept ? "hover:bg-white/20" : "hover:bg-[var(--color-border-light)] hover:text-[var(--color-danger)]"
+                                  activeDept?.dept === d.dept ? "hover:bg-white/20" : "hover:bg-[var(--color-border-light)] hover:text-[var(--color-danger)]"
                                 )}
                               >
                                 <Trash2 size={12} />
@@ -292,64 +416,42 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
         </div>
 
         <div className="rounded-[14px] border border-[var(--color-border)] bg-white p-[18px]">
-          {selected ? (
+          {!activeDept ? (
             <>
-              <div className="mb-1 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-[15px] font-semibold text-[var(--color-text-primary)]">
-                  <Users size={17} className="text-[var(--color-accent)]" />
-                  {selected.dept}
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div><div className="flex items-center gap-2 text-[15px] font-semibold"><Network size={17} className="text-[var(--color-accent)]" /> Sơ đồ tổng</div><div className="mt-1 text-[12px] text-[var(--color-text-light)]">{people.length} nhân sự · {departments.length} phòng ban</div></div>
+                <div className="flex rounded-[8px] bg-[var(--color-page-bg)] p-1">
+                  <button onClick={() => { setOverviewTab("people"); closePanels(); }} className={cn("rounded-[6px] px-3 py-1.5 text-[12px]", overviewTab === "people" ? "bg-white font-medium shadow-sm" : "text-[var(--color-text-muted)]")}>Nhân sự toàn công ty</button>
+                  <button onClick={() => { setOverviewTab("departments"); closePanels(); }} className={cn("rounded-[6px] px-3 py-1.5 text-[12px]", overviewTab === "departments" ? "bg-white font-medium shadow-sm" : "text-[var(--color-text-muted)]")}>Phòng ban</button>
                 </div>
-                {canEdit && (
-                  <button
-                    onClick={() => {
-                      const entry = structure
-                        .flatMap((b) => b.departments.map((d) => ({ ...d, block: b.block })))
-                        .find((d) => d.dept === selected.dept);
-                      if (entry) setModal({ id: entry.deptId, name: entry.dept, block: entry.block });
-                    }}
-                    className="flex items-center gap-1.5 rounded-[8px] border border-[var(--color-border)] px-2.5 py-1 text-[12px] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]"
-                  >
-                    <Pencil size={12} /> Sửa phòng ban
-                  </button>
-                )}
               </div>
-              <div className="mb-4 text-[12.5px] text-[var(--color-text-light)]">
-                {selected.block} · {selected.staff.length} nhân sự
-              </div>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                {selected.staff.map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => onNavigate("employee-detail", String(s.id))}
-                    className="flex items-center gap-2.5 rounded-[10px] border border-[var(--color-border-light)] p-2.5 text-left hover:border-[var(--color-accent)]"
-                  >
-                    <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[var(--color-accent)] text-[11px] font-semibold text-white">
-                      {getEmployeePhoto(s.id) ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={getEmployeePhoto(s.id)!} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        getInitials(s.name ?? "?")
-                      )}
+              {overviewTab === "people" ? (
+                <OrgChartCanvas roots={companyTree.roots} unassigned={companyTree.unassigned} onSelectEmployee={(person) => setSelectedEmployee((empData?.data ?? []).find((employee) => employee.id === person.id) ?? null)} onEditEmployee={canEdit ? setEditingPerson : undefined} showManagementPhones />
+              ) : (
+                <div className="min-h-[420px] overflow-x-auto rounded-[10px] bg-[var(--color-page-bg)] p-6">
+                  <div className="mx-auto flex min-w-[720px] flex-col items-center">
+                    <button onClick={() => setSelectedDepartment(departments.find((department) => department.name === "Ban Giám đốc") ?? null)} className="rounded-[12px] border border-[var(--color-accent)] bg-white px-8 py-4 text-[13px] font-semibold shadow-sm">Ban Giám đốc</button>
+                    <div className="h-8 border-l border-[var(--color-border)]" />
+                    <div className="mb-0 w-4/5 border-t border-[var(--color-border)]" />
+                    <div className="grid w-full grid-cols-3 gap-3 pt-4 xl:grid-cols-4">
+                      {departments.filter((department) => department.name !== "Ban Giám đốc").map((department) => (
+                        <button key={department.id} onClick={() => setSelectedDepartment(department)} className="rounded-[10px] border border-[var(--color-border)] bg-white p-3 text-left hover:border-[var(--color-accent)]">
+                          <div className="truncate text-[12.5px] font-medium">{department.name}</div><div className="mt-1 text-[10.5px] text-[var(--color-text-light)]">{department.block} · {department.employee_count} nhân sự</div>
+                        </button>
+                      ))}
                     </div>
-                    <div className="min-w-0">
-                      <div className="truncate text-[12.5px] font-medium text-[var(--color-text-primary)]">
-                        {s.name}
-                      </div>
-                      <div className="truncate text-[11px] text-[var(--color-text-light)]">
-                        {s.position ?? "Nhân viên"}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-                {selected.staff.length === 0 && (
-                  <div className="col-span-full py-8 text-center text-[12.5px] text-[var(--color-text-muted)]">
-                    Chưa có nhân sự trong phòng ban này.
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </>
           ) : (
-            <div className="text-[13px] text-[var(--color-text-muted)]">Chọn một bộ phận để xem chi tiết.</div>
+            <>
+              <div className="mb-3 flex items-center justify-between">
+                <div><div className="flex items-center gap-2 text-[15px] font-semibold"><Users size={17} className="text-[var(--color-accent)]" /> {activeDept.dept}</div><div className="mt-1 text-[12px] text-[var(--color-text-light)]">{activeDept.block} · {activeDept.staff.length} nhân sự</div></div>
+                {canEdit && <button onClick={() => { const entry = departments.find((department) => department.name === activeDept.dept); if (entry) setModal({ id: entry.id, name: entry.name, block: entry.block }); }} className="flex items-center gap-1.5 rounded-[8px] border border-[var(--color-border)] px-2.5 py-1 text-[12px]"><Pencil size={12} /> Sửa phòng ban</button>}
+              </div>
+              <OrgChartCanvas roots={departmentTree?.roots ?? []} unassigned={departmentTree?.unassigned ?? []} onSelectEmployee={(person) => setSelectedEmployee((empData?.data ?? []).find((employee) => employee.id === person.id) ?? null)} onEditEmployee={canEdit ? setEditingPerson : undefined} />
+            </>
           )}
         </div>
       </div>
