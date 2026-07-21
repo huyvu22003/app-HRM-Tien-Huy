@@ -72,3 +72,39 @@ Environment limitation:
 - Run `npm install` after pulling because test dependencies and `exceljs` are present in the lockfile.
 - Run the browser acceptance list in `docs/superpowers/plans/2026-07-19-organization-hierarchy.md`, especially QLSX, popup content, role visibility, and all three edit actions.
 - `.superpowers/` and `.npm-cache/` are local generated directories and must not be committed.
+
+## Compact organization chart redesign
+
+### Delivered behavior
+
+- Reworked the company overview into a compact, responsive organization chart while preserving direct department selection, the department information button, and the existing chart controls.
+- Department charts keep management relationships visible and group regular leaf employees beneath their nearest visible manager. Employee groups open a full-width panel with a searchable employee list.
+- The Phay CNC acceptance case shows 14 staff: root `Nguyễn Văn Thiện` (`Tổ trưởng`), child `Phạm Bá Công` (`Tổ phó`), one connector, and 12 grouped leaf employees. The employee panel lists all 12 employees; searching for `Cao Quốc` filters the list to `Cao Quốc Dũng`. Collapsing all leaves leaves only the root and zero connectors.
+- The final width-containment fix is commit `163a8cd` (`min-w-0` containment). Before the fix, the default viewport overflowed to a `scrollWidth` of 1636 px.
+
+### Browser acceptance evidence
+
+- Default viewport: 1271 px document client width; overview rendered 24 cards, 23 SVG connector paths, and 13 rows including the root. After `163a8cd`, document `scrollWidth == clientWidth` at 1271 px and main `scrollWidth == clientWidth` at 1025 px.
+- Responsive 900 px viewport: document `scrollWidth == clientWidth` at 891 px and main width was 891 px; the overview rendered 24 cards in 9 rows with readable card widths of 240/245 px. The viewport was reset after this check.
+- Phay CNC: verified the 14-person hierarchy, one connector, 12 grouped leaves, full employee-panel list, `Cao Quốc` search result, and collapsed state described above.
+- Verified direct department selection, the information button, and chart controls are present.
+
+### Verification (2026-07-21)
+
+- `npm.cmd test`: passed 20/20 tests in 8 suites; 0 failed, 0 cancelled, 0 skipped, 0 todo. Node emitted one `MODULE_TYPELESS_PACKAGE_JSON` performance warning for `src/lib/org-chart-layout.test.ts`.
+- `npm.cmd run typecheck`: passed with no diagnostics.
+- Backend TypeScript from `api/`: `node.exe ..\\..\\..\\api\\node_modules\\typescript\\bin\\tsc --noEmit --typeRoots ..\\..\\..\\api\\node_modules` passed with no diagnostics. The explicit `typeRoots` points to the available backend dependencies outside this deep worktree.
+- `npm.cmd run lint`: exited successfully with 0 errors and 6 warnings: one `import/no-anonymous-default-export` warning in `api/src/index.ts`, four `@next/next/no-img-element` warnings across `app-shell.tsx`, `dashboard-screen.tsx`, and `login-screen.tsx` (two), and one `react-hooks/exhaustive-deps` warning in `employees-screen.tsx`.
+- `git diff --check`: passed with no whitespace errors before this handoff edit; rerun after the documentation commit as the final cleanliness check.
+
+### Development environment notes
+
+- Turbopack fails on Windows path length in this deep worktree. Browser acceptance therefore used `next dev --webpack`.
+- One Next manifest became corrupted during HMR; deleting the worktree `.next` directory and restarting cleanly resolved it. This was an environment/cache condition, not application behavior.
+- Do not commit generated `.npm-cache/`, `.superpowers/`, or `dev-*.out` / `dev-*.err` files.
+
+### Synchronization before push or PR
+
+- This branch began from ancestor `87ff` plus the design and plan work. GitHub `main` was at `c2c6e13` and already ahead with other commits.
+- Fetch and reconcile the latest `main` before pushing or opening a PR. Do not overwrite concurrent organization-chart files while resolving differences.
+- Preserve the stable `manager_employee_id` hierarchy model and HR/Super authorization checks during reconciliation.
