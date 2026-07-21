@@ -303,6 +303,7 @@ export function DepartmentManagementChart({
   };
 
   const warningRoots = [...tree.additionalRoots, ...tree.unassigned];
+  const isEmpty = allRoots.length === 0;
 
   return (
     <div className="relative">
@@ -357,6 +358,10 @@ export function DepartmentManagementChart({
                 />
               </ul>
             </div>
+          ) : isEmpty ? (
+            <div ref={rootRef} className="relative z-10 mx-auto w-fit rounded-[10px] border border-dashed border-[var(--color-border)] bg-white px-5 py-4 text-[13px] font-medium text-[var(--color-text-muted)]">
+              Chưa có nhân sự trong phòng ban
+            </div>
           ) : (
             <div ref={rootRef} className="relative z-10 mx-auto w-fit rounded-[10px] border border-dashed border-[var(--color-warning)] bg-white px-5 py-4 text-[13px] font-medium text-[var(--color-warning)]">
               Chưa xác định Trưởng phòng
@@ -395,7 +400,10 @@ export function DepartmentManagementChart({
           manager={employeeGroup.person}
           employees={employeeGroup.employees}
           onClose={() => setEmployeeGroupManagerId(null)}
-          onSelectEmployee={onSelectEmployee}
+          onSelectEmployee={(person) => {
+            setEmployeeGroupManagerId(null);
+            onSelectEmployee(person);
+          }}
         />
       )}
     </div>

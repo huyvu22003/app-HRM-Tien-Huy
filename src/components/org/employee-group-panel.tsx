@@ -41,6 +41,7 @@ export function EmployeeGroupPanel({
     return employees.filter((employee) => {
       const searchableValue = [
         employee.name,
+        employee.code ?? "",
         String(employee.id),
         employee.position ?? "",
         employee.phone ?? "",

@@ -4,6 +4,7 @@ export function normalizePersonName(value: string): string {
 
 export interface OrgPerson {
   id: number;
+  code?: string | null;
   name: string;
   departmentId: number | null;
   departmentName: string | null;
@@ -52,6 +53,7 @@ export interface RelationshipUpdate {
 
 export function apiEmployeeToOrgPerson(employee: {
   id: number;
+  code?: string | null;
   name: string;
   department_id: number | null;
   department_name: string | null;
@@ -64,6 +66,7 @@ export function apiEmployeeToOrgPerson(employee: {
 }): OrgPerson {
   return {
     id: employee.id,
+    code: employee.code ?? null,
     name: employee.name,
     departmentId: employee.department_id,
     departmentName: employee.department_name,
@@ -310,6 +313,22 @@ export function filterManagerCandidates(employeeId: number, people: OrgPerson[])
         && isManagementRole(candidate),
     )
     .sort(comparePeople);
+}
+
+export function filterInsertManagerCandidates(
+  employeeId: number,
+  people: OrgPerson[],
+): OrgPerson[] {
+  const byId = new Map(people.map((person) => [person.id, person]));
+  const ancestors = new Set<number>();
+  let managerId = byId.get(employeeId)?.managerEmployeeId ?? null;
+  while (managerId !== null && !ancestors.has(managerId)) {
+    ancestors.add(managerId);
+    managerId = byId.get(managerId)?.managerEmployeeId ?? null;
+  }
+  return filterManagerCandidates(employeeId, people).filter(
+    (candidate) => !ancestors.has(candidate.id),
+  );
 }
 
 export function insertManagerPreview(

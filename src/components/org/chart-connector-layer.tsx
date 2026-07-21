@@ -8,6 +8,7 @@ import {
   useState,
   type RefCallback,
 } from "react";
+import { buildRowAwareConnectorPaths } from "@/lib/org-chart-layout";
 
 export interface ConnectorEdge {
   from: string;
@@ -25,7 +26,10 @@ export function buildElbowPath(from: Point, to: Point): string {
   return `M ${from.x} ${from.y} V ${middleY} H ${to.x} V ${to.y}`;
 }
 
-export function useChartConnectors(edges: ConnectorEdge[]) {
+export function useChartConnectors(
+  edges: ConnectorEdge[],
+  strategy: "elbow" | "rows" = "elbow",
+) {
   const containerRef = useRef<HTMLDivElement>(null);
   const nodesRef = useRef(new Map<string, HTMLElement>());
   const callbacksRef = useRef(new Map<string, RefCallback<HTMLElement>>());
@@ -45,24 +49,54 @@ export function useChartConnectors(edges: ConnectorEdge[]) {
     }
 
     const containerRect = container.getBoundingClientRect();
-    const nextPaths = edgesRef.current.flatMap((edge) => {
-      const fromNode = nodesRef.current.get(edge.from);
-      const toNode = nodesRef.current.get(edge.to);
-      if (!fromNode || !toNode) return [];
+    const nextPaths = strategy === "rows" && edgesRef.current.length > 0
+      ? (() => {
+          const sourceId = edgesRef.current[0].from;
+          const sourceNode = nodesRef.current.get(sourceId);
+          if (!sourceNode) return [];
+          const sourceRect = sourceNode.getBoundingClientRect();
+          const targetRects = edgesRef.current.flatMap((edge) => {
+            const node = nodesRef.current.get(edge.to);
+            if (!node) return [];
+            const rect = node.getBoundingClientRect();
+            return [{
+              key: edge.to,
+              rect: {
+                left: rect.left - containerRect.left,
+                top: rect.top - containerRect.top,
+                width: rect.width,
+                height: rect.height,
+              },
+            }];
+          });
+          return buildRowAwareConnectorPaths(
+            {
+              left: sourceRect.left - containerRect.left,
+              top: sourceRect.top - containerRect.top,
+              width: sourceRect.width,
+              height: sourceRect.height,
+            },
+            targetRects,
+          ).map((path) => ({ from: sourceId, to: path.key, d: path.d }));
+        })()
+      : edgesRef.current.flatMap((edge) => {
+          const fromNode = nodesRef.current.get(edge.from);
+          const toNode = nodesRef.current.get(edge.to);
+          if (!fromNode || !toNode) return [];
 
-      const fromRect = fromNode.getBoundingClientRect();
-      const toRect = toNode.getBoundingClientRect();
-      const from = {
-        x: fromRect.left - containerRect.left + fromRect.width / 2,
-        y: fromRect.bottom - containerRect.top,
-      };
-      const to = {
-        x: toRect.left - containerRect.left + toRect.width / 2,
-        y: toRect.top - containerRect.top,
-      };
+          const fromRect = fromNode.getBoundingClientRect();
+          const toRect = toNode.getBoundingClientRect();
+          const from = {
+            x: fromRect.left - containerRect.left + fromRect.width / 2,
+            y: fromRect.bottom - containerRect.top,
+          };
+          const to = {
+            x: toRect.left - containerRect.left + toRect.width / 2,
+            y: toRect.top - containerRect.top,
+          };
 
-      return [{ ...edge, d: buildElbowPath(from, to) }];
-    });
+          return [{ ...edge, d: buildElbowPath(from, to) }];
+        });
 
     setPaths((current) => {
       if (
@@ -78,7 +112,7 @@ export function useChartConnectors(edges: ConnectorEdge[]) {
       }
       return nextPaths;
     });
-  }, []);
+  }, [strategy]);
 
   const scheduleMeasure = useCallback(() => {
     if (!mountedRef.current) return;

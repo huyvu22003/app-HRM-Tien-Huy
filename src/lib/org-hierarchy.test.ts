@@ -12,6 +12,7 @@ import {
   selectDepartmentHeadId,
   type OrgPerson,
 } from "./org-hierarchy.ts";
+import * as hierarchyModule from "./org-hierarchy.ts";
 
 const people: OrgPerson[] = [
   { id: 1, name: "Mr. Trung", departmentId: 1, departmentName: "Ban Giám đốc", position: "Giám đốc", level: "Ban Giám đốc", managerEmployeeId: null, managerName: null, phone: "0901" },
@@ -217,6 +218,28 @@ describe("company hierarchy", () => {
 });
 
 describe("editing previews", () => {
+  it("excludes current and higher ancestors from insert-manager candidates", () => {
+    const filterInsertManagerCandidates = (
+      hierarchyModule as typeof hierarchyModule & {
+        filterInsertManagerCandidates?: (employeeId: number, people: OrgPerson[]) => OrgPerson[];
+      }
+    ).filterInsertManagerCandidates;
+    assert.ok(filterInsertManagerCandidates, "filterInsertManagerCandidates must be exported");
+
+    const chain: OrgPerson[] = [
+      { ...people[1], id: 20, name: "Head", managerEmployeeId: null },
+      { ...people[3], id: 21, name: "Manager", managerEmployeeId: 20 },
+      { ...people[3], id: 22, name: "Branch", managerEmployeeId: 21 },
+      { ...people[3], id: 23, name: "Sibling manager", managerEmployeeId: 20 },
+      { ...people[3], id: 24, name: "Descendant manager", managerEmployeeId: 22 },
+    ];
+
+    assert.deepEqual(
+      filterInsertManagerCandidates(22, chain).map((person) => person.id),
+      [23],
+    );
+  });
+
   it("filters self, descendants, other departments and non-managers", () => {
     assert.deepEqual(filterManagerCandidates(3, people).map((person) => person.id), [2, 4]);
   });

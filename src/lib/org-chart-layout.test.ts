@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   buildElbowPath,
+  buildRowAwareConnectorPaths,
   getResponsiveColumnCount,
 } from "./org-chart-layout.ts";
 
@@ -38,5 +39,22 @@ describe("getResponsiveColumnCount", () => {
     assert.equal(getResponsiveColumnCount(Number.NaN, 220, 16), 1);
     assert.equal(getResponsiveColumnCount(760, 0, 16), 1);
     assert.equal(getResponsiveColumnCount(760, 220, -220), 1);
+  });
+});
+
+describe("buildRowAwareConnectorPaths", () => {
+  it("routes later rows through the gap beside earlier cards", () => {
+    const paths = buildRowAwareConnectorPaths(
+      { left: 340, top: 20, width: 240, height: 60 },
+      [
+        { key: "a", rect: { left: 40, top: 130, width: 200, height: 60 } },
+        { key: "b", rect: { left: 260, top: 130, width: 200, height: 60 } },
+        { key: "c", rect: { left: 40, top: 206, width: 200, height: 60 } },
+      ],
+    );
+
+    assert.equal(paths.length, 3);
+    assert.equal(paths[2].key, "c");
+    assert.equal(paths[2].d, "M 460 80 V 105 H 28 V 198 H 140 V 206");
   });
 });

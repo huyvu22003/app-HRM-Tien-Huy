@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import {
   apiEmployeeToOrgPerson,
   buildCompactDepartmentHierarchy,
+  filterInsertManagerCandidates,
   filterManagerCandidates,
   isManagementRole,
   selectDepartmentHeadId,
@@ -319,9 +320,10 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
                 <div className="mb-1 text-[11px] uppercase text-[var(--color-text-light)]">Chọn người quản lý đã có trong danh mục</div>
                 <select value={candidateId} onChange={(event) => setCandidateId(event.target.value)} className="h-9 w-full rounded-[8px] border border-[var(--color-border)] px-2.5 text-[12.5px]">
                   <option value="">-- Chọn quản lý --</option>
-                  {filterManagerCandidates(editingPerson.id, people)
-                    .filter((person) => editAction !== "insert"
-                      || person.departmentId === editingPerson.departmentId && isManagementRole(person))
+                  {(editAction === "insert"
+                    ? filterInsertManagerCandidates(editingPerson.id, people)
+                    : filterManagerCandidates(editingPerson.id, people))
+                    .filter((person) => person.departmentId === editingPerson.departmentId && isManagementRole(person))
                     .map((person) => <option key={person.id} value={person.id}>{person.name} — {person.position}</option>)}
                 </select>
               </div>
@@ -442,6 +444,7 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
               </div>
               <CompanyDepartmentChart
                 departments={departments}
+                people={people}
                 onSelectDepartment={(department) => {
                   const entry = structure
                     .flatMap((block) => block.departments.map((item) => ({ ...item, block: block.block })))
