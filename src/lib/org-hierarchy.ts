@@ -209,14 +209,37 @@ export function selectDepartmentHeadId(
   }
 
   const staffIds = new Set(staff.map((person) => person.id));
-  const candidates = staff.filter((person) => {
-    const managerId = resolveLegacyManager(person, staff).id;
-    return isManagementRole(person)
+  const parentById = new Map(
+    staff.map((person) => [person.id, resolveLegacyManager(person, staff).id]),
+  );
+  const roleValue = (person: OrgPerson) =>
+    (person.position ?? person.level ?? "").toLocaleLowerCase("vi");
+  const unparentedDepartmentHeads = staff.filter((person) => {
+    const value = roleValue(person);
+    const managerId = parentById.get(person.id) ?? null;
+    return value.includes("trưởng phòng")
+      && !value.includes("phó trưởng phòng")
       && (managerId === null || !staffIds.has(managerId));
   });
-  const bestRank = Math.min(...candidates.map(roleRank));
-  const bestCandidates = candidates.filter((person) => roleRank(person) === bestRank);
-  return bestCandidates.length === 1 ? bestCandidates[0].id : null;
+  if (unparentedDepartmentHeads.length > 0) {
+    return unparentedDepartmentHeads.length === 1
+      ? unparentedDepartmentHeads[0].id
+      : null;
+  }
+
+  const teamLeaders = staff.filter((person) => roleValue(person).includes("tổ trưởng"));
+  const teamLeaderIds = new Set(teamLeaders.map((person) => person.id));
+  const highestTeamLeaders = teamLeaders.filter((person) => {
+    const seen = new Set<number>([person.id]);
+    let managerId = parentById.get(person.id) ?? null;
+    while (managerId !== null && staffIds.has(managerId) && !seen.has(managerId)) {
+      if (teamLeaderIds.has(managerId)) return false;
+      seen.add(managerId);
+      managerId = parentById.get(managerId) ?? null;
+    }
+    return true;
+  });
+  return highestTeamLeaders.length === 1 ? highestTeamLeaders[0].id : null;
 }
 
 function projectCompactNode(node: OrgNode): CompactOrgNode {

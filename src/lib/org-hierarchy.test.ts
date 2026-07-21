@@ -100,7 +100,7 @@ describe("selectDepartmentHeadId", () => {
     );
   });
 
-  it("falls back to the highest-ranked root management role", () => {
+  it("falls back to the unique unparented department head", () => {
     const roles = [
       person(10, "Trưởng phòng", "Trưởng phòng"),
       person(11, "Phó phòng", "Phó phòng"),
@@ -115,21 +115,35 @@ describe("selectDepartmentHeadId", () => {
     assert.equal(selectDepartmentHeadId(roles, { departmentId: 2 }), 10);
   });
 
-  it("orders fallback roles from department leaders through deputy team leads", () => {
-    const expected = [
-      ["Trưởng phòng", "Phó phòng"],
-      ["Phó phòng", "Quản lý"],
-      ["Quản lý", "Tổ trưởng"],
-      ["Xưởng trưởng", "Trưởng nhóm"],
-      ["Tổ trưởng", "Tổ phó"],
-    ] as const;
+  it("falls back from an unparented department head to the highest team leader", () => {
+    const staff = [
+      person(10, "Top team leader", "Tổ trưởng"),
+      person(11, "Nested team leader", "Tổ trưởng", 2, 10),
+      person(12, "Regular employee", "Nhân viên", 2, 11),
+    ];
 
-    for (const [winner, runnerUp] of expected) {
-      const staff = [
-        person(10, runnerUp, runnerUp),
-        person(11, winner, winner),
-      ];
-      assert.equal(selectDepartmentHeadId(staff, { departmentId: 2 }), 11);
+    assert.equal(selectDepartmentHeadId(staff, { departmentId: 2 }), 10);
+    assert.equal(
+      selectDepartmentHeadId([person(9, "Department head", "Trưởng phòng"), ...staff], {
+        departmentId: 2,
+      }),
+      9,
+    );
+  });
+
+  it("does not promote other management roles as fallback roots", () => {
+    for (const role of [
+      "Phó phòng",
+      "Quản lý",
+      "Xưởng trưởng",
+      "Trưởng nhóm",
+      "Tổ phó",
+    ]) {
+      assert.equal(
+        selectDepartmentHeadId([person(10, role, role)], { departmentId: 2 }),
+        null,
+        role,
+      );
     }
   });
 

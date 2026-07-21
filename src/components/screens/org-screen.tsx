@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { ChevronRight, ChevronDown, Users, Loader2, Plus, Pencil, Trash2, X, Save, Network } from "lucide-react";
 import {
   fetchDepartments,
-  fetchEmployees,
+  fetchAllEmployees,
   createDepartment,
   updateDepartment,
   deleteDepartment,
@@ -120,7 +120,7 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
   const canEdit = role === "super" || role === "hr";
 
   const deptFetcher = useCallback(() => fetchDepartments(), []);
-  const empFetcher = useCallback(() => fetchEmployees({ pageSize: 200 }), []);
+  const empFetcher = useCallback(() => fetchAllEmployees(), []);
 
   const { data: deptData, isLoading: deptLoading, error: deptError, refetch: refetchDepts } = useQuery(deptFetcher);
   const { data: empData, isLoading: empLoading, error: empError, refetch: refetchEmployees } = useQuery(empFetcher);
