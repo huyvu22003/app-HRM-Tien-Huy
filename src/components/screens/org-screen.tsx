@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { ChevronRight, ChevronDown, Users, Loader2, Plus, Pencil, Trash2, X, Save, Network } from "lucide-react";
 import {
   fetchDepartments,
-  fetchEmployees,
+  fetchAllEmployees,
   createDepartment,
   updateDepartment,
   deleteDepartment,
@@ -18,13 +18,15 @@ import { BLOCKS } from "@/lib/data/departments";
 import { cn } from "@/lib/utils";
 import {
   apiEmployeeToOrgPerson,
-  buildCompanyHierarchy,
-  buildDepartmentHierarchy,
+  buildCompactDepartmentHierarchy,
+  filterInsertManagerCandidates,
   filterManagerCandidates,
   isManagementRole,
+  selectDepartmentHeadId,
   type OrgPerson,
 } from "@/lib/org-hierarchy";
-import { OrgChartCanvas } from "@/components/org/org-chart-canvas";
+import { CompanyDepartmentChart } from "@/components/org/company-department-chart";
+import { DepartmentManagementChart } from "@/components/org/department-management-chart";
 import { DepartmentInfoModal, EmployeeQuickProfileModal } from "@/components/org/org-profile-modals";
 
 interface DeptEntry {
@@ -118,10 +120,10 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
   const canEdit = role === "super" || role === "hr";
 
   const deptFetcher = useCallback(() => fetchDepartments(), []);
-  const empFetcher = useCallback(() => fetchEmployees({ pageSize: 200 }), []);
+  const empFetcher = useCallback(() => fetchAllEmployees(), []);
 
-  const { data: deptData, isLoading: deptLoading, refetch: refetchDepts } = useQuery(deptFetcher);
-  const { data: empData, isLoading: empLoading, refetch: refetchEmployees } = useQuery(empFetcher);
+  const { data: deptData, isLoading: deptLoading, error: deptError, refetch: refetchDepts } = useQuery(deptFetcher);
+  const { data: empData, isLoading: empLoading, error: empError, refetch: refetchEmployees } = useQuery(empFetcher);
 
   const isLoading = deptLoading || empLoading;
 
@@ -154,8 +156,7 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
   }, [deptData, empData]);
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [activeDept, setActiveDept] = useState<{ block: string; dept: string; staff: ApiEmployee[] } | null>(null);
-  const [overviewTab, setOverviewTab] = useState<"people" | "departments">("people");
+  const [activeDeptId, setActiveDeptId] = useState<number | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<ApiEmployee | null>(null);
   const [selectedDepartment, setSelectedDepartment] = useState<ApiDepartment | null>(null);
   const [editingPerson, setEditingPerson] = useState<OrgPerson | null>(null);
@@ -165,27 +166,22 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
 
   const people = useMemo(() => (empData?.data ?? []).map(apiEmployeeToOrgPerson), [empData]);
   const departments = useMemo(() => deptData?.data ?? [], [deptData]);
-  const inferredHeads = useMemo(
-    () => departments.map((department) => {
-      const staff = people.filter((person) => person.departmentId === department.id);
-      const explicit = department.head_employee_id;
-      const fallback = staff
-        .filter((person) => person.managerEmployeeId === null && (!person.managerName || person.managerName === "-"))
-        .sort((a, b) => Number(isManagementRole(b)) - Number(isManagementRole(a)))[0]?.id ?? null;
-      return { id: department.id, headEmployeeId: explicit ?? fallback };
-    }),
-    [departments, people],
-  );
-  const companyTree = useMemo(() => buildCompanyHierarchy(people, inferredHeads), [people, inferredHeads]);
-  const activeDepartment = activeDept ? departments.find((department) => department.name === activeDept.dept) ?? null : null;
+  const activeDepartment = activeDeptId === null
+    ? null
+    : departments.find((department) => department.id === activeDeptId) ?? null;
+  const activeDeptEntry = activeDepartment
+    ? structure
+        .flatMap((block) => block.departments.map((department) => ({ ...department, block: block.block })))
+        .find((department) => department.deptId === activeDepartment.id) ?? null
+    : null;
   const departmentTree = useMemo(
     () => activeDepartment
-      ? buildDepartmentHierarchy(people, {
+      ? buildCompactDepartmentHierarchy(people, {
           departmentId: activeDepartment.id,
-          headEmployeeId: inferredHeads.find((department) => department.id === activeDepartment.id)?.headEmployeeId,
+          headEmployeeId: activeDepartment.head_employee_id,
         })
       : null,
-    [activeDepartment, inferredHeads, people],
+    [activeDepartment, people],
   );
 
   function closePanels() {
@@ -240,7 +236,7 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
     setActionError(null);
     try {
       await deleteMut.mutate(deptId);
-      if (activeDept?.dept === deptName) setActiveDept(null);
+      if (activeDeptId === deptId) setActiveDeptId(null);
       refetchDepts();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Xóa phòng ban thất bại");
@@ -256,8 +252,29 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
     );
   }
 
+  if (deptError || empError) {
+    return (
+      <div className="flex min-h-[320px] flex-col items-center justify-center rounded-[14px] border border-[var(--color-border)] bg-white px-6 py-12 text-center">
+        <div className="text-[15px] font-semibold text-[var(--color-text-primary)]">Không thể tải sơ đồ tổ chức</div>
+        <div className="mt-2 max-w-[560px] text-[12.5px] text-[var(--color-danger)]">
+          {[deptError, empError].filter(Boolean).join(" · ")}
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            refetchDepts();
+            refetchEmployees();
+          }}
+          className="mt-4 rounded-[8px] bg-[var(--color-accent)] px-4 py-2 text-[12.5px] font-medium text-white hover:bg-[var(--color-accent-hover)]"
+        >
+          Thử lại
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex min-w-0 flex-col gap-3">
       {modal && (
         <DeptFormModal
           initial={modal}
@@ -277,11 +294,14 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
         <DepartmentInfoModal
           department={selectedDepartment}
           employees={(empData?.data ?? []).filter((employee) => employee.department_id === selectedDepartment.id)}
-          head={(empData?.data ?? []).find((employee) => employee.id === (selectedDepartment.head_employee_id ?? inferredHeads.find((item) => item.id === selectedDepartment.id)?.headEmployeeId))}
+          head={(empData?.data ?? []).find((employee) => employee.id === selectDepartmentHeadId(people, {
+            departmentId: selectedDepartment.id,
+            headEmployeeId: selectedDepartment.head_employee_id,
+          }))}
           onClose={() => setSelectedDepartment(null)}
           onViewDepartment={(id) => {
             const entry = structure.flatMap((block) => block.departments.map((department) => ({ ...department, block: block.block }))).find((department) => department.deptId === id);
-            if (entry) setActiveDept({ block: entry.block, dept: entry.dept, staff: entry.staff });
+            if (entry) setActiveDeptId(entry.deptId);
             setSelectedDepartment(null);
           }}
         />
@@ -301,9 +321,10 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
                 <select value={candidateId} onChange={(event) => setCandidateId(event.target.value)} className="h-9 w-full rounded-[8px] border border-[var(--color-border)] px-2.5 text-[12.5px]">
                   <option value="">-- Chọn quản lý --</option>
                   {(editAction === "insert"
-                    ? people.filter((person) => person.departmentId === editingPerson.departmentId && person.id !== editingPerson.id && isManagementRole(person))
-                    : filterManagerCandidates(editingPerson.id, people)
-                  ).map((person) => <option key={person.id} value={person.id}>{person.name} — {person.position}</option>)}
+                    ? filterInsertManagerCandidates(editingPerson.id, people)
+                    : filterManagerCandidates(editingPerson.id, people))
+                    .filter((person) => person.departmentId === editingPerson.departmentId && isManagementRole(person))
+                    .map((person) => <option key={person.id} value={person.id}>{person.name} — {person.position}</option>)}
                 </select>
               </div>
             )}
@@ -337,13 +358,13 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
+      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
         <div className="rounded-[14px] border border-[var(--color-border)] bg-white p-[14px]">
           <div className="mb-2 text-[13px] font-semibold text-[var(--color-text-primary)]">Cơ cấu tổ chức</div>
           <div className="flex flex-col gap-1">
             <button
-              onClick={() => { setActiveDept(null); closePanels(); }}
-              className={cn("mb-1 flex w-full items-center gap-2 rounded-[8px] px-2 py-2 text-left text-[13px] font-medium", !activeDept ? "bg-[var(--color-accent)] text-white" : "text-[var(--color-text-primary)] hover:bg-[var(--color-page-bg)]")}
+              onClick={() => { setActiveDeptId(null); closePanels(); }}
+              className={cn("mb-1 flex w-full items-center gap-2 rounded-[8px] px-2 py-2 text-left text-[13px] font-medium", !activeDepartment ? "bg-[var(--color-accent)] text-white" : "text-[var(--color-text-primary)] hover:bg-[var(--color-page-bg)]")}
             >
               <Network size={15} /> Sơ đồ tổng
             </button>
@@ -369,13 +390,13 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
                           key={d.dept}
                           className={cn(
                             "group flex items-center justify-between rounded-[8px] px-2 py-1.5 text-[12.5px]",
-                            activeDept?.dept === d.dept
+                            activeDepartment?.id === d.deptId
                               ? "bg-[var(--color-accent)] text-white"
                               : "text-[var(--color-text-muted)] hover:bg-[var(--color-page-bg)]"
                           )}
                         >
                           <button
-                            onClick={() => { setActiveDept({ block: b.block, dept: d.dept, staff: d.staff }); closePanels(); }}
+                            onClick={() => { setActiveDeptId(d.deptId); closePanels(); }}
                             className="flex min-w-0 flex-1 items-center justify-between text-left"
                           >
                             <span className="truncate">{d.dept}</span>
@@ -388,7 +409,7 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
                                 title="Sửa"
                                 className={cn(
                                   "rounded p-0.5",
-                                  activeDept?.dept === d.dept ? "hover:bg-white/20" : "hover:bg-[var(--color-border-light)]"
+                                  activeDepartment?.id === d.deptId ? "hover:bg-white/20" : "hover:bg-[var(--color-border-light)]"
                                 )}
                               >
                                 <Pencil size={12} />
@@ -398,7 +419,7 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
                                 title="Xóa"
                                 className={cn(
                                   "rounded p-0.5",
-                                  activeDept?.dept === d.dept ? "hover:bg-white/20" : "hover:bg-[var(--color-border-light)] hover:text-[var(--color-danger)]"
+                                  activeDepartment?.id === d.deptId ? "hover:bg-white/20" : "hover:bg-[var(--color-border-light)] hover:text-[var(--color-danger)]"
                                 )}
                               >
                                 <Trash2 size={12} />
@@ -415,42 +436,42 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
           </div>
         </div>
 
-        <div className="rounded-[14px] border border-[var(--color-border)] bg-white p-[18px]">
-          {!activeDept ? (
+        <div className="min-w-0 rounded-[14px] border border-[var(--color-border)] bg-white p-[18px]">
+          {!activeDepartment ? (
             <>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div><div className="flex items-center gap-2 text-[15px] font-semibold"><Network size={17} className="text-[var(--color-accent)]" /> Sơ đồ tổng</div><div className="mt-1 text-[12px] text-[var(--color-text-light)]">{people.length} nhân sự · {departments.length} phòng ban</div></div>
-                <div className="flex rounded-[8px] bg-[var(--color-page-bg)] p-1">
-                  <button onClick={() => { setOverviewTab("people"); closePanels(); }} className={cn("rounded-[6px] px-3 py-1.5 text-[12px]", overviewTab === "people" ? "bg-white font-medium shadow-sm" : "text-[var(--color-text-muted)]")}>Nhân sự toàn công ty</button>
-                  <button onClick={() => { setOverviewTab("departments"); closePanels(); }} className={cn("rounded-[6px] px-3 py-1.5 text-[12px]", overviewTab === "departments" ? "bg-white font-medium shadow-sm" : "text-[var(--color-text-muted)]")}>Phòng ban</button>
-                </div>
               </div>
-              {overviewTab === "people" ? (
-                <OrgChartCanvas roots={companyTree.roots} unassigned={companyTree.unassigned} onSelectEmployee={(person) => setSelectedEmployee((empData?.data ?? []).find((employee) => employee.id === person.id) ?? null)} onEditEmployee={canEdit ? setEditingPerson : undefined} showManagementPhones />
-              ) : (
-                <div className="min-h-[420px] overflow-x-auto rounded-[10px] bg-[var(--color-page-bg)] p-6">
-                  <div className="mx-auto flex min-w-[720px] flex-col items-center">
-                    <button onClick={() => setSelectedDepartment(departments.find((department) => department.name === "Ban Giám đốc") ?? null)} className="rounded-[12px] border border-[var(--color-accent)] bg-white px-8 py-4 text-[13px] font-semibold shadow-sm">Ban Giám đốc</button>
-                    <div className="h-8 border-l border-[var(--color-border)]" />
-                    <div className="mb-0 w-4/5 border-t border-[var(--color-border)]" />
-                    <div className="grid w-full grid-cols-3 gap-3 pt-4 xl:grid-cols-4">
-                      {departments.filter((department) => department.name !== "Ban Giám đốc").map((department) => (
-                        <button key={department.id} onClick={() => setSelectedDepartment(department)} className="rounded-[10px] border border-[var(--color-border)] bg-white p-3 text-left hover:border-[var(--color-accent)]">
-                          <div className="truncate text-[12.5px] font-medium">{department.name}</div><div className="mt-1 text-[10.5px] text-[var(--color-text-light)]">{department.block} · {department.employee_count} nhân sự</div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
+              <CompanyDepartmentChart
+                departments={departments}
+                people={people}
+                onSelectDepartment={(department) => {
+                  const entry = structure
+                    .flatMap((block) => block.departments.map((item) => ({ ...item, block: block.block })))
+                    .find((item) => item.deptId === department.id);
+                  if (entry) {
+                    setActiveDeptId(entry.deptId);
+                  }
+                  closePanels();
+                }}
+              />
             </>
           ) : (
             <>
-              <div className="mb-3 flex items-center justify-between">
-                <div><div className="flex items-center gap-2 text-[15px] font-semibold"><Users size={17} className="text-[var(--color-accent)]" /> {activeDept.dept}</div><div className="mt-1 text-[12px] text-[var(--color-text-light)]">{activeDept.block} · {activeDept.staff.length} nhân sự</div></div>
-                {canEdit && <button onClick={() => { const entry = departments.find((department) => department.name === activeDept.dept); if (entry) setModal({ id: entry.id, name: entry.name, block: entry.block }); }} className="flex items-center gap-1.5 rounded-[8px] border border-[var(--color-border)] px-2.5 py-1 text-[12px]"><Pencil size={12} /> Sửa phòng ban</button>}
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div><div className="flex items-center gap-2 text-[15px] font-semibold"><Users size={17} className="text-[var(--color-accent)]" /> {activeDepartment.name}</div><div className="mt-1 text-[12px] text-[var(--color-text-light)]">{activeDeptEntry?.block ?? activeDepartment.block} · {activeDeptEntry?.staff.length ?? 0} nhân sự</div></div>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button type="button" onClick={() => setSelectedDepartment(activeDepartment)} className="rounded-[8px] border border-[var(--color-border)] px-2.5 py-1 text-[12px]">Thông tin phòng ban</button>
+                  {canEdit && <button onClick={() => setModal({ id: activeDepartment.id, name: activeDepartment.name, block: activeDepartment.block })} className="flex items-center gap-1.5 rounded-[8px] border border-[var(--color-border)] px-2.5 py-1 text-[12px]"><Pencil size={12} /> Sửa phòng ban</button>}
+                </div>
               </div>
-              <OrgChartCanvas roots={departmentTree?.roots ?? []} unassigned={departmentTree?.unassigned ?? []} onSelectEmployee={(person) => setSelectedEmployee((empData?.data ?? []).find((employee) => employee.id === person.id) ?? null)} onEditEmployee={canEdit ? setEditingPerson : undefined} />
+              {departmentTree && (
+                <DepartmentManagementChart
+                  tree={departmentTree}
+                  onSelectEmployee={(person) => setSelectedEmployee((empData?.data ?? []).find((employee) => employee.id === person.id) ?? null)}
+                  onEditEmployee={canEdit ? setEditingPerson : undefined}
+                />
+              )}
             </>
           )}
         </div>

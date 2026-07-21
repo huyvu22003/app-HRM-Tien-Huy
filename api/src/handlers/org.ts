@@ -73,6 +73,7 @@ export async function updateHierarchy(
     if (!candidate || !branch) return error("Không tìm thấy nhân viên", 404);
     if (!isManager(candidate)) return error("Chức vụ được chọn không thuộc cấp quản lý", 400);
     if (candidate.department_id !== branch.department_id) return error("Người quản lý phải cùng phòng ban", 400);
+    validateManager(candidate, branch.manager_employee_id);
     validateManager(branch, candidate.id);
     updates.push(
       { employeeId: candidate.id, managerEmployeeId: branch.manager_employee_id },

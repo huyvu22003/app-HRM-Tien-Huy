@@ -27,6 +27,11 @@ export function getEmployeePhoto(id: number | string): string | null {
   return readMap()[String(id)] ?? null;
 }
 
+export function getEmployeePhotos(ids: ReadonlyArray<number | string>): Map<number | string, string | null> {
+  const photos = readMap();
+  return new Map(ids.map((id) => [id, photos[String(id)] ?? null]));
+}
+
 export function setEmployeePhoto(id: number | string, dataUrl: string | null): void {
   try {
     const map = readMap();

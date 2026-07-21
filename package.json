@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test --experimental-strip-types --test-isolation=none src/lib/org-hierarchy.test.ts",
+    "test": "node --test --experimental-strip-types --test-isolation=none src/lib/org-hierarchy.test.ts src/lib/org-chart-layout.test.ts && vitest run src/lib/api.test.ts api/src/handlers/org.test.ts src/components/org/compact-org-chart.test.tsx",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },

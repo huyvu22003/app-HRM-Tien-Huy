@@ -4,6 +4,7 @@ export function normalizePersonName(value: string): string {
 
 export interface OrgPerson {
   id: number;
+  code?: string | null;
   name: string;
   departmentId: number | null;
   departmentName: string | null;
@@ -31,6 +32,20 @@ export interface OrgTreeResult {
   warnings: OrgWarning[];
 }
 
+export interface CompactOrgNode {
+  person: OrgPerson;
+  children: CompactOrgNode[];
+  employees: OrgPerson[];
+  descendantIds: number[];
+}
+
+export interface CompactDepartmentTreeResult {
+  root: CompactOrgNode | null;
+  additionalRoots: CompactOrgNode[];
+  unassigned: CompactOrgNode[];
+  warnings: OrgWarning[];
+}
+
 export interface RelationshipUpdate {
   employeeId: number;
   managerEmployeeId: number | null;
@@ -38,6 +53,7 @@ export interface RelationshipUpdate {
 
 export function apiEmployeeToOrgPerson(employee: {
   id: number;
+  code?: string | null;
   name: string;
   department_id: number | null;
   department_name: string | null;
@@ -50,6 +66,7 @@ export function apiEmployeeToOrgPerson(employee: {
 }): OrgPerson {
   return {
     id: employee.id,
+    code: employee.code ?? null,
     name: employee.name,
     departmentId: employee.department_id,
     departmentName: employee.department_name,
@@ -66,18 +83,19 @@ export function isManagementRole(person: Pick<OrgPerson, "position" | "level">):
   return /(giám đốc|trưởng phòng|phó phòng|quản lý|xưởng trưởng|tổ trưởng|tổ phó|trưởng nhóm)/.test(value);
 }
 
+function roleRank(person: Pick<OrgPerson, "position" | "level">): number {
+  const value = `${person.position ?? ""} ${person.level ?? ""}`.toLocaleLowerCase("vi");
+  if (value.includes("giám đốc")) return 0;
+  if (value.includes("trưởng phòng")) return 1;
+  if (value.includes("phó phòng")) return 2;
+  if (value.includes("quản lý") || value.includes("xưởng trưởng")) return 3;
+  if (value.includes("tổ trưởng") || value.includes("trưởng nhóm")) return 4;
+  if (value.includes("tổ phó")) return 5;
+  return 10;
+}
+
 function comparePeople(a: OrgPerson, b: OrgPerson): number {
-  const rank = (person: OrgPerson) => {
-    const value = `${person.position ?? ""} ${person.level ?? ""}`.toLocaleLowerCase("vi");
-    if (value.includes("giám đốc")) return 0;
-    if (value.includes("trưởng phòng")) return 1;
-    if (value.includes("phó phòng")) return 2;
-    if (value.includes("quản lý") || value.includes("xưởng trưởng")) return 3;
-    if (value.includes("tổ trưởng") || value.includes("trưởng nhóm")) return 4;
-    if (value.includes("tổ phó")) return 5;
-    return 10;
-  };
-  return rank(a) - rank(b)
+  return roleRank(a) - roleRank(b)
     || (a.position ?? "").localeCompare(b.position ?? "", "vi")
     || a.name.localeCompare(b.name, "vi")
     || a.id - b.id;
@@ -179,6 +197,94 @@ export function buildDepartmentHierarchy(
   );
 }
 
+export function selectDepartmentHeadId(
+  allPeople: OrgPerson[],
+  department: { departmentId: number; headEmployeeId?: number | null },
+): number | null {
+  const staff = allPeople.filter(
+    (person) => person.departmentId === department.departmentId,
+  );
+  if (staff.some((person) => person.id === department.headEmployeeId)) {
+    return department.headEmployeeId ?? null;
+  }
+
+  const staffIds = new Set(staff.map((person) => person.id));
+  const parentById = new Map(
+    staff.map((person) => [person.id, resolveLegacyManager(person, staff).id]),
+  );
+  const roleValue = (person: OrgPerson) =>
+    (person.position ?? person.level ?? "").toLocaleLowerCase("vi");
+  const unparentedDepartmentHeads = staff.filter((person) => {
+    const value = roleValue(person);
+    const managerId = parentById.get(person.id) ?? null;
+    return value.includes("trưởng phòng")
+      && !value.includes("phó trưởng phòng")
+      && (managerId === null || !staffIds.has(managerId));
+  });
+  if (unparentedDepartmentHeads.length > 0) {
+    return unparentedDepartmentHeads.length === 1
+      ? unparentedDepartmentHeads[0].id
+      : null;
+  }
+
+  const teamLeaders = staff.filter((person) => roleValue(person).includes("tổ trưởng"));
+  const teamLeaderIds = new Set(teamLeaders.map((person) => person.id));
+  const highestTeamLeaders = teamLeaders.filter((person) => {
+    const seen = new Set<number>([person.id]);
+    let managerId = parentById.get(person.id) ?? null;
+    while (managerId !== null && staffIds.has(managerId) && !seen.has(managerId)) {
+      if (teamLeaderIds.has(managerId)) return false;
+      seen.add(managerId);
+      managerId = parentById.get(managerId) ?? null;
+    }
+    return true;
+  });
+  return highestTeamLeaders.length === 1 ? highestTeamLeaders[0].id : null;
+}
+
+function projectCompactNode(node: OrgNode): CompactOrgNode {
+  const children: CompactOrgNode[] = [];
+  const employees: OrgPerson[] = [];
+
+  for (const child of node.children) {
+    if (isManagementRole(child.person) || child.children.length > 0) {
+      children.push(projectCompactNode(child));
+    } else {
+      employees.push(child.person);
+    }
+  }
+
+  return {
+    person: node.person,
+    children,
+    employees,
+    descendantIds: [...node.descendantIds],
+  };
+}
+
+export function buildCompactDepartmentHierarchy(
+  allPeople: OrgPerson[],
+  department: { departmentId: number; headEmployeeId?: number | null },
+): CompactDepartmentTreeResult {
+  const headEmployeeId = selectDepartmentHeadId(allPeople, department);
+  const hierarchy = buildDepartmentHierarchy(allPeople, {
+    departmentId: department.departmentId,
+    headEmployeeId,
+  });
+  const rootNode = headEmployeeId === null
+    ? null
+    : hierarchy.roots.find((node) => node.person.id === headEmployeeId) ?? null;
+
+  return {
+    root: rootNode ? projectCompactNode(rootNode) : null,
+    additionalRoots: hierarchy.roots
+      .filter((node) => node !== rootNode)
+      .map(projectCompactNode),
+    unassigned: hierarchy.unassigned.map(projectCompactNode),
+    warnings: hierarchy.warnings,
+  };
+}
+
 export function buildCompanyHierarchy(
   people: OrgPerson[],
   departments: Array<{ id: number; headEmployeeId?: number | null }>,
@@ -230,6 +336,22 @@ export function filterManagerCandidates(employeeId: number, people: OrgPerson[])
         && isManagementRole(candidate),
     )
     .sort(comparePeople);
+}
+
+export function filterInsertManagerCandidates(
+  employeeId: number,
+  people: OrgPerson[],
+): OrgPerson[] {
+  const byId = new Map(people.map((person) => [person.id, person]));
+  const ancestors = new Set<number>();
+  let managerId = byId.get(employeeId)?.managerEmployeeId ?? null;
+  while (managerId !== null && !ancestors.has(managerId)) {
+    ancestors.add(managerId);
+    managerId = byId.get(managerId)?.managerEmployeeId ?? null;
+  }
+  return filterManagerCandidates(employeeId, people).filter(
+    (candidate) => !ancestors.has(candidate.id),
+  );
 }
 
 export function insertManagerPreview(

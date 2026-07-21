@@ -233,13 +233,37 @@ export function fetchEmployees(params?: {
   if (params?.search) q.set("search", params.search);
   if (params?.departmentId) q.set("departmentId", String(params.departmentId));
   const qs = q.toString();
-  return api.get<{
-    data: ApiEmployee[];
-    total: number;
-    page: number;
-    pageSize: number;
-    totalPages: number;
-  }>(`/employees${qs ? `?${qs}` : ""}`);
+  return api.get<ApiEmployeePage>(`/employees${qs ? `?${qs}` : ""}`);
+}
+
+export interface ApiEmployeePage {
+  data: ApiEmployee[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export async function fetchAllEmployees(
+  fetchPage: typeof fetchEmployees = fetchEmployees,
+  pageSize = 200,
+): Promise<ApiEmployeePage> {
+  const firstPage = await fetchPage({ page: 1, pageSize });
+  const responsePageSize = firstPage.pageSize > 0 ? firstPage.pageSize : pageSize;
+  const pageCount = Number.isFinite(firstPage.total) && firstPage.total > 0
+    ? Math.max(1, Math.ceil(firstPage.total / responsePageSize))
+    : 1;
+  const pages = [firstPage];
+  for (let page = 2; page <= pageCount; page += 1) {
+    pages.push(await fetchPage({ page, pageSize }));
+  }
+  return {
+    ...firstPage,
+    data: pages.flatMap((result) => result.data),
+    page: 1,
+    pageSize: responsePageSize,
+    totalPages: pageCount,
+  };
 }
 
 export function fetchEmployee(id: number | string) {
