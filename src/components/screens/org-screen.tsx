@@ -273,7 +273,7 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex min-w-0 flex-col gap-3">
       {modal && (
         <DeptFormModal
           initial={modal}
@@ -356,7 +356,7 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
+      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
         <div className="rounded-[14px] border border-[var(--color-border)] bg-white p-[14px]">
           <div className="mb-2 text-[13px] font-semibold text-[var(--color-text-primary)]">Cơ cấu tổ chức</div>
           <div className="flex flex-col gap-1">
@@ -434,7 +434,7 @@ export function OrgScreen({ onNavigate }: { onNavigate: (screen: string, id?: st
           </div>
         </div>
 
-        <div className="rounded-[14px] border border-[var(--color-border)] bg-white p-[18px]">
+        <div className="min-w-0 rounded-[14px] border border-[var(--color-border)] bg-white p-[18px]">
           {!activeDepartment ? (
             <>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
