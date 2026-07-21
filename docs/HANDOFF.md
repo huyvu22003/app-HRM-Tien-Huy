@@ -47,7 +47,7 @@ Primary files:
 - `api/src/handlers/employees.ts`
 - `db/migrations/004_employee_manager_relationship.sql`
 
-## Verification
+## Earlier hierarchy verification (2026-07-19, before compact redesign)
 
 Completed:
 
@@ -57,12 +57,12 @@ Completed:
 - Task-file ESLint: passed with no task-related warning; only the pre-existing anonymous-default-export warning remains in `api/src/index.ts` during the broader API lint.
 - `next build`: application bundle compiled successfully.
 
-Environment limitation:
+Historical environment limitation for that verification run:
 
-- The managed Windows sandbox blocks child process creation with `spawn EPERM`.
-- Vitest/esbuild cannot start inside this sandbox, so core logic tests use Node 24's native test runner with `--test-isolation=none`.
-- `next build` reaches “Compiled successfully” and then is blocked when Next starts its TypeScript worker. TypeScript was therefore verified separately with `tsc --noEmit`.
-- The dev server is blocked by the same child-process restriction, so browser acceptance must be run in a normal terminal after checkout.
+- During the 2026-07-19 managed-sandbox run, child-process creation failed with `spawn EPERM`.
+- In that earlier environment, Vitest/esbuild could not start, so core logic tests used Node 24's native test runner with `--test-isolation=none`.
+- In that earlier run, `next build` reached “Compiled successfully” and was then blocked when Next started its TypeScript worker. TypeScript was verified separately with `tsc --noEmit`.
+- These historical limitations do not describe the later compact-redesign browser acceptance; current development-server behavior is documented below.
 
 ## Continuation notes
 
@@ -101,7 +101,7 @@ Environment limitation:
 
 ### Development environment notes
 
-- Turbopack fails on Windows path length in this deep worktree. Browser acceptance therefore used `next dev --webpack`.
+- Turbopack fails on Windows path length in this deep worktree, but `next dev --webpack` works and was used successfully for browser acceptance.
 - One Next manifest became corrupted during HMR; deleting the worktree `.next` directory and restarting cleanly resolved it. This was an environment/cache condition, not application behavior.
 - Do not commit generated `.npm-cache/`, `.superpowers/`, or `dev-*.out` / `dev-*.err` files.
 
