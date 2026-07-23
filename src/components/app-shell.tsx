@@ -217,7 +217,7 @@ export function AppShell({
       </aside>
 
       {/* Main column */}
-      <div className="flex min-h-screen flex-1 flex-col">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         <header className="flex h-16 shrink-0 items-center justify-between border-b border-[var(--color-border)] bg-white px-4 lg:px-6">
           <div className="flex items-center gap-3">
             <button
@@ -322,7 +322,7 @@ export function AppShell({
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto bg-[var(--color-page-bg)] p-6">{children}</main>
+        <main className="min-w-0 flex-1 overflow-y-auto bg-[var(--color-page-bg)] p-6">{children}</main>
       </div>
     </div>
   );
