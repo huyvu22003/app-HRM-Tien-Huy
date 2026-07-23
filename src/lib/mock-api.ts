@@ -8,6 +8,7 @@ import {
   removeManagerPreview,
   type OrgPerson,
 } from "@/lib/org-hierarchy";
+import { getEffectiveComp, getLatestRaise } from "@/lib/salary-history";
 
 function toApiEmployee(e: (typeof EMPLOYEES)[number], idx: number) {
   return {
@@ -241,7 +242,9 @@ const STD_DAYS = 26;
 
 function mockSalaryRows() {
   return EMPLOYEES.slice(0, 20).map((e, i) => {
-    const base = e.baseSalary || 8_000_000;
+    // Chỉ lấy mức lương của lần điều chỉnh mới nhất để tính lương.
+    const eff = getEffectiveComp(e.code, e.baseSalary || 8_000_000, e.allowance || 300_000);
+    const base = eff.baseSalary || 8_000_000;
     return {
       employee_id: i + 1,
       code: e.code,
@@ -249,7 +252,7 @@ function mockSalaryRows() {
       department_id: DEPARTMENTS.findIndex((d) => d.name === e.department) + 1,
       department_name: e.department,
       base_salary: base,
-      allowance: e.allowance || 300_000,
+      allowance: eff.allowance || 300_000,
       responsibility_salary: 0,
       gas_allowance: 200_000,
       attendance_bonus: 450_000,
@@ -625,14 +628,18 @@ const MOCK_ROUTES: MockRoute[] = [
       return {
         employee: emp ?? baseEmployees[0],
         compensation: src
-          ? {
-              id: 1,
-              employee_id: id,
-              base_salary: src.baseSalary,
-              allowance: src.allowance,
-              dependents: src.dependents,
-              effective_from: "2026-01-01",
-            }
+          ? (() => {
+              const eff = getEffectiveComp(src.code, src.baseSalary, src.allowance);
+              const latest = getLatestRaise(src.code);
+              return {
+                id: 1,
+                employee_id: id,
+                base_salary: eff.baseSalary,
+                allowance: eff.allowance,
+                dependents: src.dependents,
+                effective_from: latest?.effectiveDate ?? "2026-01-01",
+              };
+            })()
           : null,
         insurance: src
           ? {
