@@ -11,6 +11,7 @@ const HIDE_PREFIX = "hrm_cols_";
 const ORDER_PREFIX = "hrm_colorder_";
 const LOCK_PREFIX = "hrm_collock_";
 const LABEL_PREFIX = "hrm_collabels_";
+const WIDTH_PREFIX = "hrm_colwidth_";
 
 export interface ColumnDef<Row> {
   id: string;
@@ -84,6 +85,26 @@ export function useColumnPrefs<Row>(tableKey: string, columns: ColumnDef<Row>[])
   const [labels, setLabels] = useState<Record<string, string>>(() =>
     readJson<Record<string, string>>(LABEL_PREFIX + tableKey, {}),
   );
+  const [widths, setWidths] = useState<Record<string, number>>(() =>
+    readJson<Record<string, number>>(WIDTH_PREFIX + tableKey, {}),
+  );
+
+  const setColumnWidth = useCallback(
+    (id: string, px: number | null) => {
+      setWidths((prev) => {
+        const next = { ...prev };
+        if (px && px > 0) next[id] = Math.round(px);
+        else delete next[id];
+        try {
+          window.localStorage.setItem(WIDTH_PREFIX + tableKey, JSON.stringify(next));
+        } catch {
+          /* ignore */
+        }
+        return next;
+      });
+    },
+    [tableKey],
+  );
 
   const renameColumn = useCallback(
     (id: string, label: string) => {
@@ -144,8 +165,10 @@ export function useColumnPrefs<Row>(tableKey: string, columns: ColumnDef<Row>[])
     setOrderState([]);
     persistOrder([]);
     setLabels({});
+    setWidths({});
     try {
       window.localStorage.removeItem(LABEL_PREFIX + tableKey);
+      window.localStorage.removeItem(WIDTH_PREFIX + tableKey);
     } catch {
       /* ignore */
     }
@@ -197,5 +220,7 @@ export function useColumnPrefs<Row>(tableKey: string, columns: ColumnDef<Row>[])
     toggleReorderLock,
     moveColumn,
     renameColumn,
+    widths,
+    setColumnWidth,
   };
 }
