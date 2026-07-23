@@ -2,21 +2,17 @@
 
 import { useMemo, useState } from "react";
 import {
-  Scale,
-  Search,
-  Filter,
-  ChevronDown,
   CheckCircle2,
   AlertTriangle,
   XCircle,
-  ArrowUpDown,
   Download,
-  Eye,
   X,
 } from "lucide-react";
 import { cn, formatMoney, seededRandom } from "@/lib/utils";
 import { EMPLOYEES } from "@/lib/data/employees";
 import { exportStyledExcel } from "@/lib/excel-export";
+import { type ColumnDef } from "@/lib/table-prefs";
+import { DataTable } from "@/components/ui/data-table";
 
 type ReconcileStatus = "matched" | "variance" | "missing";
 
@@ -140,64 +136,102 @@ function StatCard({ label, value, sub, color }: { label: string; value: string; 
   );
 }
 
+const PAYROLL_COLUMNS: ColumnDef<PayrollRow>[] = [
+  {
+    id: "code",
+    label: "Mã NV",
+    locked: true,
+    cell: (r) => <span className="font-mono text-[11.5px] text-[var(--color-text-muted)]">{r.code}</span>,
+    exportValue: (r) => r.code,
+  },
+  {
+    id: "name",
+    label: "Họ tên",
+    cell: (r) => <span className="font-medium text-[var(--color-text-primary)]">{r.name}</span>,
+    exportValue: (r) => r.name,
+  },
+  {
+    id: "department",
+    label: "Bộ phận",
+    cell: (r) => <span className="text-[var(--color-text-secondary)]">{r.department}</span>,
+    exportValue: (r) => r.department,
+  },
+  {
+    id: "systemNet",
+    label: "Hệ thống",
+    align: "right",
+    cell: (r) => <span className="font-mono">{formatMoney(r.systemNet)}</span>,
+    exportValue: (r) => r.systemNet,
+    exportFormat: "money",
+  },
+  {
+    id: "bankAmount",
+    label: "Ngân hàng",
+    align: "right",
+    cell: (r) => <span className="font-mono">{r.bankAmount > 0 ? formatMoney(r.bankAmount) : "—"}</span>,
+    exportValue: (r) => r.bankAmount,
+    exportFormat: "money",
+  },
+  {
+    id: "variance",
+    label: "Chênh lệch",
+    align: "right",
+    cell: (r) => (
+      <span
+        className={cn(
+          "font-mono font-medium",
+          r.variance > 0 && "text-emerald-600",
+          r.variance < 0 && "text-red-600",
+          r.variance === 0 && "text-[var(--color-text-muted)]",
+        )}
+      >
+        {r.variance === 0 ? "0 ₫" : `${r.variance > 0 ? "+" : ""}${formatMoney(r.variance)}`}
+      </span>
+    ),
+    exportValue: (r) => r.variance,
+    exportFormat: "money",
+  },
+  {
+    id: "status",
+    label: "Trạng thái",
+    align: "center",
+    cell: (r) => {
+      const cfg = STATUS_CONFIG[r.status];
+      const Icon = cfg.icon;
+      return (
+        <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-medium", cfg.color)}>
+          <Icon size={11} />
+          {cfg.label}
+        </span>
+      );
+    },
+    exportValue: (r) => STATUS_CONFIG[r.status].label,
+  },
+  {
+    id: "bankRef",
+    label: "Mã tham chiếu",
+    align: "center",
+    cell: (r) => <span className="font-mono text-[10.5px] text-[var(--color-text-lighter)]">{r.bankRef || "—"}</span>,
+    exportValue: (r) => r.bankRef || "-",
+  },
+];
+
 export function PayrollScreen() {
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [showStatusDrop, setShowStatusDrop] = useState(false);
-  const [sortBy, setSortBy] = useState<"name" | "variance">("name");
   const [detailRow, setDetailRow] = useState<PayrollRow | null>(null);
-  const [deptFilter, setDeptFilter] = useState("");
-  const [showDeptDrop, setShowDeptDrop] = useState(false);
 
   const data = useMemo(() => generateReconcileData(), []);
-  const departments = useMemo(() => [...new Set(data.map((r) => r.department))].sort(), [data]);
 
-  const filtered = useMemo(() => {
-    let list = data;
-    if (search) {
-      const q = search.toLowerCase();
-      list = list.filter((r) => r.name.toLowerCase().includes(q) || r.code.includes(q));
-    }
-    if (statusFilter) {
-      list = list.filter((r) => r.status === statusFilter);
-    }
-    if (deptFilter) {
-      list = list.filter((r) => r.department === deptFilter);
-    }
-    if (sortBy === "variance") {
-      list = [...list].sort((a, b) => Math.abs(b.variance) - Math.abs(a.variance));
-    }
-    return list;
-  }, [data, search, statusFilter, deptFilter, sortBy]);
-
-  async function handleExport() {
-    const sorted = [...filtered].sort(
+  async function handleExport(exportRows: PayrollRow[], exportCols: ColumnDef<PayrollRow>[]) {
+    const cols = exportCols.filter((c) => c.exportValue);
+    const sorted = [...exportRows].sort(
       (a, b) => a.department.localeCompare(b.department, "vi") || a.code.localeCompare(b.code, "vi"),
     );
     await exportStyledExcel({
       filename: `doi-chieu-payroll-2026-06`,
       title: "ĐỐI CHIẾU PAYROLL — KỲ 06/2026",
       meta: [`Ngày xuất: ${new Date().toLocaleDateString("vi-VN")}`, `Số lượng: ${sorted.length} nhân viên`],
-      columns: [
-        { label: "Mã NV" },
-        { label: "Họ tên" },
-        { label: "Bộ phận" },
-        { label: "Hệ thống", align: "right", format: "money" },
-        { label: "Ngân hàng", align: "right", format: "money" },
-        { label: "Chênh lệch", align: "right", format: "money" },
-        { label: "Trạng thái" },
-        { label: "Mã tham chiếu" },
-      ],
-      rows: sorted.map((r) => [
-        r.code,
-        r.name,
-        r.department,
-        r.systemNet,
-        r.bankAmount,
-        r.variance,
-        STATUS_CONFIG[r.status].label,
-        r.bankRef || "-",
-      ]),
+      columns: cols.map((c) => ({ label: c.label, align: c.align, format: c.exportFormat })),
+      rows: sorted.map((r, i) => cols.map((c) => c.exportValue!(r, i))),
     });
   }
 
@@ -217,22 +251,11 @@ export function PayrollScreen() {
     <div className="flex flex-col gap-4">
       {/* Period header */}
       <div className="rounded-[14px] border border-[var(--color-border)] bg-white p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-[13px] font-semibold text-[var(--color-text-primary)]">
-              Đối chiếu Payroll — Kỳ 06/2026
-            </div>
-            <div className="mt-0.5 text-[12px] text-[var(--color-text-muted)]">
-              So sánh lương tính toán hệ thống với số thực chi qua ngân hàng
-            </div>
-          </div>
-          <button
-            onClick={handleExport}
-            className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition hover:border-[var(--color-primary)]"
-          >
-            <Download size={13} />
-            Xuất Excel
-          </button>
+        <div className="text-[13px] font-semibold text-[var(--color-text-primary)]">
+          Đối chiếu Payroll — Kỳ 06/2026
+        </div>
+        <div className="mt-0.5 text-[12px] text-[var(--color-text-muted)]">
+          So sánh lương tính toán hệ thống với số thực chi qua ngân hàng
         </div>
       </div>
 
@@ -264,165 +287,29 @@ export function PayrollScreen() {
         />
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[180px] max-w-[320px]">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-lighter)]" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Tìm nhân viên..."
-            className="w-full rounded-lg border border-[var(--color-border)] bg-white py-1.5 pl-8 pr-3 text-[12.5px] outline-none focus:border-[var(--color-primary)]"
-          />
-        </div>
-
-        {/* Status filter */}
-        <div className="relative">
+      <DataTable<PayrollRow>
+        tableKey="payroll"
+        columns={PAYROLL_COLUMNS}
+        rows={data}
+        getRowKey={(r) => r.id}
+        onRowClick={(r) => setDetailRow(r)}
+        minWidth={1000}
+        emptyText="Không có bản ghi phù hợp."
+        toolbarLeft={
+          <span className="text-[12px] text-[var(--color-text-muted)]">
+            Bấm vào dòng để xem chi tiết đối chiếu
+          </span>
+        }
+        toolbarActions={({ rows: fr, columns: fc }) => (
           <button
-            onClick={() => { setShowStatusDrop((v) => !v); setShowDeptDrop(false); }}
-            className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-white px-3 py-1.5 text-[12.5px] text-[var(--color-text-secondary)] transition hover:border-[var(--color-primary)]"
+            onClick={() => handleExport(fr, fc)}
+            className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] transition hover:border-[var(--color-primary)]"
           >
-            <Filter size={13} />
-            {statusFilter ? STATUS_CONFIG[statusFilter as ReconcileStatus].label : "Trạng thái"}
-            <ChevronDown size={13} />
+            <Download size={13} />
+            Xuất Excel
           </button>
-          {showStatusDrop && (
-            <div className="absolute left-0 top-full z-20 mt-1 w-[160px] rounded-xl border border-[var(--color-border)] bg-white py-1 shadow-lg">
-              <button
-                onClick={() => { setStatusFilter(""); setShowStatusDrop(false); }}
-                className={cn("w-full px-3 py-1.5 text-left text-[12px] hover:bg-gray-50", !statusFilter && "font-semibold text-[var(--color-primary)]")}
-              >
-                Tất cả
-              </button>
-              {(Object.keys(STATUS_CONFIG) as ReconcileStatus[]).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => { setStatusFilter(s); setShowStatusDrop(false); }}
-                  className={cn("w-full px-3 py-1.5 text-left text-[12px] hover:bg-gray-50", statusFilter === s && "font-semibold text-[var(--color-primary)]")}
-                >
-                  {STATUS_CONFIG[s].label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Dept filter */}
-        <div className="relative">
-          <button
-            onClick={() => { setShowDeptDrop((v) => !v); setShowStatusDrop(false); }}
-            className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-white px-3 py-1.5 text-[12.5px] text-[var(--color-text-secondary)] transition hover:border-[var(--color-primary)]"
-          >
-            {deptFilter || "Bộ phận"}
-            <ChevronDown size={13} />
-          </button>
-          {showDeptDrop && (
-            <div className="absolute left-0 top-full z-20 mt-1 max-h-[240px] w-[200px] overflow-y-auto rounded-xl border border-[var(--color-border)] bg-white py-1 shadow-lg">
-              <button
-                onClick={() => { setDeptFilter(""); setShowDeptDrop(false); }}
-                className={cn("w-full px-3 py-1.5 text-left text-[12px] hover:bg-gray-50", !deptFilter && "font-semibold text-[var(--color-primary)]")}
-              >
-                Tất cả
-              </button>
-              {departments.map((d) => (
-                <button
-                  key={d}
-                  onClick={() => { setDeptFilter(d); setShowDeptDrop(false); }}
-                  className={cn("w-full px-3 py-1.5 text-left text-[12px] hover:bg-gray-50", deptFilter === d && "font-semibold text-[var(--color-primary)]")}
-                >
-                  {d}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Sort toggle */}
-        <button
-          onClick={() => setSortBy((v) => (v === "name" ? "variance" : "name"))}
-          className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-white px-3 py-1.5 text-[12.5px] text-[var(--color-text-secondary)] transition hover:border-[var(--color-primary)]"
-        >
-          <ArrowUpDown size={13} />
-          {sortBy === "name" ? "Theo tên" : "Theo chênh lệch"}
-        </button>
-      </div>
-
-      <div className="text-[12px] text-[var(--color-text-muted)]">
-        Hiển thị {filtered.length} / {data.length} bản ghi
-      </div>
-
-      {/* Table */}
-      {filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-[14px] border border-dashed border-[var(--color-border)] bg-white py-16 text-center">
-          <Scale size={32} className="text-[var(--color-text-lighter)]" />
-          <div className="text-[13px] font-medium text-[var(--color-text-secondary)]">Không có bản ghi phù hợp</div>
-        </div>
-      ) : (
-        <div className="overflow-x-auto rounded-[14px] border border-[var(--color-border)] bg-white">
-          <table className="w-full text-left text-[12.5px]">
-            <thead>
-              <tr className="border-b border-[var(--color-border)] bg-gray-50/60 text-[11px] font-semibold text-[var(--color-text-muted)]">
-                <th className="px-4 py-2.5">Mã NV</th>
-                <th className="px-4 py-2.5">Họ tên</th>
-                <th className="px-4 py-2.5">Bộ phận</th>
-                <th className="px-4 py-2.5 text-right">Hệ thống</th>
-                <th className="px-4 py-2.5 text-right">Ngân hàng</th>
-                <th className="px-4 py-2.5 text-right">Chênh lệch</th>
-                <th className="px-4 py-2.5 text-center">Trạng thái</th>
-                <th className="px-4 py-2.5 text-center">Ref</th>
-                <th className="px-4 py-2.5 text-center"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((row) => {
-                const cfg = STATUS_CONFIG[row.status];
-                const Icon = cfg.icon;
-                return (
-                  <tr
-                    key={row.id}
-                    className="border-b border-[var(--color-border)] last:border-b-0 transition hover:bg-gray-50/50"
-                  >
-                    <td className="px-4 py-2.5 font-mono text-[11.5px] text-[var(--color-text-muted)]">{row.code}</td>
-                    <td className="px-4 py-2.5 font-medium text-[var(--color-text-primary)]">{row.name}</td>
-                    <td className="px-4 py-2.5 text-[var(--color-text-secondary)]">{row.department}</td>
-                    <td className="px-4 py-2.5 text-right font-mono">{formatMoney(row.systemNet)}</td>
-                    <td className="px-4 py-2.5 text-right font-mono">
-                      {row.bankAmount > 0 ? formatMoney(row.bankAmount) : "—"}
-                    </td>
-                    <td className={cn(
-                      "px-4 py-2.5 text-right font-mono font-medium",
-                      row.variance > 0 && "text-emerald-600",
-                      row.variance < 0 && "text-red-600",
-                      row.variance === 0 && "text-[var(--color-text-muted)]",
-                    )}>
-                      {row.variance === 0
-                        ? "0 ₫"
-                        : `${row.variance > 0 ? "+" : ""}${formatMoney(row.variance)}`}
-                    </td>
-                    <td className="px-4 py-2.5 text-center">
-                      <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-medium", cfg.color)}>
-                        <Icon size={11} />
-                        {cfg.label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5 text-center font-mono text-[10.5px] text-[var(--color-text-lighter)]">
-                      {row.bankRef || "—"}
-                    </td>
-                    <td className="px-4 py-2.5 text-center">
-                      <button
-                        onClick={() => setDetailRow(row)}
-                        className="rounded p-1 text-[var(--color-text-lighter)] transition hover:bg-gray-100 hover:text-[var(--color-primary)]"
-                      >
-                        <Eye size={14} />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+        )}
+      />
 
       {/* Summary bar */}
       <div className="flex flex-wrap gap-4 rounded-[12px] border border-[var(--color-border)] bg-gray-50/60 px-4 py-3 text-[11.5px]">

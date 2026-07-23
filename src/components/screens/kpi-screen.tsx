@@ -7,12 +7,8 @@ import {
   Pencil,
   Save,
   X,
-  ChevronDown,
-  ChevronUp,
   FileText,
   BarChart3,
-  Search,
-  Filter,
   Download,
 } from "lucide-react";
 import {
@@ -25,7 +21,8 @@ import { useQuery, useMutation } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 import { exportStyledExcel } from "@/lib/excel-export";
 import { useAuth } from "@/lib/auth-context";
-import { DEPARTMENTS } from "@/lib/data/departments";
+import { type ColumnDef } from "@/lib/table-prefs";
+import { DataTable } from "@/components/ui/data-table";
 
 function kpiClass(score: number) {
   if (score >= 93) return "Xuất sắc";
@@ -62,10 +59,6 @@ export function KpiScreen() {
   const { user } = useAuth();
   const [period, setPeriod] = useState("2026-06");
   const [editing, setEditing] = useState<EditState | null>(null);
-  const [expanded, setExpanded] = useState<number | null>(null);
-  const [search, setSearch] = useState("");
-  const [deptFilter, setDeptFilter] = useState("");
-  const [showDeptDrop, setShowDeptDrop] = useState(false);
   const [tab, setTab] = useState<"table" | "chart">("table");
 
   const { data, isLoading, refetch } = useQuery(() => fetchKpi(period), [period]);
@@ -80,18 +73,8 @@ export function KpiScreen() {
 
   const rows = useMemo(() => {
     if (!data?.data) return [];
-    let list = [...data.data].sort((a, b) => b.score - a.score);
-    if (search) {
-      const q = search.toLowerCase();
-      list = list.filter(
-        (r) => r.employee_name.toLowerCase().includes(q) || r.employee_code.toLowerCase().includes(q),
-      );
-    }
-    if (deptFilter) {
-      list = list.filter((r) => r.department_name === deptFilter);
-    }
-    return list.map((r, i) => ({ ...r, computedRank: i + 1 }));
-  }, [data, search, deptFilter]);
+    return [...data.data].sort((a, b) => b.score - a.score);
+  }, [data]);
 
   const allRows = useMemo(() => {
     if (!data?.data) return [];
@@ -110,39 +93,6 @@ export function KpiScreen() {
     const reportBased = allRows.filter((r) => r.bc > 0 || r.ns > 0 || r.cl > 0).length;
     return { total, avg, excellent, good, fair, pass, low, reportBased };
   }, [allRows]);
-
-  async function handleExport() {
-    const sorted = [...rows].sort(
-      (a, b) => (a.department_name ?? "").localeCompare(b.department_name ?? "", "vi") || b.score - a.score,
-    );
-    await exportStyledExcel({
-      filename: `kpi-${period}`,
-      title: `BẢNG KPI KỲ ${period.split("-")[1]}/${period.split("-")[0]}`,
-      meta: [`Ngày xuất: ${new Date().toLocaleDateString("vi-VN")}`, `Số lượng: ${sorted.length} nhân viên`],
-      columns: [
-        { label: "Mã NV" },
-        { label: "Họ và tên" },
-        { label: "Bộ phận" },
-        { label: "BC/25", align: "right", format: "int" },
-        { label: "NS/30", align: "right", format: "int" },
-        { label: "CL/25", align: "right", format: "int" },
-        { label: "ĐG/20", align: "right", format: "int" },
-        { label: "Tổng", align: "right", format: "int" },
-        { label: "Xếp loại" },
-      ],
-      rows: sorted.map((r) => [
-        r.employee_code,
-        r.employee_name,
-        r.department_name ?? "-",
-        r.bc,
-        r.ns,
-        r.cl,
-        r.dg,
-        r.score,
-        kpiClass(r.score),
-      ]),
-    });
-  }
 
   const periodLabel = (() => {
     const [y, m] = period.split("-");
@@ -179,10 +129,142 @@ export function KpiScreen() {
     [doSign, refetch],
   );
 
-  const deptNames = useMemo(
-    () => DEPARTMENTS.map((d) => d.name).sort((a, b) => a.localeCompare(b, "vi")),
-    [],
-  );
+  const columns = useMemo<ColumnDef<ApiKpi>[]>(() => {
+    return [
+      {
+        id: "name",
+        label: "Nhân viên",
+        locked: true,
+        cell: (r) => (
+          <div className="min-w-0">
+            <div className="truncate font-medium text-[var(--color-text-primary)]">{r.employee_name}</div>
+            {r.department_name && (
+              <div className="truncate text-[11px] text-[var(--color-text-lighter)]">{r.department_name}</div>
+            )}
+          </div>
+        ),
+        exportValue: (r) => r.employee_name,
+      },
+      { id: "code", label: "Mã NV", cell: (r) => <span className="text-[var(--color-text-muted)]">{r.employee_code}</span>, exportValue: (r) => r.employee_code },
+      { id: "department_name", label: "Bộ phận", defaultHidden: true, cell: (r) => r.department_name ?? "-", exportValue: (r) => r.department_name ?? "" },
+      { id: "bc", label: "BC/25", align: "center", cell: (r) => <span className="font-[family-name:var(--font-mono)] text-[12px]" title="Tự tính từ báo cáo">{r.bc}</span>, exportValue: (r) => r.bc, exportFormat: "int" },
+      { id: "ns", label: "NS/30", align: "center", cell: (r) => <span className="font-[family-name:var(--font-mono)] text-[12px]" title="Tự tính từ báo cáo">{r.ns}</span>, exportValue: (r) => r.ns, exportFormat: "int" },
+      { id: "cl", label: "CL/25", align: "center", cell: (r) => <span className="font-[family-name:var(--font-mono)] text-[12px]" title="Tự tính từ báo cáo">{r.cl}</span>, exportValue: (r) => r.cl, exportFormat: "int" },
+      {
+        id: "dg",
+        label: "ĐG/20",
+        align: "center",
+        cell: (r) =>
+          editing?.id === r.id ? (
+            <input
+              type="number"
+              min={0}
+              max={20}
+              value={editing.dg}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => setEditing({ ...editing, dg: Math.min(20, Math.max(0, Number(e.target.value))) })}
+              className="w-12 rounded border border-[var(--color-accent)] px-1 py-0.5 text-center text-[12px] font-[family-name:var(--font-mono)]"
+            />
+          ) : (
+            <span className="font-[family-name:var(--font-mono)] text-[12px] text-[var(--color-accent)]" title="Tổ trưởng chấm">{r.dg}</span>
+          ),
+        exportValue: (r) => r.dg,
+        exportFormat: "int",
+      },
+      {
+        id: "score",
+        label: "Tổng",
+        align: "right",
+        cell: (r) => {
+          const editScore = editing?.id === r.id ? r.bc + r.ns + r.cl + editing.dg : r.score;
+          return <span className={cn("font-[family-name:var(--font-mono)] font-semibold", scoreColor(editScore))}>{editScore}</span>;
+        },
+        exportValue: (r) => r.score,
+        exportFormat: "int",
+      },
+      {
+        id: "rank",
+        label: "Xếp loại",
+        cell: (r) => {
+          const editScore = editing?.id === r.id ? r.bc + r.ns + r.cl + editing.dg : r.score;
+          const editRank = editing?.id === r.id ? kpiClass(editScore) : (r.rank ?? "");
+          return <span className={cn("inline-block rounded-full px-2 py-0.5 text-[11px] font-medium", classColor(editRank))}>{editRank}</span>;
+        },
+        exportValue: (r) => r.rank ?? kpiClass(r.score),
+      },
+      {
+        id: "l1",
+        label: "L1",
+        align: "center",
+        noReorder: true,
+        cell: (r) =>
+          r.signed_l1 ? (
+            <CheckCircle2 size={15} className="mx-auto text-[var(--color-success)]" />
+          ) : canSign && user?.role === "lead" ? (
+            <button onClick={(e) => { e.stopPropagation(); handleSign(r.id, 1); }} className="rounded bg-[var(--color-accent)] px-1.5 py-0.5 text-[10px] text-white hover:opacity-80">Ký</button>
+          ) : (
+            <Clock size={15} className="mx-auto text-[var(--color-text-lighter)]" />
+          ),
+      },
+      {
+        id: "l2",
+        label: "L2",
+        align: "center",
+        noReorder: true,
+        cell: (r) =>
+          r.signed_l2 ? (
+            <CheckCircle2 size={15} className="mx-auto text-[var(--color-success)]" />
+          ) : r.signed_l1 && canSign && (user?.role === "super" || user?.role === "hr") ? (
+            <button onClick={(e) => { e.stopPropagation(); handleSign(r.id, 2); }} className="rounded bg-[var(--color-primary)] px-1.5 py-0.5 text-[10px] text-white hover:opacity-80">Ký</button>
+          ) : (
+            <Clock size={15} className="mx-auto text-[var(--color-text-lighter)]" />
+          ),
+      },
+      {
+        id: "actions",
+        label: "",
+        align: "center",
+        noReorder: true,
+        cell: (r) => {
+          const isEditing = editing?.id === r.id;
+          return (
+            <div className="flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
+              {isEditing ? (
+                <>
+                  <button onClick={handleSave} disabled={saving} className="rounded p-1 text-[var(--color-success)] hover:bg-[var(--color-success-bg)]">
+                    <Save size={14} />
+                  </button>
+                  <button onClick={() => setEditing(null)} className="rounded p-1 text-[var(--color-text-lighter)] hover:bg-gray-100">
+                    <X size={14} />
+                  </button>
+                </>
+              ) : (
+                canEditDg && (
+                  <button onClick={() => startEdit(r)} title="Chấm ĐG" className="rounded p-1 text-[var(--color-text-lighter)] hover:bg-gray-100">
+                    <Pencil size={14} />
+                  </button>
+                )
+              )}
+            </div>
+          );
+        },
+      },
+    ];
+  }, [editing, saving, canSign, canEditDg, user?.role, handleSave, handleSign, startEdit]);
+
+  async function handleExport(exportRows: ApiKpi[], exportCols: ColumnDef<ApiKpi>[]) {
+    const cols = exportCols.filter((c) => c.exportValue);
+    const sorted = [...exportRows].sort(
+      (a, b) => (a.department_name ?? "").localeCompare(b.department_name ?? "", "vi") || b.score - a.score,
+    );
+    await exportStyledExcel({
+      filename: `kpi-${period}`,
+      title: `BẢNG KPI KỲ ${periodLabel}`,
+      meta: [`Ngày xuất: ${new Date().toLocaleDateString("vi-VN")}`, `Số lượng: ${sorted.length} nhân viên`],
+      columns: cols.map((c) => ({ label: c.label, align: c.align, format: c.exportFormat })),
+      rows: sorted.map((r, i) => cols.map((c) => c.exportValue!(r, i))),
+    });
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -253,198 +335,30 @@ export function KpiScreen() {
         </div>
       )}
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[180px] max-w-[280px]">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-lighter)]" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Tìm nhân viên..."
-            className="w-full rounded-lg border border-[var(--color-border)] bg-white py-1.5 pl-8 pr-3 text-[12.5px] outline-none focus:border-[var(--color-primary)]"
-          />
-        </div>
-        <div className="relative">
-          <button
-            onClick={() => setShowDeptDrop((v) => !v)}
-            className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-white px-3 py-1.5 text-[12.5px] text-[var(--color-text-secondary)] transition hover:border-[var(--color-primary)]"
-          >
-            <Filter size={13} />
-            {deptFilter || "Bộ phận"}
-            <ChevronDown size={13} />
-          </button>
-          {showDeptDrop && (
-            <div className="absolute left-0 top-full z-20 mt-1 max-h-[240px] w-[220px] overflow-y-auto rounded-xl border border-[var(--color-border)] bg-white py-1 shadow-lg">
-              <button
-                onClick={() => { setDeptFilter(""); setShowDeptDrop(false); }}
-                className={cn("w-full px-3 py-1.5 text-left text-[12px] hover:bg-gray-50", !deptFilter && "font-semibold text-[var(--color-primary)]")}
-              >
-                Tất cả
-              </button>
-              {deptNames.map((d) => (
-                <button
-                  key={d}
-                  onClick={() => { setDeptFilter(d); setShowDeptDrop(false); }}
-                  className={cn("w-full px-3 py-1.5 text-left text-[12px] hover:bg-gray-50", deptFilter === d && "font-semibold text-[var(--color-primary)]")}
-                >
-                  {d}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <button
-          onClick={handleExport}
-          className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-white px-3 py-1.5 text-[12.5px] text-[var(--color-text-secondary)] transition hover:border-[var(--color-primary)]"
-        >
-          <Download size={13} /> Xuất Excel
-        </button>
-        <div className="text-[12px] text-[var(--color-text-muted)]">
-          Hiển thị {rows.length} / {allRows.length}
-        </div>
-      </div>
-
       {/* Table view */}
       {tab === "table" && (
-        <>
-          {isLoading ? (
-            <div className="flex items-center justify-center py-20">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--color-border)] border-t-[var(--color-primary)]" />
-            </div>
-          ) : (
-            <div className="overflow-x-auto rounded-[14px] border border-[var(--color-border)] bg-white">
-              <table className="w-full min-w-[950px] text-[13px]">
-                <thead>
-                  <tr className="text-left text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">
-                    <th className="w-10 px-3 py-3 font-medium">#</th>
-                    <th className="px-3 py-3 font-medium">Nhân viên</th>
-                    <th className="px-3 py-3 font-medium">Mã NV</th>
-                    <th className="px-3 py-3 text-center font-medium" title="Sản lượng (từ báo cáo)">BC/25</th>
-                    <th className="px-3 py-3 text-center font-medium" title="Năng suất (từ báo cáo)">NS/30</th>
-                    <th className="px-3 py-3 text-center font-medium" title="Chất lượng (từ báo cáo)">CL/25</th>
-                    <th className="px-3 py-3 text-center font-medium" title="Đánh giá Tổ trưởng">ĐG/20</th>
-                    <th className="px-3 py-3 text-right font-medium">Tổng</th>
-                    <th className="px-3 py-3 font-medium">Xếp loại</th>
-                    <th className="px-3 py-3 text-center font-medium">L1</th>
-                    <th className="px-3 py-3 text-center font-medium">L2</th>
-                    <th className="w-16 px-3 py-3 font-medium"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r) => {
-                    const isEditing = editing?.id === r.id;
-                    const isExpanded = expanded === r.id;
-                    const editScore = isEditing ? r.bc + r.ns + r.cl + editing.dg : r.score;
-                    const editRank = isEditing ? kpiClass(editScore) : (r.rank ?? "");
-                    return (
-                      <tr key={r.id} className={cn("group border-t border-[var(--color-border-light)]", isExpanded && "bg-gray-50/50")}>
-                        <td className="px-3 py-2.5 font-[family-name:var(--font-mono)] text-[var(--color-text-muted)]">
-                          {r.computedRank}
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <div className="font-medium text-[var(--color-text-primary)]">{r.employee_name}</div>
-                          {r.department_name && (
-                            <div className="text-[11px] text-[var(--color-text-lighter)]">{r.department_name}</div>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5 text-[var(--color-text-muted)]">{r.employee_code}</td>
-
-                        {/* BC, NS, CL are auto-calculated — read-only */}
-                        <td className="px-3 py-2.5 text-center font-[family-name:var(--font-mono)] text-[12px]">
-                          <span title="Tự tính từ báo cáo">{r.bc}</span>
-                        </td>
-                        <td className="px-3 py-2.5 text-center font-[family-name:var(--font-mono)] text-[12px]">
-                          <span title="Tự tính từ báo cáo">{r.ns}</span>
-                        </td>
-                        <td className="px-3 py-2.5 text-center font-[family-name:var(--font-mono)] text-[12px]">
-                          <span title="Tự tính từ báo cáo">{r.cl}</span>
-                        </td>
-
-                        {/* ĐG is editable by team lead */}
-                        {isEditing ? (
-                          <td className="px-1.5 py-2.5 text-center">
-                            <input
-                              type="number"
-                              min={0}
-                              max={20}
-                              value={editing.dg}
-                              onChange={(e) => setEditing({ ...editing, dg: Math.min(20, Math.max(0, Number(e.target.value))) })}
-                              className="w-12 rounded border border-[var(--color-accent)] px-1 py-0.5 text-center text-[12px] font-[family-name:var(--font-mono)]"
-                            />
-                          </td>
-                        ) : (
-                          <td className="px-3 py-2.5 text-center font-[family-name:var(--font-mono)] text-[12px]">
-                            <span className="text-[var(--color-accent)]" title="Tổ trưởng chấm">{r.dg}</span>
-                          </td>
-                        )}
-
-                        <td className={cn("px-3 py-2.5 text-right font-[family-name:var(--font-mono)] font-semibold", scoreColor(editScore))}>
-                          {editScore}
-                        </td>
-
-                        <td className="px-3 py-2.5">
-                          <span className={cn("inline-block rounded-full px-2 py-0.5 text-[11px] font-medium", classColor(editRank))}>
-                            {editRank}
-                          </span>
-                        </td>
-
-                        <td className="px-3 py-2.5 text-center">
-                          {r.signed_l1 ? (
-                            <CheckCircle2 size={15} className="mx-auto text-[var(--color-success)]" />
-                          ) : canSign && user?.role === "lead" ? (
-                            <button onClick={() => handleSign(r.id, 1)} className="rounded bg-[var(--color-accent)] px-1.5 py-0.5 text-[10px] text-white hover:opacity-80">
-                              Ký
-                            </button>
-                          ) : (
-                            <Clock size={15} className="mx-auto text-[var(--color-text-lighter)]" />
-                          )}
-                        </td>
-
-                        <td className="px-3 py-2.5 text-center">
-                          {r.signed_l2 ? (
-                            <CheckCircle2 size={15} className="mx-auto text-[var(--color-success)]" />
-                          ) : r.signed_l1 && canSign && (user?.role === "super" || user?.role === "hr") ? (
-                            <button onClick={() => handleSign(r.id, 2)} className="rounded bg-[var(--color-primary)] px-1.5 py-0.5 text-[10px] text-white hover:opacity-80">
-                              Ký
-                            </button>
-                          ) : (
-                            <Clock size={15} className="mx-auto text-[var(--color-text-lighter)]" />
-                          )}
-                        </td>
-
-                        <td className="px-3 py-2.5">
-                          <div className="flex items-center gap-1">
-                            {isEditing ? (
-                              <>
-                                <button onClick={handleSave} disabled={saving} className="rounded p-1 text-[var(--color-success)] hover:bg-[var(--color-success-bg)]">
-                                  <Save size={14} />
-                                </button>
-                                <button onClick={() => setEditing(null)} className="rounded p-1 text-[var(--color-text-lighter)] hover:bg-gray-100">
-                                  <X size={14} />
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                {canEditDg && (
-                                  <button onClick={() => startEdit(r)} title="Chấm ĐG" className="rounded p-1 text-[var(--color-text-lighter)] opacity-0 group-hover:opacity-100 hover:bg-gray-100">
-                                    <Pencil size={14} />
-                                  </button>
-                                )}
-                                <button onClick={() => setExpanded(isExpanded ? null : r.id)} className="rounded p-1 text-[var(--color-text-lighter)] hover:bg-gray-100">
-                                  {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
+        isLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--color-border)] border-t-[var(--color-primary)]" />
+          </div>
+        ) : (
+          <DataTable<ApiKpi>
+            tableKey="kpi"
+            columns={columns}
+            rows={rows}
+            getRowKey={(r) => r.id}
+            minWidth={950}
+            emptyText="Không có dữ liệu KPI trong kỳ."
+            toolbarActions={({ rows: fr, columns: fc }) => (
+              <button
+                onClick={() => handleExport(fr, fc)}
+                className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-white px-3 py-1.5 text-[12.5px] text-[var(--color-text-secondary)] transition hover:border-[var(--color-primary)]"
+              >
+                <Download size={13} /> Xuất Excel
+              </button>
+            )}
+          />
+        )
       )}
 
       {/* Chart view */}
