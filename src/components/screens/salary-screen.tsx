@@ -5,8 +5,8 @@ import { X, Printer, Download } from "lucide-react";
 import { fetchSalary, fetchDepartments, type ApiSalaryRow } from "@/lib/api";
 import { useQuery } from "@/lib/hooks";
 import { formatMoney, cn } from "@/lib/utils";
-import { useColumnPrefs, type ColumnDef } from "@/lib/table-prefs";
-import { ColumnMenu } from "@/components/ui/column-menu";
+import { type ColumnDef } from "@/lib/table-prefs";
+import { DataTable } from "@/components/ui/data-table";
 import { exportStyledExcel } from "@/lib/excel-export";
 
 const STD_DAYS = 26;
@@ -146,7 +146,18 @@ function totalOtOf(s: SalaryComputed): number {
 }
 
 const SAL_COLUMNS: ColumnDef<SalaryDisplayRow>[] = [
-  { id: "name", label: "Nhân viên", locked: true, cell: (d) => d.row.name, exportValue: (d) => `${d.row.name} (${d.row.code})` },
+  {
+    id: "name",
+    label: "Nhân viên",
+    locked: true,
+    cell: (d) => (
+      <div className="min-w-0">
+        <div className="truncate font-medium text-[var(--color-text-primary)]">{d.row.name}</div>
+        <div className="text-[11px] text-[var(--color-text-lighter)]">{d.row.code}</div>
+      </div>
+    ),
+    exportValue: (d) => `${d.row.name} (${d.row.code})`,
+  },
   { id: "department_name", label: "Bộ phận", cell: (d) => d.row.department_name ?? "-", exportValue: (d) => d.row.department_name ?? "" },
   { id: "cong", label: "Công", align: "right", cell: (d) => `${d.s.actualDays}/${STD_DAYS}`, exportValue: (d) => d.s.actualDays, exportFormat: "int" },
   { id: "workSalary", label: "Lương công", align: "right", cell: (d) => formatMoney(d.s.workSalary), exportValue: (d) => d.s.workSalary, exportFormat: "money" },
@@ -429,11 +440,9 @@ export function SalaryScreen() {
     return `${m}/${y}`;
   })();
 
-  const { hidden, toggle, reset, isVisible } = useColumnPrefs("salary", SAL_COLUMNS);
-
-  async function handleExport() {
-    const cols = SAL_COLUMNS.filter((c) => isVisible(c.id) && c.exportValue);
-    const sorted = [...rows].sort(
+  async function handleExport(exportRows: SalaryDisplayRow[], exportCols: ColumnDef<SalaryDisplayRow>[]) {
+    const cols = exportCols.filter((c) => c.exportValue);
+    const sorted = [...exportRows].sort(
       (a, b) =>
         (a.row.department_name ?? "").localeCompare(b.row.department_name ?? "", "vi") ||
         a.row.code.localeCompare(b.row.code, "vi"),
@@ -443,47 +452,37 @@ export function SalaryScreen() {
       title: `BẢNG LƯƠNG KỲ ${periodLabel}`,
       meta: [`Ngày xuất: ${new Date().toLocaleDateString("vi-VN")}`, `Số lượng: ${sorted.length} nhân viên`],
       columns: cols.map((c) => ({ label: c.label, align: c.align, format: c.exportFormat })),
-      rows: sorted.map((d, i) => cols.map((c) => c.exportValue!(d, i)))
+      rows: sorted.map((d, i) => cols.map((c) => c.exportValue!(d, i))),
     });
   }
 
+  const toolbarLeft = (
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="text-[13px] font-semibold text-[var(--color-text-primary)]">Bảng lương kỳ {periodLabel}</div>
+      <input
+        type="month"
+        value={period}
+        onChange={(e) => setPeriod(e.target.value)}
+        className="rounded-lg border border-[var(--color-border)] px-2 py-1 text-[13px]"
+      />
+      <select
+        value={deptFilter}
+        onChange={(e) => setDeptFilter(e.target.value ? Number(e.target.value) : "")}
+        className="rounded-lg border border-[var(--color-border)] px-2 py-1 text-[13px]"
+      >
+        <option value="">Tất cả phòng ban</option>
+        {deptData?.data?.map((d) => (
+          <option key={d.id} value={d.id}>{d.name}</option>
+        ))}
+      </select>
+      <span className="rounded-[20px] bg-[var(--color-success-bg)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--color-success)]">
+        {rows.length} nhân viên
+      </span>
+    </div>
+  );
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between rounded-[14px] border border-[var(--color-border)] bg-white p-[14px]">
-        <div className="flex items-center gap-3">
-          <div className="text-[13px] font-semibold text-[var(--color-text-primary)]">Bảng lương kỳ {periodLabel}</div>
-          <input
-            type="month"
-            value={period}
-            onChange={(e) => setPeriod(e.target.value)}
-            className="rounded-lg border border-[var(--color-border)] px-2 py-1 text-[13px]"
-          />
-          <select
-            value={deptFilter}
-            onChange={(e) => setDeptFilter(e.target.value ? Number(e.target.value) : "")}
-            className="rounded-lg border border-[var(--color-border)] px-2 py-1 text-[13px]"
-          >
-            <option value="">Tất cả phòng ban</option>
-            {deptData?.data?.map((d) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
-          </select>
-        </div>
-        <div className="flex items-center gap-2">
-          <ColumnMenu columns={SAL_COLUMNS} hidden={hidden} onToggle={toggle} onReset={reset} />
-          <button
-            onClick={handleExport}
-            className="flex items-center gap-1.5 rounded-[8px] border border-[var(--color-border)] px-3 py-1.5 text-[12.5px] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]"
-          >
-            <Download size={14} /> Xuất Excel
-          </button>
-          <PrintPayslips rows={rows} period={period} />
-          <span className="rounded-[20px] bg-[var(--color-success-bg)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--color-success)]">
-            {rows.length} nhân viên
-          </span>
-        </div>
-      </div>
-
       {totals && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
@@ -505,85 +504,27 @@ export function SalaryScreen() {
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--color-border)] border-t-[var(--color-primary)]" />
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-[14px] border border-[var(--color-border)] bg-white">
-          <table className="w-full min-w-[1400px] text-[13px]">
-            <thead>
-              <tr className="text-left text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">
-                {SAL_COLUMNS.filter((c) => isVisible(c.id)).map((c) => (
-                  <th
-                    key={c.id}
-                    className={cn("px-3 py-3 font-medium", c.align === "right" && "text-right")}
-                  >
-                    {c.label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(({ row, s }) => {
-                const totalOT = s.otWeekday + s.otWeekdayExempt + s.otSunday + s.otSundayExempt + s.otHoliday;
-                return (
-                  <tr
-                    key={row.code}
-                    onClick={() => setSelected({ row, s })}
-                    className="cursor-pointer border-t border-[var(--color-border-light)] hover:bg-[var(--color-page-bg)]"
-                  >
-                    {isVisible("name") && (
-                      <td className="px-3 py-2.5">
-                        <div className="font-medium text-[var(--color-text-primary)]">{row.name}</div>
-                        <div className="text-[11px] text-[var(--color-text-lighter)]">{row.code}</div>
-                      </td>
-                    )}
-                    {isVisible("department_name") && (
-                      <td className="px-3 py-2.5 text-[12px] text-[var(--color-text-muted)]">{row.department_name}</td>
-                    )}
-                    {isVisible("cong") && (
-                      <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)] text-[12px]">
-                        {s.actualDays}/{STD_DAYS}
-                      </td>
-                    )}
-                    {isVisible("workSalary") && (
-                      <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)]">{formatMoney(s.workSalary)}</td>
-                    )}
-                    {isVisible("responsibilityActual") && (
-                      <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)]">{formatMoney(s.responsibilityActual)}</td>
-                    )}
-                    {isVisible("overtime") && (
-                      <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)]">
-                        {totalOT > 0 ? formatMoney(totalOT) : "-"}
-                      </td>
-                    )}
-                    {isVisible("totalIncome") && (
-                      <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)] font-medium">
-                        {formatMoney(s.totalIncome)}
-                      </td>
-                    )}
-                    {isVisible("insuranceTotal") && (
-                      <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)] text-[var(--color-danger)]">
-                        -{formatMoney(s.insuranceTotal)}
-                      </td>
-                    )}
-                    {isVisible("pit") && (
-                      <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)] text-[var(--color-danger)]">
-                        {s.pit > 0 ? `-${formatMoney(s.pit)}` : "0"}
-                      </td>
-                    )}
-                    {isVisible("advance") && (
-                      <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)]">
-                        {s.advance > 0 ? `-${formatMoney(s.advance)}` : "-"}
-                      </td>
-                    )}
-                    {isVisible("netPay") && (
-                      <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)] font-semibold text-[var(--color-success)]">
-                        {formatMoney(s.netPay)}
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <DataTable<SalaryDisplayRow>
+          tableKey="salary"
+          columns={SAL_COLUMNS}
+          rows={rows}
+          getRowKey={(d) => d.row.code}
+          onRowClick={(d) => setSelected(d)}
+          minWidth={1400}
+          emptyText="Không có dữ liệu lương trong kỳ."
+          toolbarLeft={toolbarLeft}
+          toolbarActions={({ rows: fr, columns: fc }) => (
+            <>
+              <button
+                onClick={() => handleExport(fr, fc)}
+                className="flex items-center gap-1.5 rounded-[8px] border border-[var(--color-border)] px-3 py-1.5 text-[12.5px] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]"
+              >
+                <Download size={14} /> Xuất Excel
+              </button>
+              <PrintPayslips rows={fr} period={period} />
+            </>
+          )}
+        />
       )}
 
       {selected && <PayslipModal data={selected} period={period} onClose={() => setSelected(null)} />}
