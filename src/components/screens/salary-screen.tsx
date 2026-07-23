@@ -511,6 +511,7 @@ export function SalaryScreen() {
           getRowKey={(d) => d.row.code}
           onRowClick={(d) => setSelected(d)}
           minWidth={1400}
+          pageSize={15}
           emptyText="Không có dữ liệu lương trong kỳ."
           toolbarLeft={toolbarLeft}
           toolbarActions={({ rows: fr, columns: fc }) => (
