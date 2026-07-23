@@ -246,6 +246,7 @@ export function AttendanceScreen() {
           rows={filtered}
           getRowKey={(d) => d.row.id}
           minWidth={1000}
+          pageSize={15}
           rowClassName={(d) => (d.mismatch && editingRow !== d.row.id ? "bg-[var(--color-warning-bg)]" : "")}
           emptyText="Không có dữ liệu chấm công."
           toolbarLeft={flagButtons}
