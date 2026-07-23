@@ -747,10 +747,55 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
       ? [...columns.slice(0, actionsIdx), ...customColumns, ...columns.slice(actionsIdx)]
       : [...columns, ...customColumns];
 
-  const { hidden, toggle, reset, visibleColumns, reorderLocked, toggleReorderLock, moveColumn, renameColumn } =
+  const { hidden, toggle, reset, visibleColumns, reorderLocked, toggleReorderLock, moveColumn, renameColumn, widths, setColumnWidth } =
     useColumnPrefs("employees", displayColumns);
 
   const [sortState, setSortState] = useState<{ colId: string; dir: "asc" | "desc" } | null>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
+
+  // Drag the divider on a header's right edge to resize that column.
+  function startResize(colId: string, e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const th = (e.currentTarget as HTMLElement).closest("th") as HTMLElement | null;
+    const startX = e.clientX;
+    const startW = th ? th.getBoundingClientRect().width : widths[colId] ?? 150;
+    const onMove = (ev: MouseEvent) => {
+      const w = Math.max(60, Math.min(600, startW + (ev.clientX - startX)));
+      setColumnWidth(colId, w);
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.userSelect = "";
+    };
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }
+
+  // Double-click the divider → auto-fit the left column to its widest content.
+  function autoFitColumn(colId: string) {
+    const root = tableRef.current;
+    if (!root) return;
+    const cells = root.querySelectorAll<HTMLElement>(`[data-col="${CSS.escape(colId)}"]`);
+    let max = 0;
+    cells.forEach((el) => {
+      const inner = el.firstElementChild as HTMLElement | null;
+      max = Math.max(max, inner ? inner.scrollWidth : el.scrollWidth);
+    });
+    if (max > 0) setColumnWidth(colId, Math.max(60, Math.min(600, max + 28)));
+  }
+
+  function colWidth(c: ColumnDef<ApiEmployee>): number {
+    if (widths[c.id]) return widths[c.id];
+    if (c.id === "name") return 220;
+    if (c.id === "code") return 96;
+    if (c.id === "actions") return 48;
+    if (c.id === "status") return 130;
+    if (c.id === "email" || c.id === "address") return 200;
+    return 150;
+  }
 
   // Apply search + department + per-column filters + sort, then paginate — all client-side.
   const filtered = useMemo(() => {
@@ -899,10 +944,14 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
                 ? "border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]"
                 : "border-[var(--color-accent)] bg-[var(--color-accent)] text-white",
             )}
-            title={reorderLocked ? "Mở khoá để kéo sắp xếp cột" : "Đang mở khoá — kéo tiêu đề cột để sắp xếp. Bấm để khoá lại"}
+            title={
+              reorderLocked
+                ? "Mở khoá để kéo đổi vị trí và chỉnh rộng cột"
+                : "Đang mở khoá — kéo grip để đổi vị trí, kéo vạch phải để chỉnh rộng, nháy đúp vạch để tự canh. Bấm để khoá & lưu lại"
+            }
           >
             {reorderLocked ? <Lock size={14} /> : <Unlock size={14} />}
-            {reorderLocked ? "Khoá cột" : "Đang sắp xếp"}
+            {reorderLocked ? "Khoá cột" : "Đang chỉnh cột · Lưu"}
           </button>
           {canEdit && (
             <button
@@ -950,17 +999,25 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
             <span className="ml-2 text-[13px]">Đang tải dữ liệu...</span>
           </div>
         ) : (
-          <table className="w-full min-w-[900px] text-[13px]">
+          <table ref={tableRef} className="w-full min-w-[900px] table-fixed text-[13px]">
+            <colgroup>
+              <col style={{ width: 52 }} />
+              {visibleColumns.map((c) => (
+                <col key={c.id} style={{ width: colWidth(c) }} />
+              ))}
+            </colgroup>
             <thead>
               <tr className="text-left text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">
                 {/* Fixed STT column — always first, never reordered */}
-                <th className="w-12 px-4 py-3 text-center font-medium">STT</th>
+                <th className="px-4 py-3 text-center font-medium">STT</th>
                 {visibleColumns.map((c) => {
                   const canDrag = !reorderLocked && !c.noReorder;
                   const canMenu = !!c.exportValue && !c.noReorder;
+                  const canResize = !reorderLocked && !c.noReorder;
                   return (
                     <th
                       key={c.id}
+                      data-col={c.id}
                       onDragOver={(e) => {
                         if (!reorderLocked && !c.noReorder) e.preventDefault();
                       }}
@@ -971,38 +1028,48 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
                         if (dragId) moveColumn(dragId, c.id);
                       }}
                       className={cn(
-                        "border-l border-[var(--color-border-light)] px-3 py-3 font-medium",
+                        "relative border-l border-[var(--color-border-light)] px-3 py-3 font-medium",
                         c.align === "right" && "text-right",
                         c.align === "center" && "text-center",
                       )}
                     >
-                      <span className={cn("inline-flex items-center gap-1", c.align === "right" && "flex-row-reverse")}>
+                      <span className={cn("flex min-w-0 items-center gap-1", c.align === "right" && "flex-row-reverse")}>
                         {canDrag && (
                           <span
                             draggable
                             onDragStart={(e) => e.dataTransfer.setData("text/plain", c.id)}
-                            className="cursor-grab text-[var(--color-text-lighter)] hover:text-[var(--color-accent)] active:cursor-grabbing"
+                            className="flex-shrink-0 cursor-grab text-[var(--color-text-lighter)] hover:text-[var(--color-accent)] active:cursor-grabbing"
                             title="Kéo để đổi vị trí cột"
                           >
                             <GripVertical size={13} />
                           </span>
                         )}
-                        {c.label}
+                        <span className="truncate">{c.label}</span>
                         {canMenu && (
-                          <ColumnHeaderMenu
-                            label={c.label}
-                            value={colFilters[c.id] ?? ""}
-                            sortDir={sortState?.colId === c.id ? sortState.dir : null}
-                            onFilter={(v) => setColFilters((s) => ({ ...s, [c.id]: v }))}
-                            onSort={(dir) => setSortState({ colId: c.id, dir })}
-                            onRename={(label) => renameColumn(c.id, label)}
-                            onClear={() => {
-                              setColFilters((s) => ({ ...s, [c.id]: "" }));
-                              setSortState((s) => (s?.colId === c.id ? null : s));
-                            }}
-                          />
+                          <span className="flex-shrink-0">
+                            <ColumnHeaderMenu
+                              label={c.label}
+                              value={colFilters[c.id] ?? ""}
+                              sortDir={sortState?.colId === c.id ? sortState.dir : null}
+                              onFilter={(v) => setColFilters((s) => ({ ...s, [c.id]: v }))}
+                              onSort={(dir) => setSortState({ colId: c.id, dir })}
+                              onRename={(label) => renameColumn(c.id, label)}
+                              onClear={() => {
+                                setColFilters((s) => ({ ...s, [c.id]: "" }));
+                                setSortState((s) => (s?.colId === c.id ? null : s));
+                              }}
+                            />
+                          </span>
                         )}
                       </span>
+                      {canResize && (
+                        <span
+                          onMouseDown={(e) => startResize(c.id, e)}
+                          onDoubleClick={() => autoFitColumn(c.id)}
+                          className="absolute right-0 top-0 z-10 h-full w-2 cursor-col-resize hover:bg-[var(--color-accent)]/40"
+                          title="Kéo để chỉnh rộng cột · Nháy đúp để tự canh theo nội dung"
+                        />
+                      )}
                     </th>
                   );
                 })}
@@ -1089,14 +1156,15 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
                   {visibleColumns.map((c) => (
                     <td
                       key={c.id}
+                      data-col={c.id}
                       className={cn(
-                        "border-l border-[var(--color-border-light)] px-3 py-2.5",
+                        "overflow-hidden border-l border-[var(--color-border-light)] px-3 py-2.5",
                         c.align === "right" && "text-right",
                         c.align === "center" && "text-center",
                         c.cellClass,
                       )}
                     >
-                      {c.cell(e, i)}
+                      <div className={cn("min-w-0 truncate", c.align === "center" && "mx-auto")}>{c.cell(e, i)}</div>
                     </td>
                   ))}
                 </tr>
