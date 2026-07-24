@@ -45,3 +45,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Opt-in: commit env sản phẩm (chỉ chứa URL công khai)
+!.env.production

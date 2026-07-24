@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Columns3, Check, RotateCcw } from "lucide-react";
+import { Columns3, Check, RotateCcw, Trash2 } from "lucide-react";
 import type { ColumnDef } from "@/lib/table-prefs";
 import { cn } from "@/lib/utils";
 
@@ -10,11 +10,17 @@ export function ColumnMenu<Row>({
   hidden,
   onToggle,
   onReset,
+  isDeletable,
+  onDeleteColumn,
 }: {
   columns: ColumnDef<Row>[];
   hidden: Set<string>;
   onToggle: (id: string) => void;
   onReset: () => void;
+  /** Cột nào được phép xoá (VD: cột tùy chỉnh). */
+  isDeletable?: (col: ColumnDef<Row>) => boolean;
+  /** Xoá cột trực tiếp trong menu. */
+  onDeleteColumn?: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -59,31 +65,46 @@ export function ColumnMenu<Row>({
           <div className="max-h-[300px] overflow-y-auto">
             {columns.map((c) => {
               const visible = !hidden.has(c.id);
+              const deletable = !!onDeleteColumn && !!isDeletable?.(c) && !c.locked;
               return (
-                <button
+                <div
                   key={c.id}
-                  onClick={() => !c.locked && onToggle(c.id)}
-                  disabled={c.locked}
                   className={cn(
-                    "flex w-full items-center gap-2 rounded-[8px] px-2 py-1.5 text-left text-[12.5px]",
-                    c.locked
-                      ? "cursor-not-allowed text-[var(--color-text-lighter)]"
-                      : "text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]",
+                    "group flex w-full items-center gap-2 rounded-[8px] pl-2 pr-1 text-left text-[12.5px]",
+                    c.locked ? "text-[var(--color-text-lighter)]" : "hover:bg-[var(--color-page-bg)]",
                   )}
                 >
-                  <span
+                  <button
+                    onClick={() => !c.locked && onToggle(c.id)}
+                    disabled={c.locked}
                     className={cn(
-                      "flex h-4 w-4 items-center justify-center rounded-[4px] border",
-                      visible
-                        ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-white"
-                        : "border-[var(--color-border)]",
+                      "flex flex-1 items-center gap-2 py-1.5 text-left",
+                      c.locked ? "cursor-not-allowed" : "text-[var(--color-text-secondary)]",
                     )}
                   >
-                    {visible && <Check size={11} />}
-                  </span>
-                  <span className="flex-1 truncate">{c.label || c.id}</span>
-                  {c.locked && <span className="text-[10px] text-[var(--color-text-lighter)]">cố định</span>}
-                </button>
+                    <span
+                      className={cn(
+                        "flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-[4px] border",
+                        visible
+                          ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-white"
+                          : "border-[var(--color-border)]",
+                      )}
+                    >
+                      {visible && <Check size={11} />}
+                    </span>
+                    <span className="flex-1 truncate">{c.label || c.id}</span>
+                    {c.locked && <span className="text-[10px] text-[var(--color-text-lighter)]">cố định</span>}
+                  </button>
+                  {deletable && (
+                    <button
+                      onClick={() => onDeleteColumn!(c.id)}
+                      title={`Xoá cột "${c.label || c.id}"`}
+                      className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-[6px] text-[var(--color-text-lighter)] hover:bg-[var(--color-danger-bg)] hover:text-[var(--color-danger)]"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>

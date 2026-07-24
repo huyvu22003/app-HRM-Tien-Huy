@@ -65,40 +65,14 @@ function CustomFieldsModal({
           </button>
         </div>
 
-        <div className="mb-3 flex flex-col gap-1">
-          {fields.length === 0 && (
-            <div className="rounded-[8px] bg-[var(--color-page-bg)] px-3 py-2.5 text-[12.5px] text-[var(--color-text-muted)]">
-              Chưa có cột tùy chỉnh. Thêm cột riêng của bạn bên dưới (VD: Tay nghề, Ca làm việc, Ghi chú HR).
-            </div>
-          )}
-          {fields.map((f) => (
-            <div key={f.id} className="flex items-center justify-between rounded-[8px] border border-[var(--color-border-light)] px-3 py-2">
-              <div className="text-[12.5px]">
-                <span className="font-medium text-[var(--color-text-primary)]">{f.label}</span>
-                <span className="ml-2 text-[11px] text-[var(--color-text-lighter)]">
-                  {f.type === "text" ? "Văn bản" : f.type === "number" ? "Số" : "Lựa chọn"}
-                </span>
-              </div>
-              <button
-                onClick={async () => {
-                  await removeCustomField(f.id);
-                  onChanged();
-                }}
-                className="text-[var(--color-text-lighter)] hover:text-[var(--color-danger)]"
-                title="Xóa cột"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))}
-        </div>
-
+        {/* Form thêm cột luôn ở trên cùng để không bị danh sách đẩy xuống */}
         <div className="rounded-[10px] bg-[var(--color-page-bg)] p-3">
           <div className="mb-2 text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">Thêm cột mới</div>
           <div className="flex flex-wrap items-end gap-2">
             <input
               value={label}
               onChange={(e) => setLabel(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && add()}
               placeholder="Tên cột"
               className="h-8 flex-1 min-w-[140px] rounded-[6px] border border-[var(--color-border)] px-2 text-[12.5px] outline-none focus:border-[var(--color-accent)]"
             />
@@ -126,6 +100,41 @@ function CustomFieldsModal({
               placeholder="Các lựa chọn, phân cách bằng dấu phẩy (VD: A, B, C)"
               className="mt-2 h-8 w-full rounded-[6px] border border-[var(--color-border)] px-2 text-[12.5px] outline-none focus:border-[var(--color-accent)]"
             />
+          )}
+        </div>
+
+        {/* Danh sách cột đã tạo (cuộn riêng, không đẩy form) */}
+        <div className="mt-3 flex max-h-[240px] flex-col gap-1 overflow-y-auto">
+          {fields.length === 0 ? (
+            <div className="rounded-[8px] bg-[var(--color-page-bg)] px-3 py-2.5 text-[12.5px] text-[var(--color-text-muted)]">
+              Chưa có cột tùy chỉnh. Thêm cột riêng của bạn phía trên (VD: Tay nghề, Ca làm việc, Ghi chú HR).
+            </div>
+          ) : (
+            <>
+              <div className="px-1 text-[11px] text-[var(--color-text-lighter)]">
+                {fields.length} cột đã tạo · Xoá cột ở menu <span className="font-medium">Cột</span> trên bảng.
+              </div>
+              {fields.map((f) => (
+                <div key={f.id} className="flex items-center justify-between rounded-[8px] border border-[var(--color-border-light)] px-3 py-2">
+                  <div className="text-[12.5px]">
+                    <span className="font-medium text-[var(--color-text-primary)]">{f.label}</span>
+                    <span className="ml-2 text-[11px] text-[var(--color-text-lighter)]">
+                      {f.type === "text" ? "Văn bản" : f.type === "number" ? "Số" : "Lựa chọn"}
+                    </span>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      await removeCustomField(f.id);
+                      onChanged();
+                    }}
+                    className="text-[var(--color-text-lighter)] hover:text-[var(--color-danger)]"
+                    title="Xóa cột"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </>
           )}
         </div>
 
@@ -942,7 +951,18 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
         </select>
 
         <div className="ml-auto flex gap-2">
-          <ColumnMenu columns={displayColumns} hidden={hidden} onToggle={toggle} onReset={reset} />
+          <ColumnMenu
+            columns={displayColumns}
+            hidden={hidden}
+            onToggle={toggle}
+            onReset={reset}
+            isDeletable={(c) => c.id.startsWith("cf_")}
+            onDeleteColumn={async (id) => {
+              await removeCustomField(id);
+              await hydrateCustomData(true);
+              setCustomFields(getCustomFields());
+            }}
+          />
           <button
             onClick={toggleReorderLock}
             className={cn(
