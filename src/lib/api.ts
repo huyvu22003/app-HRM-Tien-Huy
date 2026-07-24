@@ -482,6 +482,9 @@ export interface ApiSalaryRow {
   kpi_bonus: number | null;
   hot_bonus: number | null;
   advance: number | null;
+  advance_ck: number | null;
+  advance_tm: number | null;
+  company_debt: number | null;
   std_days: number | null;
   actual_days: number | null;
   gas_days: number | null;
