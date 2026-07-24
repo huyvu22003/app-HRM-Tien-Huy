@@ -5,7 +5,7 @@ pages_build_output_dir = "out"
 [[d1_databases]]
 binding = "DB"
 database_name = "hrm-tien-huy-db"
-database_id = "placeholder-replace-after-create"
+database_id = "8231e20c-8a17-482d-90a9-ae5de9ff9bdc"
 
 [[r2_buckets]]
 binding = "STORAGE"
