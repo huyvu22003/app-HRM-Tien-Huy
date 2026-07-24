@@ -68,6 +68,9 @@ for step in "${STEPS[@]}"; do
   $WRANGLER d1 execute "$DB_NAME" --remote --yes --file="$f"
 done
 
+echo "==> (3.5/5) Tạo R2 bucket 'hrm-tien-huy-files' (bỏ qua nếu đã có)..."
+$WRANGLER r2 bucket create hrm-tien-huy-files 2>&1 | head -5 || true
+
 echo "==> LƯU Ý trước khi deploy Worker:"
 echo "    - CORS_ORIGIN trong api/wrangler.toml phải khớp domain frontend."
 echo "      Hiện tại = 'https://hrm.tienhuy.vn'. Nếu frontend chạy ở *.pages.dev,"
