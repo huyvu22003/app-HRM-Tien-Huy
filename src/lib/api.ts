@@ -485,6 +485,9 @@ export interface ApiSalaryRow {
   advance_ck: number | null;
   advance_tm: number | null;
   company_debt: number | null;
+  pay_method: string | null;
+  merge_into: string | null;
+  bank: string | null;
   std_days: number | null;
   actual_days: number | null;
   gas_days: number | null;
