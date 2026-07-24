@@ -23,7 +23,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useQuery, useMutation } from "@/lib/hooks";
 import { getInitials, cn, formatDate, formatMoney, seededRandom } from "@/lib/utils";
 import { getEmployeePhoto, setEmployeePhoto } from "@/lib/photo-store";
-import { getCustomFields, getCustomValues, setCustomValues, type CustomField } from "@/lib/custom-fields";
+import { getCustomFields, getCustomValues, setCustomValues, hydrateCustomData, type CustomField } from "@/lib/custom-fields";
 import { getRaises, addRaise, deleteRaise, type SalaryRaise } from "@/lib/salary-history";
 
 const TABS = ["Tổng hợp", "Công việc", "Cá nhân", "Lương & phụ cấp", "Bảo hiểm", "Hồ sơ đính kèm"];
@@ -681,9 +681,10 @@ export function EmployeeDetailScreen({
   const [customSaved, setCustomSaved] = useState(false);
   const empIdNum = data?.employee?.id;
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- load custom fields/values from storage
-    setCustomFields(getCustomFields());
-    if (empIdNum != null) setCustomVals(getCustomValues(empIdNum));
+    hydrateCustomData(true).then(() => {
+      setCustomFields(getCustomFields());
+      if (empIdNum != null) setCustomVals(getCustomValues(empIdNum));
+    });
   }, [empIdNum]);
 
   const { mutate: doUpdate, isLoading: isSaving } = useMutation(
@@ -844,9 +845,9 @@ export function EmployeeDetailScreen({
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  function saveCustom() {
+  async function saveCustom() {
     if (empIdNum == null) return;
-    setCustomValues(empIdNum, customVals);
+    await setCustomValues(empIdNum, customVals);
     setCustomSaved(true);
     setTimeout(() => setCustomSaved(false), 3000);
   }
