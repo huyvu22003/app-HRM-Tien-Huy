@@ -13,6 +13,7 @@ export async function getSalary(request: Request, env: Env): Promise<Response> {
             c.base_salary, c.allowance, c.responsibility_salary,
             c.gas_allowance, c.attendance_bonus, c.union_dues,
             c.dependents, c.kpi_bonus, c.hot_bonus, c.advance,
+            c.advance_ck, c.advance_tm, c.company_debt,
             a.std_days, a.actual_days, a.gas_days, a.leave_days,
             a.overtime_hours, a.ot_weekday_hours, a.ot_sunday_hours,
             a.ot_holiday_hours, a.ot_night_hours,

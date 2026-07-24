@@ -73,6 +73,9 @@ export interface SalaryComputed {
   insuranceTotal: number;
   unionDues: number;
   advance: number;
+  advanceCk: number;
+  advanceTm: number;
+  companyDebt: number;
   taxableAfterDeductions: number;
   pit: number;
   netPay: number;
@@ -124,14 +127,18 @@ function computeSalary(row: ApiSalaryRow): SalaryComputed {
   const bhtn = row.bhtn_amount ?? 0;
   const insuranceTotal = bhxh + bhyt + bhtn;
   const unionDues = row.union_dues ?? 50000;
-  const advance = row.advance ?? 0;
+  // Tạm ứng: ưu tiên tổng CK+TM nếu có; nếu chưa nhập thì dùng cột advance cũ.
+  const advanceCk = row.advance_ck ?? 0;
+  const advanceTm = row.advance_tm ?? 0;
+  const advance = Math.max(row.advance ?? 0, advanceCk + advanceTm);
+  const companyDebt = row.company_debt ?? 0;
 
   const taxableAfterDeductions = taxableIncome - insuranceTotal - PERSONAL_DEDUCTION - dependents * DEPENDENT_DEDUCTION;
   // Thuế TNCN tạm ngắt (trả 0 tới khi bật lại SALARY_PIT_ENABLED).
   const pit = SALARY_PIT_ENABLED ? computePIT(taxableAfterDeductions) : 0;
 
-  // Thực trả = Gross − BHXH − BHYT − BHTN − ĐPCĐ − Tạm ứng − Thuế TNCN.
-  const netPay = totalIncome - insuranceTotal - unionDues - advance - pit;
+  // Thực trả = Gross − BHXH − BHYT − BHTN − ĐPCĐ − Tạm ứng − Trừ nợ − Thuế TNCN.
+  const netPay = totalIncome - insuranceTotal - unionDues - advance - companyDebt - pit;
 
   return {
     base, responsibility, allowance, gasAllowanceMonth, attendanceBonus, totalMonthly,
@@ -140,7 +147,7 @@ function computeSalary(row: ApiSalaryRow): SalaryComputed {
     otWeekday, otSunday, otHoliday,
     bonus, mealAllowance, gasAllowanceActual, nightAllowance, leavePay,
     totalIncome, taxableIncome,
-    bhxh, bhyt, bhtn, insuranceTotal, unionDues, advance,
+    bhxh, bhyt, bhtn, insuranceTotal, unionDues, advance, advanceCk, advanceTm, companyDebt,
     taxableAfterDeductions, pit, netPay,
   };
 }
@@ -173,6 +180,7 @@ const SAL_COLUMNS_ALL: ColumnDef<SalaryDisplayRow>[] = [
   { id: "insuranceTotal", label: "Bảo hiểm", align: "right", cell: (d) => `-${formatMoney(d.s.insuranceTotal)}`, exportValue: (d) => -d.s.insuranceTotal, exportFormat: "money" },
   { id: "pit", label: "Thuế", align: "right", cell: (d) => (d.s.pit > 0 ? `-${formatMoney(d.s.pit)}` : "0"), exportValue: (d) => -d.s.pit, exportFormat: "money" },
   { id: "advance", label: "Tạm ứng", align: "right", cell: (d) => (d.s.advance > 0 ? `-${formatMoney(d.s.advance)}` : "-"), exportValue: (d) => -d.s.advance, exportFormat: "money" },
+  { id: "companyDebt", label: "Trừ nợ", align: "right", cell: (d) => (d.s.companyDebt > 0 ? `-${formatMoney(d.s.companyDebt)}` : "-"), exportValue: (d) => -d.s.companyDebt, exportFormat: "money" },
   { id: "netPay", label: "Thực nhận", align: "right", cell: (d) => formatMoney(d.s.netPay), exportValue: (d) => d.s.netPay, exportFormat: "money" },
 ];
 
@@ -245,9 +253,12 @@ function PayslipModal({ data, period, onClose }: { data: SalaryDisplayRow; perio
               <Row label="Trừ BHYT (1,5%)" value={s.bhyt} />
               <Row label="Trừ BHTN (1%)" value={s.bhtn} />
               <Row label="Tiền ĐPCĐ" value={s.unionDues} />
-              {s.advance > 0 && <Row label="Tạm ứng" value={s.advance} />}
+              {s.advanceCk > 0 && <Row label="Tạm ứng (CK)" value={s.advanceCk} />}
+              {s.advanceTm > 0 && <Row label="Tạm ứng (TM)" value={s.advanceTm} />}
+              {s.advance > 0 && s.advanceCk + s.advanceTm === 0 && <Row label="Tạm ứng" value={s.advance} />}
+              {s.companyDebt > 0 && <Row label="Trừ nợ công ty" value={s.companyDebt} />}
               {s.pit > 0 && <Row label="Thuế TNCN" value={s.pit} />}
-              <Row label="Tổng cộng (2)" value={s.insuranceTotal + s.unionDues + s.advance + s.pit} bold />
+              <Row label="Tổng cộng (2)" value={s.insuranceTotal + s.unionDues + s.advance + s.companyDebt + s.pit} bold />
             </div>
           </div>
         </div>
@@ -308,7 +319,10 @@ function PrintPayslips({ rows, period }: { rows: SalaryDisplayRow[]; period: str
           ["Trừ BHYT (1,5%)", s.bhyt],
           ["Trừ BHTN (1%)", s.bhtn],
           ["Tiền ĐPCĐ", s.unionDues],
-          s.advance > 0 ? ["Tạm ứng", s.advance] : null,
+          s.advanceCk > 0 ? ["Tạm ứng (CK)", s.advanceCk] : null,
+          s.advanceTm > 0 ? ["Tạm ứng (TM)", s.advanceTm] : null,
+          s.advance > 0 && s.advanceCk + s.advanceTm === 0 ? ["Tạm ứng", s.advance] : null,
+          s.companyDebt > 0 ? ["Trừ nợ công ty", s.companyDebt] : null,
           s.pit > 0 ? ["Thuế TNCN", s.pit] : null,
         ].filter(Boolean) as [string, number][];
 
@@ -356,7 +370,7 @@ function PrintPayslips({ rows, period }: { rows: SalaryDisplayRow[]; period: str
       <div class="blk-h">II. Thông tin ngày công</div>
       <table class="t">${tblRows(workRows, false)}</table>
       <div class="blk-h">IV. Các khoản trừ</div>
-      <table class="t">${tblRows(deductRows)}<tr class="b"><td class="lbl"><b>Tổng cộng (2)</b></td><td class="val"><b>${fmt(s.insuranceTotal + s.unionDues + s.advance + s.pit)}</b></td></tr></table>
+      <table class="t">${tblRows(deductRows)}<tr class="b"><td class="lbl"><b>Tổng cộng (2)</b></td><td class="val"><b>${fmt(s.insuranceTotal + s.unionDues + s.advance + s.companyDebt + s.pit)}</b></td></tr></table>
     </div>
   </div>
   <div class="foot">
