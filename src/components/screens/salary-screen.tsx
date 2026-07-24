@@ -182,6 +182,27 @@ const SAL_COLUMNS_ALL: ColumnDef<SalaryDisplayRow>[] = [
   { id: "advance", label: "Tạm ứng", align: "right", cell: (d) => (d.s.advance > 0 ? `-${formatMoney(d.s.advance)}` : "-"), exportValue: (d) => -d.s.advance, exportFormat: "money" },
   { id: "companyDebt", label: "Trừ nợ", align: "right", cell: (d) => (d.s.companyDebt > 0 ? `-${formatMoney(d.s.companyDebt)}` : "-"), exportValue: (d) => -d.s.companyDebt, exportFormat: "money" },
   { id: "netPay", label: "Thực nhận", align: "right", cell: (d) => formatMoney(d.s.netPay), exportValue: (d) => d.s.netPay, exportFormat: "money" },
+  {
+    id: "payMethod",
+    label: "Cách nhận",
+    align: "center",
+    cell: (d) => {
+      const method = (d.row.pay_method ?? "CK").toUpperCase();
+      const merged = !!d.row.merge_into?.trim();
+      return (
+        <span className="inline-flex items-center gap-1">
+          <span className={cn(
+            "rounded-[6px] px-1.5 py-0.5 text-[10.5px] font-medium",
+            method === "TM" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700",
+          )}>
+            {method === "TM" ? "Tiền mặt" : "Chuyển khoản"}
+          </span>
+          {merged && <span className="rounded-[6px] bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600">ghép</span>}
+        </span>
+      );
+    },
+    exportValue: (d) => `${(d.row.pay_method ?? "CK") === "TM" ? "Tiền mặt" : "Chuyển khoản"}${d.row.merge_into?.trim() ? ` (ghép vào ${d.row.merge_into})` : ""}`,
+  },
 ];
 
 // Ẩn cột Thuế khi đang tạm ngắt thuế TNCN.
@@ -434,10 +455,151 @@ tr.b td{border-top:1px solid #333;border-bottom:none;padding-top:0.8mm}
   );
 }
 
+type Payout = { code: string; name: string; bank: string; method: string; amount: number };
+
+function DisbursementView({ rows }: { rows: SalaryDisplayRow[] }) {
+  const { ck, tm, merged, totalCk, totalTm } = useMemo(() => {
+    const rowByCode = new Map(rows.map((d) => [d.row.code, d]));
+    const payout = new Map<string, Payout>();
+    const mergedList: { name: string; targetName: string; amount: number }[] = [];
+    const ensure = (code: string): Payout => {
+      let p = payout.get(code);
+      if (!p) {
+        const d = rowByCode.get(code);
+        p = { code, name: d?.row.name ?? code, bank: d?.row.bank ?? "", method: (d?.row.pay_method ?? "CK").toUpperCase(), amount: 0 };
+        payout.set(code, p);
+      }
+      return p;
+    };
+    for (const d of rows) {
+      const net = d.s.netPay;
+      const target = d.row.merge_into?.trim();
+      if (target && rowByCode.has(target)) {
+        ensure(target).amount += net;
+        mergedList.push({ name: d.row.name, targetName: rowByCode.get(target)!.row.name, amount: net });
+      } else {
+        ensure(d.row.code).amount += net;
+      }
+    }
+    const list = [...payout.values()].filter((p) => p.amount !== 0);
+    const byName = (a: Payout, b: Payout) => a.name.localeCompare(b.name, "vi");
+    const ck = list.filter((p) => p.method !== "TM").sort(byName);
+    const tm = list.filter((p) => p.method === "TM").sort(byName);
+    return {
+      ck, tm, merged: mergedList,
+      totalCk: ck.reduce((s, p) => s + p.amount, 0),
+      totalTm: tm.reduce((s, p) => s + p.amount, 0),
+    };
+  }, [rows]);
+
+  async function exportChi() {
+    await exportStyledExcel({
+      filename: `danh-sach-chi-luong`,
+      title: "DANH SÁCH CHI LƯƠNG",
+      meta: [`Ngày xuất: ${new Date().toLocaleDateString("vi-VN")}`],
+      columns: [
+        { label: "Họ tên" },
+        { label: "Cách nhận" },
+        { label: "Số tài khoản" },
+        { label: "Số tiền", align: "right", format: "money" },
+      ],
+      rows: [
+        ...ck.map((p) => [p.name, "Chuyển khoản", p.bank, p.amount]),
+        ...tm.map((p) => [p.name, "Tiền mặt", "", p.amount]),
+      ],
+    });
+  }
+
+  const card = "rounded-[14px] border border-[var(--color-border)] bg-white";
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex justify-end">
+        <button
+          onClick={exportChi}
+          className="flex items-center gap-1.5 rounded-[8px] border border-[var(--color-border)] px-3 py-1.5 text-[12.5px] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]"
+        >
+          <Download size={14} /> Xuất Excel
+        </button>
+      </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {/* Chuyển khoản */}
+        <div className={card}>
+          <div className="flex items-center justify-between border-b border-[var(--color-border-light)] px-4 py-2.5">
+            <span className="text-[13px] font-semibold text-blue-700">Chuyển khoản ({ck.length})</span>
+            <span className="font-[family-name:var(--font-mono)] text-[13px] font-semibold">{formatMoney(totalCk)}</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12.5px]">
+              <thead>
+                <tr className="text-left text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">
+                  <th className="px-4 py-2 font-medium">Họ tên</th>
+                  <th className="px-4 py-2 font-medium">Số tài khoản</th>
+                  <th className="px-4 py-2 text-right font-medium">Số tiền</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ck.map((p) => (
+                  <tr key={p.code} className="border-t border-[var(--color-border-light)]">
+                    <td className="px-4 py-2 font-medium text-[var(--color-text-primary)]">{p.name}</td>
+                    <td className="px-4 py-2 text-[var(--color-text-muted)]">{p.bank || "—"}</td>
+                    <td className="px-4 py-2 text-right font-[family-name:var(--font-mono)]">{formatMoney(p.amount)}</td>
+                  </tr>
+                ))}
+                {ck.length === 0 && <tr><td colSpan={3} className="px-4 py-6 text-center text-[var(--color-text-muted)]">Không có</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        {/* Tiền mặt */}
+        <div className={card}>
+          <div className="flex items-center justify-between border-b border-[var(--color-border-light)] px-4 py-2.5">
+            <span className="text-[13px] font-semibold text-amber-700">Tiền mặt ({tm.length})</span>
+            <span className="font-[family-name:var(--font-mono)] text-[13px] font-semibold">{formatMoney(totalTm)}</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12.5px]">
+              <thead>
+                <tr className="text-left text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">
+                  <th className="px-4 py-2 font-medium">Họ tên</th>
+                  <th className="px-4 py-2 text-right font-medium">Số tiền</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tm.map((p) => (
+                  <tr key={p.code} className="border-t border-[var(--color-border-light)]">
+                    <td className="px-4 py-2 font-medium text-[var(--color-text-primary)]">{p.name}</td>
+                    <td className="px-4 py-2 text-right font-[family-name:var(--font-mono)]">{formatMoney(p.amount)}</td>
+                  </tr>
+                ))}
+                {tm.length === 0 && <tr><td colSpan={2} className="px-4 py-6 text-center text-[var(--color-text-muted)]">Không có</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {merged.length > 0 && (
+        <div className={cn(card, "px-4 py-3")}>
+          <div className="mb-2 text-[12.5px] font-semibold text-[var(--color-text-primary)]">Lương ghép (chuyển vào người khác)</div>
+          <div className="flex flex-col gap-1 text-[12px]">
+            {merged.map((m, i) => (
+              <div key={i} className="flex items-center justify-between border-b border-[var(--color-border-light)] pb-1 last:border-0">
+                <span className="text-[var(--color-text-secondary)]">{m.name} → ghép vào <span className="font-medium text-[var(--color-text-primary)]">{m.targetName}</span></span>
+                <span className="font-[family-name:var(--font-mono)]">{formatMoney(m.amount)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function SalaryScreen() {
   const [period, setPeriod] = useState("2026-06");
   const [deptFilter, setDeptFilter] = useState<number | "">("");
   const [selected, setSelected] = useState<SalaryDisplayRow | null>(null);
+  const [tab, setTab] = useState<"table" | "chi">("table");
 
   const { data, isLoading } = useQuery(() => fetchSalary(period), [period]);
   const { data: deptData } = useQuery(() => fetchDepartments(), []);
@@ -480,32 +642,58 @@ export function SalaryScreen() {
   }
 
   const toolbarLeft = (
-    <div className="flex flex-wrap items-center gap-3">
-      <div className="text-[13px] font-semibold text-[var(--color-text-primary)]">Bảng lương kỳ {periodLabel}</div>
-      <input
-        type="month"
-        value={period}
-        onChange={(e) => setPeriod(e.target.value)}
-        className="rounded-lg border border-[var(--color-border)] px-2 py-1 text-[13px]"
-      />
-      <select
-        value={deptFilter}
-        onChange={(e) => setDeptFilter(e.target.value ? Number(e.target.value) : "")}
-        className="rounded-lg border border-[var(--color-border)] px-2 py-1 text-[13px]"
-      >
-        <option value="">Tất cả phòng ban</option>
-        {deptData?.data?.map((d) => (
-          <option key={d.id} value={d.id}>{d.name}</option>
-        ))}
-      </select>
-      <span className="rounded-[20px] bg-[var(--color-success-bg)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--color-success)]">
-        {rows.length} nhân viên
-      </span>
-    </div>
+    <div className="text-[13px] font-semibold text-[var(--color-text-primary)]">Bảng lương kỳ {periodLabel}</div>
   );
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Kỳ lương + chuyển giữa Bảng lương và Danh sách chi */}
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          type="month"
+          value={period}
+          onChange={(e) => setPeriod(e.target.value)}
+          className="rounded-lg border border-[var(--color-border)] px-2 py-1 text-[13px]"
+        />
+        <select
+          value={deptFilter}
+          onChange={(e) => setDeptFilter(e.target.value ? Number(e.target.value) : "")}
+          className="rounded-lg border border-[var(--color-border)] px-2 py-1 text-[13px]"
+        >
+          <option value="">Tất cả phòng ban</option>
+          {deptData?.data?.map((d) => (
+            <option key={d.id} value={d.id}>{d.name}</option>
+          ))}
+        </select>
+        <span className="rounded-[20px] bg-[var(--color-success-bg)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--color-success)]">
+          {rows.length} nhân viên
+        </span>
+        <div className="ml-auto flex items-center gap-1 rounded-lg border border-[var(--color-border)] bg-white p-0.5">
+          {([["table", "Bảng lương"], ["chi", "Danh sách chi"]] as const).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className={cn(
+                "rounded-md px-3 py-1 text-[12px] font-medium transition",
+                tab === key ? "bg-[var(--color-primary)] text-white" : "text-[var(--color-text-secondary)] hover:bg-gray-100",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {tab === "chi" ? (
+        isLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--color-border)] border-t-[var(--color-primary)]" />
+          </div>
+        ) : (
+          <DisbursementView rows={rows} />
+        )
+      ) : (
+      <>
       {totals && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
@@ -551,6 +739,8 @@ export function SalaryScreen() {
             </>
           )}
         />
+      )}
+      </>
       )}
 
       {selected && <PayslipModal data={selected} period={period} onClose={() => setSelected(null)} />}

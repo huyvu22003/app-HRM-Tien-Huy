@@ -8,8 +8,9 @@ export async function getSalary(request: Request, env: Env): Promise<Response> {
   if (!period) return error("Thiếu tham số period (VD: 2026-06)", 400);
 
   const { results } = await env.DB.prepare(
-    `SELECT e.id as employee_id, e.code, e.name, e.department_id,
+    `SELECT e.id as employee_id, e.code, e.name, e.department_id, e.bank,
             d.name as department_name,
+            c.pay_method, c.merge_into,
             c.base_salary, c.allowance, c.responsibility_salary,
             c.gas_allowance, c.attendance_bonus, c.union_dues,
             c.dependents, c.kpi_bonus, c.hot_bonus, c.advance,
