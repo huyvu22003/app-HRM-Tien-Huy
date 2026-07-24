@@ -8,6 +8,7 @@ import {
   removeManagerPreview,
   type OrgPerson,
 } from "@/lib/org-hierarchy";
+import { getEffectiveComp, getLatestRaise } from "@/lib/salary-history";
 
 function toApiEmployee(e: (typeof EMPLOYEES)[number], idx: number) {
   return {
@@ -241,7 +242,9 @@ const STD_DAYS = 26;
 
 function mockSalaryRows() {
   return EMPLOYEES.slice(0, 20).map((e, i) => {
-    const base = e.baseSalary || 8_000_000;
+    // Chỉ lấy mức lương của lần điều chỉnh mới nhất để tính lương.
+    const eff = getEffectiveComp(e.code, e.baseSalary || 8_000_000, e.allowance || 300_000);
+    const base = eff.baseSalary || 8_000_000;
     return {
       employee_id: i + 1,
       code: e.code,
@@ -249,7 +252,7 @@ function mockSalaryRows() {
       department_id: DEPARTMENTS.findIndex((d) => d.name === e.department) + 1,
       department_name: e.department,
       base_salary: base,
-      allowance: e.allowance || 300_000,
+      allowance: eff.allowance || 300_000,
       responsibility_salary: 0,
       gas_allowance: 200_000,
       attendance_bonus: 450_000,
@@ -482,6 +485,45 @@ function blockColorFor(block: string): string {
   return found?.block_color ?? "#1e6fd0";
 }
 
+// --- Cột tùy chỉnh (demo: lưu localStorage; production: bảng D1) ---
+const CF_DEFS_KEY = "hrm_custom_fields";
+const CF_VALUES_KEY = "hrm_custom_field_values";
+
+interface MockCustomField {
+  id: string;
+  label: string;
+  type: "text" | "number" | "select";
+  options?: string[];
+}
+type MockValuesMap = Record<string, Record<string, string>>;
+
+function cfRead<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (raw) return JSON.parse(raw) as T;
+  } catch {
+    /* ignore */
+  }
+  return fallback;
+}
+
+function cfWrite(key: string, value: unknown) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* ignore */
+  }
+}
+
+function cfDefs(): MockCustomField[] {
+  return cfRead<MockCustomField[]>(CF_DEFS_KEY, []);
+}
+
+function cfValues(): MockValuesMap {
+  return cfRead<MockValuesMap>(CF_VALUES_KEY, {});
+}
+
 const MOCK_ROUTES: MockRoute[] = [
   {
     match: /^\/auth\/login$/,
@@ -625,14 +667,18 @@ const MOCK_ROUTES: MockRoute[] = [
       return {
         employee: emp ?? baseEmployees[0],
         compensation: src
-          ? {
-              id: 1,
-              employee_id: id,
-              base_salary: src.baseSalary,
-              allowance: src.allowance,
-              dependents: src.dependents,
-              effective_from: "2026-01-01",
-            }
+          ? (() => {
+              const eff = getEffectiveComp(src.code, src.baseSalary, src.allowance);
+              const latest = getLatestRaise(src.code);
+              return {
+                id: 1,
+                employee_id: id,
+                base_salary: eff.baseSalary,
+                allowance: eff.allowance,
+                dependents: src.dependents,
+                effective_from: latest?.effectiveDate ?? "2026-01-01",
+              };
+            })()
           : null,
         insurance: src
           ? {
@@ -792,6 +838,59 @@ const MOCK_ROUTES: MockRoute[] = [
   {
     match: /^\/permissions$/,
     handler: () => ({ data: [] }),
+  },
+  {
+    match: /^\/custom-fields$/,
+    method: "GET",
+    handler: () => ({ data: cfDefs() }),
+  },
+  {
+    match: /^\/custom-fields$/,
+    method: "POST",
+    handler: (_path, _params, body) => {
+      const b = parseBody(body);
+      const label = String(b.label ?? "").trim();
+      const type = b.type === "number" || b.type === "select" ? (b.type as string) : "text";
+      const field: MockCustomField = {
+        id: `cf_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+        label,
+        type: type as MockCustomField["type"],
+        options: type === "select" && Array.isArray(b.options) ? (b.options as string[]) : undefined,
+      };
+      cfWrite(CF_DEFS_KEY, [...cfDefs(), field]);
+      return field;
+    },
+  },
+  {
+    match: /^\/custom-fields\/values$/,
+    method: "GET",
+    handler: () => ({ data: cfValues() }),
+  },
+  {
+    match: /^\/custom-fields\/[^/]+$/,
+    method: "DELETE",
+    handler: (path) => {
+      const id = path.split("/").pop() as string;
+      cfWrite(CF_DEFS_KEY, cfDefs().filter((f) => f.id !== id));
+      const values = cfValues();
+      for (const empId of Object.keys(values)) {
+        if (values[empId] && id in values[empId]) delete values[empId][id];
+      }
+      cfWrite(CF_VALUES_KEY, values);
+      return { success: true };
+    },
+  },
+  {
+    match: /^\/employees\/(\d+)\/custom-values$/,
+    method: "PUT",
+    handler: (path, _params, body) => {
+      const empId = path.split("/")[2];
+      const b = parseBody(body);
+      const values = cfValues();
+      values[empId] = { ...(values[empId] ?? {}), ...(b as Record<string, string>) };
+      cfWrite(CF_VALUES_KEY, values);
+      return { success: true };
+    },
   },
 ];
 

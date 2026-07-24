@@ -31,6 +31,13 @@ import { getConfig, updateConfig } from "./handlers/config";
 import { getPermissions, updatePermissions } from "./handlers/permissions";
 import { uploadFile, downloadFile } from "./handlers/files";
 import { updateHierarchy } from "./handlers/org";
+import {
+  listCustomFields,
+  createCustomField,
+  deleteCustomField,
+  listCustomValues,
+  saveCustomValues,
+} from "./handlers/custom-fields";
 
 export type { Env };
 
@@ -81,6 +88,22 @@ export default {
       if (method === "GET" && pathname === "/api/employees") return withCors(await listEmployees(request, env));
       if (method === "POST" && pathname === "/api/employees/import") return withCors(await importEmployees(request, env));
       if (method === "POST" && pathname === "/api/employees") return withCors(await createEmployee(request, env));
+
+      // --- Custom fields (cột tùy chỉnh) — phải đứng trước route employees/:id ---
+      if (method === "GET" && pathname === "/api/custom-fields") return withCors(await listCustomFields(request, env));
+      if (method === "POST" && pathname === "/api/custom-fields") return withCors(await createCustomField(request, env));
+      if (method === "GET" && pathname === "/api/custom-fields/values") return withCors(await listCustomValues(request, env));
+      if (method === "DELETE" && pathname.startsWith("/api/custom-fields/")) {
+        const id = parseIdFromPath(pathname, "/api/custom-fields/");
+        if (!id) return withCors(error("Thiếu id cột", 400));
+        return withCors(await deleteCustomField(request, env, id));
+      }
+      if (method === "PUT" && /^\/api\/employees\/\d+\/custom-values$/.test(pathname)) {
+        const id = parseIdFromPath(pathname, "/api/employees/");
+        if (!id) return withCors(error("Thiếu id nhân viên", 400));
+        return withCors(await saveCustomValues(request, env, id));
+      }
+
       if (method === "GET" && pathname.startsWith("/api/employees/")) {
         const id = parseIdFromPath(pathname, "/api/employees/");
         if (!id) return withCors(error("Thiếu id nhân viên", 400));

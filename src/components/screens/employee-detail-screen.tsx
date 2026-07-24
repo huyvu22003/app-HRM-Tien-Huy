@@ -12,13 +12,19 @@ import {
   Upload,
   User as UserIcon,
   FileText,
+  TrendingUp,
+  Plus,
+  Trash2,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { fetchEmployee, updateEmployee, fetchDepartments, type ApiEmployee, type ApiCompensation, type ApiInsurance, type ApiDepartment } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery, useMutation } from "@/lib/hooks";
 import { getInitials, cn, formatDate, formatMoney, seededRandom } from "@/lib/utils";
 import { getEmployeePhoto, setEmployeePhoto } from "@/lib/photo-store";
-import { getCustomFields, getCustomValues, setCustomValues, type CustomField } from "@/lib/custom-fields";
+import { getCustomFields, getCustomValues, setCustomValues, hydrateCustomData, type CustomField } from "@/lib/custom-fields";
+import { getRaises, addRaise, deleteRaise, type SalaryRaise } from "@/lib/salary-history";
 
 const TABS = ["Tổng hợp", "Công việc", "Cá nhân", "Lương & phụ cấp", "Bảo hiểm", "Hồ sơ đính kèm"];
 
@@ -430,6 +436,215 @@ function PrintPreviewModal({
   );
 }
 
+function SalaryHistorySection({
+  employeeCode,
+  currentBase,
+  canEdit,
+  onChanged,
+}: {
+  employeeCode: string;
+  currentBase: number;
+  canEdit: boolean;
+  onChanged: () => void;
+}) {
+  const [raises, setRaises] = useState<SalaryRaise[]>([]);
+  const [adding, setAdding] = useState(false);
+  const [effectiveDate, setEffectiveDate] = useState("");
+  const [baseSalary, setBaseSalary] = useState("");
+  const [allowance, setAllowance] = useState("");
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState("");
+
+  const reload = useCallback(() => {
+    setRaises(getRaises(employeeCode));
+  }, [employeeCode]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- load salary history from storage
+    reload();
+  }, [reload]);
+
+  // Danh sách sắp xếp mới nhất trước. Mức tăng của mỗi dòng so với lần điều
+  // chỉnh cũ hơn kế tiếp; lần điều chỉnh sớm nhất là mốc khởi điểm (không có
+  // mức tăng để so sánh vì không rõ lương trước khi ghi nhận lịch sử).
+  const rows = raises.map((r, i) => {
+    const delta = i < raises.length - 1 ? r.baseSalary - raises[i + 1].baseSalary : null;
+    return { raise: r, delta };
+  });
+
+  function resetForm() {
+    setEffectiveDate("");
+    setBaseSalary("");
+    setAllowance("");
+    setReason("");
+    setError("");
+    setAdding(false);
+  }
+
+  function handleAdd() {
+    const base = Number(baseSalary.replace(/[^\d]/g, ""));
+    if (!effectiveDate) return setError("Vui lòng chọn ngày được tăng.");
+    if (!base || base <= 0) return setError("Vui lòng nhập mức lương cơ bản mới.");
+    if (!reason.trim()) return setError("Vui lòng nhập lý do tăng lương.");
+    const allow = allowance.trim() ? Number(allowance.replace(/[^\d]/g, "")) : null;
+    addRaise({ employeeCode, effectiveDate, baseSalary: base, allowance: allow, reason: reason.trim() });
+    resetForm();
+    reload();
+    onChanged();
+  }
+
+  function handleDelete(id: string) {
+    deleteRaise(employeeCode, id);
+    reload();
+    onChanged();
+  }
+
+  return (
+    <div className="mt-6 border-t border-[var(--color-border-light)] pt-5">
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-[13px] font-semibold text-[var(--color-text-primary)]">
+          <TrendingUp size={15} className="text-[var(--color-accent)]" /> Lịch sử tăng lương
+        </div>
+        {canEdit && !adding && (
+          <button
+            onClick={() => setAdding(true)}
+            className="flex items-center gap-1.5 rounded-[8px] border border-[var(--color-border)] px-2.5 py-1 text-[12px] text-[var(--color-text-secondary)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+          >
+            <Plus size={13} /> Ghi nhận tăng lương
+          </button>
+        )}
+      </div>
+
+      <div className="mb-3 rounded-[8px] bg-[var(--color-page-bg)] px-3 py-2 text-[11.5px] text-[var(--color-text-muted)]">
+        Khi tính lương, hệ thống chỉ dùng mức lương của <strong>lần điều chỉnh mới nhất</strong>.
+      </div>
+
+      {canEdit && adding && (
+        <div className="mb-4 rounded-[10px] border border-[var(--color-border)] bg-white p-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
+            <label className="flex flex-col gap-1 text-[11.5px] text-[var(--color-text-muted)]">
+              Ngày được tăng
+              <input
+                type="date"
+                value={effectiveDate}
+                onChange={(e) => setEffectiveDate(e.target.value)}
+                className="h-9 rounded-[8px] border border-[var(--color-border)] px-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-[11.5px] text-[var(--color-text-muted)]">
+              Lương cơ bản mới
+              <input
+                inputMode="numeric"
+                value={baseSalary}
+                onChange={(e) => setBaseSalary(e.target.value)}
+                placeholder="VD: 15000000"
+                className="h-9 rounded-[8px] border border-[var(--color-border)] px-2 text-[13px] outline-none focus:border-[var(--color-accent)]"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-[11.5px] text-[var(--color-text-muted)]">
+              Phụ cấp mới (tuỳ chọn)
+              <input
+                inputMode="numeric"
+                value={allowance}
+                onChange={(e) => setAllowance(e.target.value)}
+                placeholder="Bỏ trống nếu giữ nguyên"
+                className="h-9 rounded-[8px] border border-[var(--color-border)] px-2 text-[13px] outline-none focus:border-[var(--color-accent)]"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-[11.5px] text-[var(--color-text-muted)]">
+              Lý do tăng
+              <input
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="VD: Tăng lương định kỳ 2026"
+                className="h-9 rounded-[8px] border border-[var(--color-border)] px-2 text-[13px] outline-none focus:border-[var(--color-accent)]"
+              />
+            </label>
+          </div>
+          {error && <div className="mt-2 text-[12px] text-[var(--color-danger)]">{error}</div>}
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              onClick={handleAdd}
+              className="flex items-center gap-1.5 rounded-[8px] bg-[var(--color-accent)] px-3 py-1.5 text-[12.5px] font-medium text-white hover:opacity-90"
+            >
+              <Save size={13} /> Lưu
+            </button>
+            <button
+              onClick={resetForm}
+              className="rounded-[8px] border border-[var(--color-border)] px-3 py-1.5 text-[12.5px] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]"
+            >
+              Huỷ
+            </button>
+          </div>
+        </div>
+      )}
+
+      {rows.length === 0 ? (
+        <div className="rounded-[10px] border border-dashed border-[var(--color-border)] px-4 py-6 text-center text-[12.5px] text-[var(--color-text-muted)]">
+          Chưa có lịch sử tăng lương. Lương hiện tại: {formatMoney(currentBase)}.
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-[10px] border border-[var(--color-border)]">
+          <table className="w-full text-[12.5px]">
+            <thead>
+              <tr className="bg-[var(--color-page-bg)] text-left text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">
+                <th className="px-3 py-2.5 font-medium">Ngày tăng</th>
+                <th className="px-3 py-2.5 text-right font-medium">Lương cơ bản</th>
+                <th className="px-3 py-2.5 text-right font-medium">Mức tăng</th>
+                <th className="px-3 py-2.5 text-right font-medium">Phụ cấp</th>
+                <th className="px-3 py-2.5 font-medium">Lý do</th>
+                {canEdit && <th className="px-3 py-2.5" />}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(({ raise, delta }, i) => (
+                <tr key={raise.id} className="border-t border-[var(--color-border-light)]">
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    {formatDate(raise.effectiveDate)}
+                    {i === 0 && (
+                      <span className="ml-1.5 rounded-[6px] bg-[var(--color-success-bg)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-success)]">
+                        Đang áp dụng
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)] font-medium">{formatMoney(raise.baseSalary)}</td>
+                  <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)]">
+                    {delta == null ? (
+                      <span className="text-[10px] uppercase tracking-wide text-[var(--color-text-lighter)]">Khởi điểm</span>
+                    ) : delta === 0 ? (
+                      <span className="text-[var(--color-text-lighter)]">—</span>
+                    ) : (
+                      <span className={cn("inline-flex items-center gap-0.5", delta > 0 ? "text-[var(--color-success)]" : "text-[var(--color-danger)]")}>
+                        {delta > 0 ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
+                        {formatMoney(Math.abs(delta))}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-[family-name:var(--font-mono)]">
+                    {raise.allowance != null ? formatMoney(raise.allowance) : <span className="text-[var(--color-text-lighter)]">—</span>}
+                  </td>
+                  <td className="px-3 py-2.5 text-[var(--color-text-secondary)]">{raise.reason}</td>
+                  {canEdit && (
+                    <td className="px-3 py-2.5 text-right">
+                      <button
+                        onClick={() => handleDelete(raise.id)}
+                        title="Xoá bản ghi"
+                        className="rounded p-1 text-[var(--color-text-lighter)] hover:bg-[var(--color-danger-bg)] hover:text-[var(--color-danger)]"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function EmployeeDetailScreen({
   employeeId,
   onNavigate,
@@ -466,9 +681,10 @@ export function EmployeeDetailScreen({
   const [customSaved, setCustomSaved] = useState(false);
   const empIdNum = data?.employee?.id;
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- load custom fields/values from storage
-    setCustomFields(getCustomFields());
-    if (empIdNum != null) setCustomVals(getCustomValues(empIdNum));
+    hydrateCustomData(true).then(() => {
+      setCustomFields(getCustomFields());
+      if (empIdNum != null) setCustomVals(getCustomValues(empIdNum));
+    });
   }, [empIdNum]);
 
   const { mutate: doUpdate, isLoading: isSaving } = useMutation(
@@ -629,9 +845,9 @@ export function EmployeeDetailScreen({
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  function saveCustom() {
+  async function saveCustom() {
     if (empIdNum == null) return;
-    setCustomValues(empIdNum, customVals);
+    await setCustomValues(empIdNum, customVals);
     setCustomSaved(true);
     setTimeout(() => setCustomSaved(false), 3000);
   }
@@ -872,11 +1088,21 @@ export function EmployeeDetailScreen({
           )}
 
           {tab === 3 && (
-            <div className="grid grid-cols-2 gap-5 md:grid-cols-3">
-              <Field label="Lương cơ bản" value={compensation?.base_salary ? formatMoney(compensation.base_salary) : "-"} editing={editing} field="base_salary" form={form!} onChange={handleFieldChange} />
-              <Field label="Phụ cấp" value={compensation?.allowance ? formatMoney(compensation.allowance) : "-"} editing={editing} field="allowance" form={form!} onChange={handleFieldChange} />
-              <Field label="Tài khoản ngân hàng" value={employee.bank} editing={editing} field="bank" form={form!} onChange={handleFieldChange} />
-            </div>
+            <>
+              <div className="grid grid-cols-2 gap-5 md:grid-cols-3">
+                <Field label="Lương cơ bản hiện tại" value={compensation?.base_salary ? formatMoney(compensation.base_salary) : "-"} editing={editing} field="base_salary" form={form!} onChange={handleFieldChange} />
+                <Field label="Phụ cấp" value={compensation?.allowance ? formatMoney(compensation.allowance) : "-"} editing={editing} field="allowance" form={form!} onChange={handleFieldChange} />
+                <Field label="Tài khoản ngân hàng" value={employee.bank} editing={editing} field="bank" form={form!} onChange={handleFieldChange} />
+              </div>
+              {!editing && (
+                <SalaryHistorySection
+                  employeeCode={employee.code}
+                  currentBase={compensation?.base_salary ?? 0}
+                  canEdit={canEdit}
+                  onChanged={refetch}
+                />
+              )}
+            </>
           )}
 
           {tab === 4 && (

@@ -1,10 +1,25 @@
 "use client";
 
 /**
- * User-defined custom columns for the employee list. Definitions and per-employee
- * values are persisted to localStorage so they survive reloads (demo). When a
- * backend custom-fields table exists, swap these read/write helpers for API calls.
+ * Cột tùy chỉnh (user-defined columns) cho danh sách nhân viên.
+ *
+ * Định nghĩa cột + giá trị được lưu ở MÁY CHỦ qua API (`/custom-fields`,
+ * `/custom-fields/values`, `/employees/:id/custom-values`) nên không mất khi
+ * đăng xuất / đổi trình duyệt / đổi máy. Ở chế độ demo (chưa deploy backend),
+ * lớp `mock-api` tự phục vụ các route này bằng localStorage.
+ *
+ * Để phần render bảng vẫn đọc đồng bộ được, module giữ một bộ nhớ đệm
+ * (cache) được nạp bằng `hydrateCustomData()`; các getter đọc từ cache.
  */
+
+import {
+  fetchCustomFields,
+  createCustomFieldApi,
+  deleteCustomFieldApi,
+  fetchCustomValues,
+  saveCustomValuesApi,
+  type CustomValuesMap,
+} from "@/lib/api";
 
 export type CustomFieldType = "text" | "number" | "select";
 
@@ -12,66 +27,72 @@ export interface CustomField {
   id: string;
   label: string;
   type: CustomFieldType;
-  options?: string[]; // for type "select"
+  options?: string[]; // cho type "select"
 }
 
-const DEFS_KEY = "hrm_custom_fields";
-const VALUES_KEY = "hrm_custom_field_values";
+// --- Bộ nhớ đệm phía client ---
+let _fields: CustomField[] = [];
+let _values: CustomValuesMap = {};
+let _hydrated = false;
 
-type ValuesMap = Record<string, Record<string, string>>; // { [employeeId]: { [fieldId]: value } }
-
-function read<T>(key: string, fallback: T): T {
+/** Nạp định nghĩa cột + toàn bộ giá trị từ máy chủ vào cache. */
+export async function hydrateCustomData(force = false): Promise<void> {
+  if (_hydrated && !force) return;
   try {
-    const raw = window.localStorage.getItem(key);
-    if (raw) return JSON.parse(raw) as T;
+    const [defs, vals] = await Promise.all([fetchCustomFields(), fetchCustomValues()]);
+    _fields = defs.data ?? [];
+    _values = vals.data ?? {};
+    _hydrated = true;
   } catch {
-    /* ignore */
-  }
-  return fallback;
-}
-
-function write(key: string, value: unknown) {
-  try {
-    window.localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    /* ignore */
+    // Giữ nguyên cache hiện có nếu lỗi mạng.
   }
 }
 
 export function getCustomFields(): CustomField[] {
-  return read<CustomField[]>(DEFS_KEY, []);
+  return _fields;
 }
 
-export function addCustomField(field: Omit<CustomField, "id">): CustomField {
-  const defs = getCustomFields();
-  const created: CustomField = { ...field, id: `cf_${Date.now().toString(36)}` };
-  defs.push(created);
-  write(DEFS_KEY, defs);
-  return created;
+export async function addCustomField(field: Omit<CustomField, "id">): Promise<CustomField> {
+  const created = await createCustomFieldApi({
+    label: field.label,
+    type: field.type,
+    options: field.options,
+  });
+  const normalized: CustomField = {
+    id: created.id,
+    label: created.label,
+    type: created.type,
+    options: created.options,
+  };
+  _fields = [..._fields, normalized];
+  return normalized;
 }
 
-export function removeCustomField(id: string) {
-  write(DEFS_KEY, getCustomFields().filter((f) => f.id !== id));
-  // prune stored values for the removed field
-  const values = read<ValuesMap>(VALUES_KEY, {});
-  for (const empId of Object.keys(values)) {
-    if (values[empId] && id in values[empId]) delete values[empId][id];
+export async function removeCustomField(id: string): Promise<void> {
+  await deleteCustomFieldApi(id);
+  _fields = _fields.filter((f) => f.id !== id);
+  for (const empId of Object.keys(_values)) {
+    if (_values[empId] && id in _values[empId]) {
+      const next = { ..._values[empId] };
+      delete next[id];
+      _values[empId] = next;
+    }
   }
-  write(VALUES_KEY, values);
 }
 
 export function getCustomValue(employeeId: number | string, fieldId: string): string {
-  const values = read<ValuesMap>(VALUES_KEY, {});
-  return values[String(employeeId)]?.[fieldId] ?? "";
+  return _values[String(employeeId)]?.[fieldId] ?? "";
 }
 
 export function getCustomValues(employeeId: number | string): Record<string, string> {
-  const values = read<ValuesMap>(VALUES_KEY, {});
-  return values[String(employeeId)] ?? {};
+  return _values[String(employeeId)] ?? {};
 }
 
-export function setCustomValues(employeeId: number | string, fieldValues: Record<string, string>) {
-  const values = read<ValuesMap>(VALUES_KEY, {});
-  values[String(employeeId)] = { ...(values[String(employeeId)] ?? {}), ...fieldValues };
-  write(VALUES_KEY, values);
+export async function setCustomValues(
+  employeeId: number | string,
+  fieldValues: Record<string, string>,
+): Promise<void> {
+  await saveCustomValuesApi(employeeId, fieldValues);
+  const key = String(employeeId);
+  _values[key] = { ...(_values[key] ?? {}), ...fieldValues };
 }

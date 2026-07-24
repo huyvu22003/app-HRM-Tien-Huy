@@ -298,6 +298,37 @@ export function importEmployees(employees: Record<string, unknown>[]) {
   );
 }
 
+// --- Custom fields (cột tùy chỉnh) ---
+
+export interface ApiCustomField {
+  id: string;
+  label: string;
+  type: "text" | "number" | "select";
+  options?: string[];
+}
+
+export type CustomValuesMap = Record<string, Record<string, string>>;
+
+export function fetchCustomFields() {
+  return api.get<{ data: ApiCustomField[] }>("/custom-fields");
+}
+
+export function createCustomFieldApi(field: { label: string; type: string; options?: string[] }) {
+  return api.post<ApiCustomField>("/custom-fields", field);
+}
+
+export function deleteCustomFieldApi(id: string) {
+  return api.delete<{ success: boolean }>(`/custom-fields/${id}`);
+}
+
+export function fetchCustomValues() {
+  return api.get<{ data: CustomValuesMap }>("/custom-fields/values");
+}
+
+export function saveCustomValuesApi(employeeId: number | string, values: Record<string, string>) {
+  return api.put<{ success: boolean }>(`/employees/${employeeId}/custom-values`, values);
+}
+
 // --- Departments ---
 
 export interface ApiDepartment {

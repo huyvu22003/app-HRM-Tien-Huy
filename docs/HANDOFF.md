@@ -47,6 +47,40 @@ Primary files:
 - `api/src/handlers/employees.ts`
 - `db/migrations/004_employee_manager_relationship.sql`
 
+## Custom fields — server-side persistence (2026-07-24)
+
+Cột tùy chỉnh (user-defined columns) của danh sách nhân viên đã được chuyển
+sang lưu ở máy chủ để không mất khi đăng xuất / đổi trình duyệt / đổi máy.
+
+Migration:
+
+- Apply `db/migrations/005_custom_fields.sql` before enabling writes against production D1.
+- Tạo bảng `custom_fields` (định nghĩa cột, dùng chung toàn công ty) và
+  `employee_custom_values` (giá trị theo từng nhân viên).
+
+API:
+
+- `GET/POST /api/custom-fields`, `DELETE /api/custom-fields/:id`
+- `GET /api/custom-fields/values`
+- `PUT /api/employees/:id/custom-values`
+
+Kích hoạt lưu máy chủ (bước hạ tầng còn lại):
+
+1. Tạo D1 thật và thay `database_id = "placeholder-replace-after-create"`
+   trong `wrangler.toml` + `api/wrangler.toml`.
+2. Áp dụng toàn bộ migration 001→005.
+3. Deploy Worker API (`api/`) và trỏ `NEXT_PUBLIC_API_URL` của site về Worker.
+   Khi chưa deploy, ứng dụng chạy demo và `mock-api` phục vụ các route trên
+   bằng localStorage (chỉ bền trong cùng trình duyệt + cùng địa chỉ web).
+
+Primary files:
+
+- `src/lib/custom-fields.ts` (client cache + gọi API)
+- `src/lib/api.ts` (client functions)
+- `src/lib/mock-api.ts` (demo fallback)
+- `api/src/handlers/custom-fields.ts`
+- `db/migrations/005_custom_fields.sql`
+
 ## Earlier hierarchy verification (2026-07-19, before compact redesign)
 
 Completed:

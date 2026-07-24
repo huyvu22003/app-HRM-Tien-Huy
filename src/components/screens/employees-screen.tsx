@@ -17,6 +17,7 @@ import {
   addCustomField,
   removeCustomField,
   getCustomValue,
+  hydrateCustomData,
   type CustomField,
   type CustomFieldType,
 } from "@/lib/custom-fields";
@@ -34,17 +35,24 @@ function CustomFieldsModal({
   const [type, setType] = useState<CustomFieldType>("text");
   const [options, setOptions] = useState("");
 
-  function add() {
-    if (!label.trim()) return;
-    addCustomField({
-      label: label.trim(),
-      type,
-      options: type === "select" ? options.split(",").map((o) => o.trim()).filter(Boolean) : undefined,
-    });
-    setLabel("");
-    setOptions("");
-    setType("text");
-    onChanged();
+  const [busy, setBusy] = useState(false);
+
+  async function add() {
+    if (!label.trim() || busy) return;
+    setBusy(true);
+    try {
+      await addCustomField({
+        label: label.trim(),
+        type,
+        options: type === "select" ? options.split(",").map((o) => o.trim()).filter(Boolean) : undefined,
+      });
+      setLabel("");
+      setOptions("");
+      setType("text");
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -72,8 +80,8 @@ function CustomFieldsModal({
                 </span>
               </div>
               <button
-                onClick={() => {
-                  removeCustomField(f.id);
+                onClick={async () => {
+                  await removeCustomField(f.id);
                   onChanged();
                 }}
                 className="text-[var(--color-text-lighter)] hover:text-[var(--color-danger)]"
@@ -105,7 +113,7 @@ function CustomFieldsModal({
             </select>
             <button
               onClick={add}
-              disabled={!label.trim()}
+              disabled={!label.trim() || busy}
               className="flex h-8 items-center gap-1.5 rounded-[6px] bg-[var(--color-accent)] px-3 text-[12.5px] font-medium text-white disabled:opacity-60"
             >
               <Plus size={13} /> Thêm
@@ -581,10 +589,9 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
 
   const [importOpen, setImportOpen] = useState(false);
   const [fieldsOpen, setFieldsOpen] = useState(false);
-  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [customFields, setCustomFields] = useState<CustomField[]>(() => getCustomFields());
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- load from storage on mount
-    setCustomFields(getCustomFields());
+    hydrateCustomData(true).then(() => setCustomFields(getCustomFields()));
   }, []);
 
   const colFilterKey = JSON.stringify(colFilters);
@@ -900,7 +907,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
         <CustomFieldsModal
           fields={customFields}
           onClose={() => setFieldsOpen(false)}
-          onChanged={() => setCustomFields(getCustomFields())}
+          onChanged={() => hydrateCustomData(true).then(() => setCustomFields(getCustomFields()))}
         />
       )}
       {isLeadOrStaff && (
