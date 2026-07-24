@@ -241,7 +241,9 @@ function sortedDepartments(): ApiDept[] {
 const STD_DAYS = 26;
 
 function mockSalaryRows() {
-  return EMPLOYEES.slice(0, 20).map((e, i) => {
+  // Tạo bảng lương demo cho TẤT CẢ nhân viên đang làm việc (khớp số nhân sự),
+  // không giới hạn 20 người như trước.
+  return EMPLOYEES.filter((e) => e.status === "Đang làm việc").map((e, i) => {
     // Chỉ lấy mức lương của lần điều chỉnh mới nhất để tính lương.
     const eff = getEffectiveComp(e.code, e.baseSalary || 8_000_000, e.allowance || 300_000);
     const base = eff.baseSalary || 8_000_000;
@@ -284,7 +286,8 @@ function mockSalaryRows() {
 }
 
 function mockAttendance(period: string) {
-  return EMPLOYEES.slice(0, 20).map((e, i) => ({
+  // Chấm công demo cho tất cả nhân viên đang làm việc (khớp số nhân sự).
+  return EMPLOYEES.filter((e) => e.status === "Đang làm việc").map((e, i) => ({
     id: i + 1,
     employee_id: i + 1,
     employee_name: e.name,
