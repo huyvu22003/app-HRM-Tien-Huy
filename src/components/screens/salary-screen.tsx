@@ -14,6 +14,12 @@ const HOURS_PER_DAY = 8;
 const PERSONAL_DEDUCTION = 15_500_000;
 const DEPENDENT_DEDUCTION = 6_200_000;
 
+// TẠM NGẮT thuế TNCN và KPI khỏi bảng lương.
+// - Thuế TNCN vẫn nằm trong công thức (khoản trừ) nhưng trả 0 cho tới khi bật lại.
+// - KPI không cộng vào thu nhập lương.
+// Bật lại thuế: đổi cờ này thành true.
+const SALARY_PIT_ENABLED = false;
+
 const PIT_BRACKETS = [
   { upTo: 10_000_000, rate: 0.05, quick: 0 },
   { upTo: 30_000_000, rate: 0.10, quick: 500_000 },
@@ -52,9 +58,7 @@ export interface SalaryComputed {
   allowanceActual: number;
   attendanceActual: number;
   otWeekday: number;
-  otWeekdayExempt: number;
   otSunday: number;
-  otSundayExempt: number;
   otHoliday: number;
   bonus: number;
   mealAllowance: number;
@@ -98,10 +102,9 @@ function computeSalary(row: ApiSalaryRow): SalaryComputed {
   const responsibilityActual = Math.round((responsibility / STD_DAYS) * actualDays);
   const allowanceActual = Math.round((allowance / STD_DAYS) * actualDays);
   const attendanceActual = row.attendance_bonus ?? 0;
+  // Tăng ca trả nguyên theo hệ số: thường 150%, chủ nhật 200%, lễ 300%.
   const otWeekday = Math.round(hourlyBase * otWeekdayHours * 1.5);
-  const otWeekdayExempt = Math.round(otWeekday / 3);
   const otSunday = Math.round(hourlyBase * otSundayHours * 2.0);
-  const otSundayExempt = Math.round(otSunday / 2);
   const otHoliday = Math.round(hourlyBase * otHolidayHours * 3.0);
   const bonus = row.bonus ?? 0;
   const mealAllowance = row.meal_allowance ?? 0;
@@ -109,11 +112,12 @@ function computeSalary(row: ApiSalaryRow): SalaryComputed {
   const nightAllowance = row.night_allowance ?? 0;
   const leavePay = leaveDays > 0 ? Math.round(dailyBase * leaveDays) : 0;
 
+  // Tổng thu nhập (Gross) — KHÔNG cộng KPI.
   const totalIncome = workSalary + responsibilityActual + allowanceActual + attendanceActual
-    + otWeekday + otWeekdayExempt + otSunday + otSundayExempt + otHoliday
+    + otWeekday + otSunday + otHoliday
     + bonus + mealAllowance + gasAllowanceActual + nightAllowance + leavePay;
 
-  const taxableIncome = totalIncome - otSundayExempt - otWeekdayExempt;
+  const taxableIncome = totalIncome;
 
   const bhxh = row.bhxh_amount ?? 0;
   const bhyt = row.bhyt_amount ?? 0;
@@ -123,15 +127,17 @@ function computeSalary(row: ApiSalaryRow): SalaryComputed {
   const advance = row.advance ?? 0;
 
   const taxableAfterDeductions = taxableIncome - insuranceTotal - PERSONAL_DEDUCTION - dependents * DEPENDENT_DEDUCTION;
-  const pit = computePIT(taxableAfterDeductions);
+  // Thuế TNCN tạm ngắt (trả 0 tới khi bật lại SALARY_PIT_ENABLED).
+  const pit = SALARY_PIT_ENABLED ? computePIT(taxableAfterDeductions) : 0;
 
-  const netPay = totalIncome - unionDues - insuranceTotal - advance - pit;
+  // Thực trả = Gross − BHXH − BHYT − BHTN − ĐPCĐ − Tạm ứng − Thuế TNCN.
+  const netPay = totalIncome - insuranceTotal - unionDues - advance - pit;
 
   return {
     base, responsibility, allowance, gasAllowanceMonth, attendanceBonus, totalMonthly,
     actualDays, gasDays, leaveDays, otWeekdayHours, otSundayHours, otHolidayHours, otNightHours, dependents,
     workSalary, responsibilityActual, allowanceActual, attendanceActual,
-    otWeekday, otWeekdayExempt, otSunday, otSundayExempt, otHoliday,
+    otWeekday, otSunday, otHoliday,
     bonus, mealAllowance, gasAllowanceActual, nightAllowance, leavePay,
     totalIncome, taxableIncome,
     bhxh, bhyt, bhtn, insuranceTotal, unionDues, advance,
@@ -142,10 +148,10 @@ function computeSalary(row: ApiSalaryRow): SalaryComputed {
 type SalaryDisplayRow = { row: ApiSalaryRow; s: SalaryComputed };
 
 function totalOtOf(s: SalaryComputed): number {
-  return s.otWeekday + s.otWeekdayExempt + s.otSunday + s.otSundayExempt + s.otHoliday;
+  return s.otWeekday + s.otSunday + s.otHoliday;
 }
 
-const SAL_COLUMNS: ColumnDef<SalaryDisplayRow>[] = [
+const SAL_COLUMNS_ALL: ColumnDef<SalaryDisplayRow>[] = [
   {
     id: "name",
     label: "Nhân viên",
@@ -169,6 +175,9 @@ const SAL_COLUMNS: ColumnDef<SalaryDisplayRow>[] = [
   { id: "advance", label: "Tạm ứng", align: "right", cell: (d) => (d.s.advance > 0 ? `-${formatMoney(d.s.advance)}` : "-"), exportValue: (d) => -d.s.advance, exportFormat: "money" },
   { id: "netPay", label: "Thực nhận", align: "right", cell: (d) => formatMoney(d.s.netPay), exportValue: (d) => d.s.netPay, exportFormat: "money" },
 ];
+
+// Ẩn cột Thuế khi đang tạm ngắt thuế TNCN.
+const SAL_COLUMNS = SAL_COLUMNS_ALL.filter((c) => SALARY_PIT_ENABLED || c.id !== "pit");
 
 function PayslipModal({ data, period, onClose }: { data: SalaryDisplayRow; period: string; onClose: () => void }) {
   const { row, s } = data;
@@ -206,8 +215,8 @@ function PayslipModal({ data, period, onClose }: { data: SalaryDisplayRow; perio
               <Row label="Trách nhiệm" value={s.responsibilityActual} />
               <Row label="Phụ cấp" value={s.allowanceActual} />
               {s.attendanceActual > 0 && <Row label="Chuyên cần" value={s.attendanceActual} />}
-              {(s.otWeekday + s.otWeekdayExempt) > 0 && <Row label="Tăng ca ngày thường" value={s.otWeekday + s.otWeekdayExempt} />}
-              {(s.otSunday + s.otSundayExempt) > 0 && <Row label="Tăng ca chủ nhật" value={s.otSunday + s.otSundayExempt} />}
+              {s.otWeekday > 0 && <Row label="Tăng ca ngày thường" value={s.otWeekday} />}
+              {s.otSunday > 0 && <Row label="Tăng ca chủ nhật" value={s.otSunday} />}
               {s.otHoliday > 0 && <Row label="Tăng ca ngày lễ" value={s.otHoliday} />}
               {s.bonus > 0 && <Row label="Thưởng" value={s.bonus} />}
               {s.mealAllowance > 0 && <Row label="Phụ cấp cơm" value={s.mealAllowance} />}
@@ -284,8 +293,8 @@ function PrintPayslips({ rows, period }: { rows: SalaryDisplayRow[]; period: str
           ["Trách nhiệm", s.responsibilityActual],
           ["Phụ cấp", s.allowanceActual],
           s.attendanceActual > 0 ? ["Chuyên cần", s.attendanceActual] : null,
-          (s.otWeekday + s.otWeekdayExempt) > 0 ? ["Tăng ca ngày thường", s.otWeekday + s.otWeekdayExempt] : null,
-          (s.otSunday + s.otSundayExempt) > 0 ? ["Tăng ca chủ nhật", s.otSunday + s.otSundayExempt] : null,
+          s.otWeekday > 0 ? ["Tăng ca ngày thường", s.otWeekday] : null,
+          s.otSunday > 0 ? ["Tăng ca chủ nhật", s.otSunday] : null,
           s.otHoliday > 0 ? ["Tăng ca ngày lễ", s.otHoliday] : null,
           s.bonus > 0 ? ["Thưởng", s.bonus] : null,
           s.mealAllowance > 0 ? ["Phụ cấp cơm", s.mealAllowance] : null,
@@ -488,7 +497,9 @@ export function SalaryScreen() {
           {[
             { label: "Tổng thu nhập", value: formatMoney(totals.totalIncome), color: "text-[var(--color-text-primary)]" },
             { label: "Tổng BHXH/YT/TN", value: formatMoney(totals.totalIns), color: "text-[var(--color-danger)]" },
-            { label: "Tổng thuế TNCN", value: formatMoney(totals.totalTax), color: "text-[var(--color-danger)]" },
+            ...(SALARY_PIT_ENABLED
+              ? [{ label: "Tổng thuế TNCN", value: formatMoney(totals.totalTax), color: "text-[var(--color-danger)]" }]
+              : []),
             { label: "Tổng thực nhận", value: formatMoney(totals.totalNet), color: "text-[var(--color-success)]" },
           ].map((s) => (
             <div key={s.label} className="rounded-[12px] border border-[var(--color-border)] bg-white px-3 py-2.5">
