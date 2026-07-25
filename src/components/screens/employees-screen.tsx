@@ -177,6 +177,35 @@ const IMPORT_HEADER_MAP: Record<string, string> = {
   "số cccd": "cccd",
   "địa chỉ thường trú": "address",
   "ngày nghỉ việc": "resign_date",
+  // Phase 2 — hồ sơ mở rộng
+  "nguyên nhân nghỉ": "resign_reason",
+  "ngày hđlđ l1": "contract_date_1",
+  "ngày hđlđ l2": "contract_date_2",
+  "ngày hđlđ l3": "contract_date_3",
+  "năm sinh": "birth_year",
+  "nơi sinh": "birth_place",
+  "học lực": "education",
+  "địa chỉ tạm trú": "temp_address",
+  "ngày cấp": "cccd_issue_date",
+  "nơi cấp": "cccd_issue_place",
+  "quốc tịch": "nationality",
+  "tôn giáo": "religion",
+  "dân tộc": "ethnicity",
+  "số tài khoản": "bank_account",
+  "chi nhánh ngân hàng": "bank_branch",
+  "mã số sổ bhxh": "bhxh_no",
+  "báo tăng bhxh": "bhxh_increase_date",
+  "báo giảm bhxh": "bhxh_decrease_date",
+  "npt": "dependents",
+  "người thân": "relative_name",
+  "mối quan hệ": "relative_relation",
+  "số đt người thân": "relative_phone",
+  "lương cơ bản": "base_salary",
+  "trách nhiệm": "responsibility_salary",
+  "pc công việc": "allowance",
+  "pc xăng xe": "gas_allowance",
+  "chuyên cần": "attendance_bonus",
+  "tổng lương": "total_salary", // chỉ để không báo "chưa hỗ trợ" — backend bỏ qua
 };
 
 // Nhãn hiển thị cho các trường được đối chiếu.
@@ -186,6 +215,15 @@ const FIELD_LABELS: Record<string, string> = {
   cccd: "CCCD", address: "Địa chỉ", join_date: "Ngày vào làm", workplace: "Nơi làm việc",
   level: "Cấp bậc", manager: "Quản lý", contract_type: "Loại HĐ", status: "Trạng thái",
   bank: "Tài khoản NH", tax_code: "Mã số thuế", resign_date: "Ngày nghỉ việc",
+  resign_reason: "Nguyên nhân nghỉ", contract_date_1: "Ngày HĐLĐ L1", contract_date_2: "Ngày HĐLĐ L2",
+  contract_date_3: "Ngày HĐLĐ L3", birth_year: "Năm sinh", birth_place: "Nơi sinh", education: "Học lực",
+  temp_address: "Địa chỉ tạm trú", cccd_issue_date: "Ngày cấp CCCD", cccd_issue_place: "Nơi cấp CCCD",
+  nationality: "Quốc tịch", religion: "Tôn giáo", ethnicity: "Dân tộc", bank_account: "Số tài khoản",
+  bank_branch: "Chi nhánh NH", bhxh_no: "Mã số sổ BHXH", bhxh_increase_date: "Báo tăng BHXH",
+  bhxh_decrease_date: "Báo giảm BHXH", relative_name: "Người thân", relative_relation: "Mối quan hệ",
+  relative_phone: "SĐT người thân", dependents: "Số phụ thuộc", base_salary: "Lương cơ bản",
+  responsibility_salary: "Trách nhiệm", allowance: "PC công việc", gas_allowance: "PC xăng xe",
+  attendance_bonus: "Chuyên cần",
 };
 
 // Các trường được so sánh/cập nhật (khớp với backend import).
@@ -193,6 +231,10 @@ const IMPORT_COMPARE_FIELDS = [
   "name", "department_name", "position", "phone", "email", "gender", "dob", "cccd",
   "address", "join_date", "workplace", "level", "manager", "contract_type", "status",
   "bank", "tax_code",
+  "resign_reason", "contract_date_1", "contract_date_2", "contract_date_3", "birth_year",
+  "birth_place", "education", "temp_address", "cccd_issue_date", "cccd_issue_place",
+  "nationality", "religion", "ethnicity", "bank_account", "bank_branch", "bhxh_no",
+  "bhxh_increase_date", "bhxh_decrease_date", "relative_name", "relative_relation", "relative_phone",
 ];
 
 /** Chuẩn hoá ngày dd/mm/yyyy → yyyy-mm-dd để so sánh khỏi lệch định dạng. */

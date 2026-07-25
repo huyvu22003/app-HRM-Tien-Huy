@@ -118,6 +118,16 @@ function Field({
   );
 }
 
+/** Trường chỉ đọc (hồ sơ mở rộng nhập từ import) — hiển thị, chưa cho sửa. */
+function ReadOnlyField({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div>
+      <div className="text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">{label}</div>
+      <div className="mt-1 text-[13.5px] text-[var(--color-text-primary)]">{value ?? "-"}</div>
+    </div>
+  );
+}
+
 function mask(val: string | null | undefined, showLast = 3): string {
   if (!val) return "-";
   const s = String(val);
@@ -1071,19 +1081,35 @@ export function EmployeeDetailScreen({
                 <Field label="Ngày hết hạn HĐ" value={formatDate(employee.contract_end)} editing={editing} field="contract_end" form={form!} onChange={handleFieldChange} type="date" />
               )}
               <Field label="Trạng thái" value={employee.status} editing={editing} field="status" form={form!} onChange={handleFieldChange} type="select" options={["Đang làm việc", "Nghỉ việc", "Nghỉ thai sản", "Thử việc"]} />
+              {employee.contract_date_1 && <ReadOnlyField label="Ngày HĐLĐ L1" value={employee.contract_date_1} />}
+              {employee.contract_date_2 && <ReadOnlyField label="Ngày HĐLĐ L2" value={employee.contract_date_2} />}
+              {employee.contract_date_3 && <ReadOnlyField label="Ngày HĐLĐ L3" value={employee.contract_date_3} />}
+              {employee.resign_reason && <ReadOnlyField label="Nguyên nhân nghỉ" value={employee.resign_reason} />}
             </div>
           )}
 
           {tab === 2 && (
             <div className="grid grid-cols-2 gap-5 md:grid-cols-3">
               <Field label="Ngày sinh" value={formatDate(employee.dob)} editing={editing} field="dob" form={form!} onChange={handleFieldChange} type="date" />
+              {employee.birth_year && <ReadOnlyField label="Năm sinh" value={employee.birth_year} />}
               <Field label="Giới tính" value={employee.gender} editing={editing} field="gender" form={form!} onChange={handleFieldChange} type="select" options={["Nam", "Nữ"]} />
               <Field label="CCCD" value={employee.cccd} editing={editing} field="cccd" form={form!} onChange={handleFieldChange} />
+              {employee.cccd_issue_date && <ReadOnlyField label="Ngày cấp CCCD" value={employee.cccd_issue_date} />}
+              {employee.cccd_issue_place && <ReadOnlyField label="Nơi cấp CCCD" value={employee.cccd_issue_place} />}
               <Field label="Mã số thuế" value={employee.tax_code} editing={editing} field="tax_code" form={form!} onChange={handleFieldChange} />
               <Field label="Điện thoại" value={employee.phone} editing={editing} field="phone" form={form!} onChange={handleFieldChange} />
               <Field label="Email" value={employee.email} editing={editing} field="email" form={form!} onChange={handleFieldChange} />
-              <Field label="Địa chỉ" value={employee.address} editing={editing} field="address" form={form!} onChange={handleFieldChange} />
+              <Field label="Địa chỉ thường trú" value={employee.address} editing={editing} field="address" form={form!} onChange={handleFieldChange} />
+              {employee.temp_address && <ReadOnlyField label="Địa chỉ tạm trú" value={employee.temp_address} />}
+              {employee.birth_place && <ReadOnlyField label="Nơi sinh" value={employee.birth_place} />}
+              {employee.education && <ReadOnlyField label="Học lực" value={employee.education} />}
+              {employee.nationality && <ReadOnlyField label="Quốc tịch" value={employee.nationality} />}
+              {employee.religion && <ReadOnlyField label="Tôn giáo" value={employee.religion} />}
+              {employee.ethnicity && <ReadOnlyField label="Dân tộc" value={employee.ethnicity} />}
               <Field label="Số phụ thuộc" value={compensation?.dependents ?? 0} editing={editing} field="dependents" form={form!} onChange={handleFieldChange} />
+              {employee.relative_name && <ReadOnlyField label="Người thân" value={employee.relative_name} />}
+              {employee.relative_relation && <ReadOnlyField label="Mối quan hệ" value={employee.relative_relation} />}
+              {employee.relative_phone && <ReadOnlyField label="SĐT người thân" value={employee.relative_phone} />}
             </div>
           )}
 
@@ -1093,6 +1119,8 @@ export function EmployeeDetailScreen({
                 <Field label="Lương cơ bản hiện tại" value={compensation?.base_salary ? formatMoney(compensation.base_salary) : "-"} editing={editing} field="base_salary" form={form!} onChange={handleFieldChange} />
                 <Field label="Phụ cấp" value={compensation?.allowance ? formatMoney(compensation.allowance) : "-"} editing={editing} field="allowance" form={form!} onChange={handleFieldChange} />
                 <Field label="Tài khoản ngân hàng" value={employee.bank} editing={editing} field="bank" form={form!} onChange={handleFieldChange} />
+                {employee.bank_account && <ReadOnlyField label="Số tài khoản" value={employee.bank_account} />}
+                {employee.bank_branch && <ReadOnlyField label="Chi nhánh ngân hàng" value={employee.bank_branch} />}
               </div>
               {!editing && (
                 <SalaryHistorySection
@@ -1114,6 +1142,9 @@ export function EmployeeDetailScreen({
               <Field label="Nơi khám BHYT" value={insurance?.bhyt_clinic} editing={editing} field="bhyt_clinic" form={form!} onChange={handleFieldChange} />
               <Field label="Ngày bắt đầu đóng" value={insurance?.start_date ? formatDate(insurance.start_date) : "-"} editing={editing} field="ins_start_date" form={form!} onChange={handleFieldChange} type="date" />
               <Field label="Mức lương đóng BH" value={insurance?.salary_base ? formatMoney(insurance.salary_base) : "-"} editing={editing} field="ins_salary_base" form={form!} onChange={handleFieldChange} />
+              {employee.bhxh_no && <ReadOnlyField label="Mã số sổ BHXH" value={employee.bhxh_no} />}
+              {employee.bhxh_increase_date && <ReadOnlyField label="Báo tăng BHXH" value={employee.bhxh_increase_date} />}
+              {employee.bhxh_decrease_date && <ReadOnlyField label="Báo giảm BHXH" value={employee.bhxh_decrease_date} />}
             </div>
           )}
 

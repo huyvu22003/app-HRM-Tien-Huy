@@ -183,12 +183,20 @@ export async function importEmployees(request: Request, env: Env): Promise<Respo
     const cols: Record<string, unknown> = {};
     for (const k of ["gender", "dob", "phone", "cccd", "address", "email", "position",
                      "workplace", "contract_type", "contract_end", "join_date", "status",
-                     "manager", "level", "bank", "tax_code"]) {
+                     "manager", "level", "bank", "tax_code",
+                     // Phase 2: các trường hồ sơ mở rộng
+                     "resign_reason", "contract_date_1", "contract_date_2", "contract_date_3",
+                     "birth_year", "birth_place", "education", "temp_address",
+                     "cccd_issue_date", "cccd_issue_place", "nationality", "religion", "ethnicity",
+                     "bank_account", "bank_branch", "bhxh_no", "bhxh_increase_date",
+                     "bhxh_decrease_date", "relative_name", "relative_relation", "relative_phone"]) {
       if (has(k)) cols[k] = strField(k);
     }
     if (deptName) cols.department_id = departmentId;
 
+    let empId: number;
     if (existing) {
+      empId = existing.id;
       // name có thể đổi; luôn cho phép cập nhật name khi có.
       cols.name = name;
       const sets = Object.keys(cols).map((k) => `${k} = ?`).join(", ");
@@ -202,10 +210,35 @@ export async function importEmployees(request: Request, env: Env): Promise<Respo
       const insertCols = { name, status: (cols.status as string) ?? "Đang làm việc", ...cols };
       const keys = ["code", ...Object.keys(insertCols)];
       const placeholders = keys.map(() => "?").join(", ");
-      await env.DB.prepare(`INSERT INTO employees (${keys.join(", ")}) VALUES (${placeholders})`)
+      const res = await env.DB.prepare(`INSERT INTO employees (${keys.join(", ")}) VALUES (${placeholders})`)
         .bind(code, ...Object.values(insertCols))
         .run();
+      empId = res.meta.last_row_id as number;
       created++;
+    }
+
+    // Lương / phụ cấp / người phụ thuộc → bảng compensation.
+    const num = (k: string) => Number(String(r[k]).replace(/[^\d.-]/g, ""));
+    const compMap: Record<string, string> = {
+      base_salary: "base_salary", responsibility_salary: "responsibility_salary",
+      allowance: "allowance", gas_allowance: "gas_allowance",
+      attendance_bonus: "attendance_bonus", dependents: "dependents",
+    };
+    const comp: Record<string, number> = {};
+    for (const k of Object.keys(compMap)) if (has(k) && !Number.isNaN(num(k))) comp[k] = num(k);
+    if (Object.keys(comp).length) {
+      const existingComp = await env.DB.prepare("SELECT id FROM compensation WHERE employee_id = ?")
+        .bind(empId).first<{ id: number }>();
+      if (existingComp) {
+        const sets = Object.keys(comp).map((k) => `${k} = ?`).join(", ");
+        await env.DB.prepare(`UPDATE compensation SET ${sets} WHERE employee_id = ?`)
+          .bind(...Object.values(comp), empId).run();
+      } else {
+        const keys = ["employee_id", ...Object.keys(comp)];
+        const placeholders = keys.map(() => "?").join(", ");
+        await env.DB.prepare(`INSERT INTO compensation (${keys.join(", ")}) VALUES (${placeholders})`)
+          .bind(empId, ...Object.values(comp)).run();
+      }
     }
   }
 
