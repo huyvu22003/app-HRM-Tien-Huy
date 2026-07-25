@@ -27,6 +27,8 @@ import { getCustomFields, getCustomValues, setCustomValues, hydrateCustomData, t
 import { getRaises, addRaise, deleteRaise, type SalaryRaise } from "@/lib/salary-history";
 
 const TABS = ["Tổng hợp", "Công việc", "Cá nhân", "Lương & phụ cấp", "Bảo hiểm", "Hồ sơ đính kèm"];
+// Tab "Cột tùy chỉnh" chỉ xuất hiện khi có cột tùy chỉnh — nằm sau các tab cố định.
+const CUSTOM_TAB = TABS.length;
 
 type EditableFields = {
   code: string;
@@ -1006,7 +1008,7 @@ export function EmployeeDetailScreen({
       <div className="rounded-[14px] border border-[var(--color-border)] bg-white">
         <div className="flex items-center justify-between border-b border-[var(--color-border-light)] px-4">
           <div className="flex gap-1 overflow-x-auto">
-            {TABS.map((t, i) => (
+            {(customFields.length > 0 ? [...TABS, "Cột tùy chỉnh"] : TABS).map((t, i) => (
               <button
                 key={t}
                 onClick={() => setTab(i)}
@@ -1162,57 +1164,59 @@ export function EmployeeDetailScreen({
               )}
             </div>
           )}
-        </div>
-      </div>
 
-      {customFields.length > 0 && (
-        <div className="rounded-[14px] border border-[var(--color-border)] bg-white p-[18px]">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="text-[13px] font-semibold text-[var(--color-text-primary)]">Thông tin bổ sung</div>
-            {canEdit && (
-              <div className="flex items-center gap-2">
-                {customSaved && <span className="text-[11px] font-medium text-[var(--color-success)]">Đã lưu ✓</span>}
-                <button
-                  onClick={saveCustom}
-                  className="flex items-center gap-1.5 rounded-[8px] bg-[var(--color-success)] px-3 py-1.5 text-[12px] font-medium text-white hover:opacity-90"
-                >
-                  <Save size={13} /> Lưu
-                </button>
-              </div>
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-5 md:grid-cols-3">
-            {customFields.map((f) => (
-              <div key={f.id}>
-                <div className="text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">{f.label}</div>
-                {canEdit ? (
-                  f.type === "select" ? (
-                    <select
-                      value={customVals[f.id] ?? ""}
-                      onChange={(e) => setCustomVals((s) => ({ ...s, [f.id]: e.target.value }))}
-                      className="mt-1 h-9 w-full rounded-[8px] border border-[var(--color-accent)] bg-white px-2.5 text-[13px] outline-none"
+          {tab === CUSTOM_TAB && customFields.length > 0 && (
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <div className="text-[13px] text-[var(--color-text-muted)]">
+                  Các cột tùy chỉnh do HR tạo thêm. Thêm/ẩn/xóa cột thực hiện ở trang danh sách nhân viên.
+                </div>
+                {canEdit && (
+                  <div className="flex items-center gap-2">
+                    {customSaved && <span className="text-[11px] font-medium text-[var(--color-success)]">Đã lưu ✓</span>}
+                    <button
+                      onClick={saveCustom}
+                      className="flex items-center gap-1.5 rounded-[8px] bg-[var(--color-success)] px-3 py-1.5 text-[12px] font-medium text-white hover:opacity-90"
                     >
-                      <option value="">--</option>
-                      {(f.options ?? []).map((o) => (
-                        <option key={o} value={o}>{o}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type={f.type === "number" ? "number" : "text"}
-                      value={customVals[f.id] ?? ""}
-                      onChange={(e) => setCustomVals((s) => ({ ...s, [f.id]: e.target.value }))}
-                      className="mt-1 h-9 w-full rounded-[8px] border border-[var(--color-accent)] px-2.5 text-[13px] outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
-                    />
-                  )
-                ) : (
-                  <div className="mt-1 text-[13.5px] text-[var(--color-text-primary)]">{customVals[f.id] || "-"}</div>
+                      <Save size={13} /> Lưu
+                    </button>
+                  </div>
                 )}
               </div>
-            ))}
-          </div>
+              <div className="grid grid-cols-2 gap-5 md:grid-cols-3">
+                {customFields.map((f) => (
+                  <div key={f.id}>
+                    <div className="text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">{f.label}</div>
+                    {canEdit ? (
+                      f.type === "select" ? (
+                        <select
+                          value={customVals[f.id] ?? ""}
+                          onChange={(e) => setCustomVals((s) => ({ ...s, [f.id]: e.target.value }))}
+                          className="mt-1 h-9 w-full rounded-[8px] border border-[var(--color-accent)] bg-white px-2.5 text-[13px] outline-none"
+                        >
+                          <option value="">--</option>
+                          {(f.options ?? []).map((o) => (
+                            <option key={o} value={o}>{o}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type={f.type === "number" ? "number" : "text"}
+                          value={customVals[f.id] ?? ""}
+                          onChange={(e) => setCustomVals((s) => ({ ...s, [f.id]: e.target.value }))}
+                          className="mt-1 h-9 w-full rounded-[8px] border border-[var(--color-accent)] px-2.5 text-[13px] outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                        />
+                      )
+                    ) : (
+                      <div className="mt-1 text-[13.5px] text-[var(--color-text-primary)]">{customVals[f.id] || "-"}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {!canEdit && (
         <div className="flex items-center gap-2 rounded-[10px] bg-[var(--color-warning-bg)] px-4 py-2.5 text-[12.5px] text-[var(--color-warning)]">
