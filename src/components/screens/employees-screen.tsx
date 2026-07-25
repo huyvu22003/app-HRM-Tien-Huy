@@ -5,7 +5,7 @@ import { Search, Upload, Download, Plus, ChevronRight, ChevronLeft, Info, Loader
 import { fetchEmployees, fetchDepartments, importEmployees, type ApiEmployee, type ApiDepartment } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery, useMutation } from "@/lib/hooks";
-import { getInitials, cn, formatDate, seededRandom } from "@/lib/utils";
+import { getInitials, cn, formatDate, formatMoney, seededRandom } from "@/lib/utils";
 import { useColumnPrefs, type ColumnDef } from "@/lib/table-prefs";
 import { ColumnMenu } from "@/components/ui/column-menu";
 import { exportStyledExcel } from "@/lib/excel-export";
@@ -719,6 +719,102 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
       cellClass: "text-[var(--color-text-muted)]",
       cell: (e) => e.contract_type ?? "-",
       exportValue: (e) => e.contract_type ?? "",
+    },
+    {
+      id: "contract_end",
+      label: "Ngày hết hạn HĐ",
+      defaultHidden: true,
+      cellClass: "text-[var(--color-text-muted)]",
+      cell: (e) => formatDate(e.contract_end),
+      exportValue: (e) => formatDate(e.contract_end),
+    },
+    {
+      id: "dob",
+      label: "Ngày sinh",
+      defaultHidden: true,
+      cellClass: "text-[var(--color-text-muted)]",
+      cell: (e) => formatDate(e.dob),
+      exportValue: (e) => formatDate(e.dob),
+    },
+    {
+      id: "cccd",
+      label: "CCCD",
+      defaultHidden: true,
+      cellClass: "font-[family-name:var(--font-mono)] text-[var(--color-text-muted)]",
+      cell: (e) => e.cccd ?? "-",
+      exportValue: (e) => e.cccd ?? "",
+    },
+    {
+      id: "tax_code",
+      label: "Mã số thuế",
+      defaultHidden: true,
+      cellClass: "font-[family-name:var(--font-mono)] text-[var(--color-text-muted)]",
+      cell: (e) => e.tax_code ?? "-",
+      exportValue: (e) => e.tax_code ?? "",
+    },
+    {
+      id: "address",
+      label: "Địa chỉ",
+      defaultHidden: true,
+      cellClass: "text-[var(--color-text-muted)]",
+      cell: (e) => e.address ?? "-",
+      exportValue: (e) => e.address ?? "",
+    },
+    {
+      id: "bank",
+      label: "Tài khoản ngân hàng",
+      defaultHidden: true,
+      cellClass: "text-[var(--color-text-muted)]",
+      cell: (e) => e.bank ?? "-",
+      exportValue: (e) => e.bank ?? "",
+    },
+    {
+      id: "dependents",
+      label: "Số phụ thuộc",
+      defaultHidden: true,
+      align: "right",
+      cellClass: "font-[family-name:var(--font-mono)] text-[var(--color-text-muted)]",
+      cell: (e) => e.dependents ?? 0,
+      exportValue: (e) => e.dependents ?? 0,
+      exportFormat: "int",
+    },
+    {
+      id: "base_salary",
+      label: "Lương cơ bản",
+      defaultHidden: true,
+      align: "right",
+      cellClass: "font-[family-name:var(--font-mono)] text-[var(--color-text-muted)]",
+      cell: (e) => (e.base_salary ? formatMoney(e.base_salary) : "-"),
+      exportValue: (e) => e.base_salary ?? 0,
+      exportFormat: "money",
+    },
+    {
+      id: "allowance",
+      label: "Phụ cấp",
+      defaultHidden: true,
+      align: "right",
+      cellClass: "font-[family-name:var(--font-mono)] text-[var(--color-text-muted)]",
+      cell: (e) => (e.allowance ? formatMoney(e.allowance) : "-"),
+      exportValue: (e) => e.allowance ?? 0,
+      exportFormat: "money",
+    },
+    {
+      id: "ins_status",
+      label: "Tình trạng BHXH",
+      defaultHidden: true,
+      cellClass: "text-[var(--color-text-muted)]",
+      cell: (e) => e.ins_status ?? "-",
+      exportValue: (e) => e.ins_status ?? "",
+    },
+    {
+      id: "ins_salary_base",
+      label: "Mức lương đóng BH",
+      defaultHidden: true,
+      align: "right",
+      cellClass: "font-[family-name:var(--font-mono)] text-[var(--color-text-muted)]",
+      cell: (e) => (e.ins_salary_base ? formatMoney(e.ins_salary_base) : "-"),
+      exportValue: (e) => e.ins_salary_base ?? 0,
+      exportFormat: "money",
     },
     {
       id: "status",
