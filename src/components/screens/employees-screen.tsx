@@ -226,15 +226,23 @@ const FIELD_LABELS: Record<string, string> = {
   attendance_bonus: "Chuyên cần",
 };
 
+// Các trường số — chuẩn hoá bỏ dấu phân cách/ký hiệu tiền để so sánh cho khớp.
+const NUMERIC_IMPORT_FIELDS = new Set([
+  "base_salary", "responsibility_salary", "allowance", "gas_allowance",
+  "attendance_bonus", "dependents",
+]);
+
 // Các trường được so sánh/cập nhật (khớp với backend import).
 const IMPORT_COMPARE_FIELDS = [
   "name", "department_name", "position", "phone", "email", "gender", "dob", "cccd",
   "address", "join_date", "workplace", "level", "manager", "contract_type", "status",
-  "bank", "tax_code",
+  "bank", "tax_code", "resign_date",
   "resign_reason", "contract_date_1", "contract_date_2", "contract_date_3", "birth_year",
   "birth_place", "education", "temp_address", "cccd_issue_date", "cccd_issue_place",
   "nationality", "religion", "ethnicity", "bank_account", "bank_branch", "bhxh_no",
   "bhxh_increase_date", "bhxh_decrease_date", "relative_name", "relative_relation", "relative_phone",
+  // Lương & phụ cấp (upsert vào bảng compensation ở backend)
+  "base_salary", "responsibility_salary", "allowance", "gas_allowance", "attendance_bonus", "dependents",
 ];
 
 // Bộ cột xuất ĐẦY ĐỦ theo mẫu danh sách nhân sự công ty (tiêu đề khớp dữ liệu 1:1).
@@ -290,6 +298,12 @@ const FULL_EXPORT_COLUMNS: FullExportCol[] = [
 function normalizeImportValue(field: string, value: string): string {
   const v = (value ?? "").trim();
   if (!v) return "";
+  // Số: bỏ ký hiệu tiền, dấu chấm/phẩy phân cách và khoảng trắng -> chỉ giữ chữ số.
+  // "14.000.000 ₫" / "14,000,000" / "14000000" đều quy về "14000000".
+  if (NUMERIC_IMPORT_FIELDS.has(field)) {
+    const digits = v.replace(/[^\d-]/g, "");
+    return digits === "" || digits === "-" ? "" : String(parseInt(digits, 10));
+  }
   if (field === "dob" || field === "join_date" || field === "resign_date") {
     const m = v.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
     if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
