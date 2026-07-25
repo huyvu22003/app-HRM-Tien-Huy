@@ -44,6 +44,11 @@ function toApiEmployee(e: (typeof EMPLOYEES)[number], idx: number) {
     allowance: e.allowance ?? null,
     ins_status: e.insStatus || null,
     ins_salary_base: e.insSalaryBase ?? null,
+    resign_reason: null, contract_date_1: null, contract_date_2: null, contract_date_3: null,
+    birth_year: null, birth_place: null, education: null, temp_address: null,
+    cccd_issue_date: null, cccd_issue_place: null, nationality: null, religion: null, ethnicity: null,
+    bank_account: null, bank_branch: null, bhxh_no: null, bhxh_increase_date: null,
+    bhxh_decrease_date: null, relative_name: null, relative_relation: null, relative_phone: null,
   };
 }
 
@@ -80,6 +85,27 @@ type ApiEmp = {
   allowance: number | null;
   ins_status: string | null;
   ins_salary_base: number | null;
+  resign_reason: string | null;
+  contract_date_1: string | null;
+  contract_date_2: string | null;
+  contract_date_3: string | null;
+  birth_year: string | null;
+  birth_place: string | null;
+  education: string | null;
+  temp_address: string | null;
+  cccd_issue_date: string | null;
+  cccd_issue_place: string | null;
+  nationality: string | null;
+  religion: string | null;
+  ethnicity: string | null;
+  bank_account: string | null;
+  bank_branch: string | null;
+  bhxh_no: string | null;
+  bhxh_increase_date: string | null;
+  bhxh_decrease_date: string | null;
+  relative_name: string | null;
+  relative_relation: string | null;
+  relative_phone: string | null;
 };
 
 const baseEmployees: ApiEmp[] = EMPLOYEES.map(toApiEmployee);
@@ -189,6 +215,27 @@ function makeImportedEmployee(input: Record<string, unknown>, id: number): ApiEm
     allowance: (input.allowance as number) ?? null,
     ins_status: (input.ins_status as string) || null,
     ins_salary_base: (input.ins_salary_base as number) ?? null,
+    resign_reason: (input.resign_reason as string) || null,
+    contract_date_1: (input.contract_date_1 as string) || null,
+    contract_date_2: (input.contract_date_2 as string) || null,
+    contract_date_3: (input.contract_date_3 as string) || null,
+    birth_year: (input.birth_year as string) || null,
+    birth_place: (input.birth_place as string) || null,
+    education: (input.education as string) || null,
+    temp_address: (input.temp_address as string) || null,
+    cccd_issue_date: (input.cccd_issue_date as string) || null,
+    cccd_issue_place: (input.cccd_issue_place as string) || null,
+    nationality: (input.nationality as string) || null,
+    religion: (input.religion as string) || null,
+    ethnicity: (input.ethnicity as string) || null,
+    bank_account: (input.bank_account as string) || null,
+    bank_branch: (input.bank_branch as string) || null,
+    bhxh_no: (input.bhxh_no as string) || null,
+    bhxh_increase_date: (input.bhxh_increase_date as string) || null,
+    bhxh_decrease_date: (input.bhxh_decrease_date as string) || null,
+    relative_name: (input.relative_name as string) || null,
+    relative_relation: (input.relative_relation as string) || null,
+    relative_phone: (input.relative_phone as string) || null,
   };
 }
 

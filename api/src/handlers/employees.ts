@@ -177,39 +177,68 @@ export async function importEmployees(request: Request, env: Env): Promise<Respo
       .bind(code)
       .first<{ id: number }>();
 
-    const cols = {
-      name,
-      gender: (r.gender as string) ?? null,
-      dob: (r.dob as string) ?? null,
-      phone: (r.phone as string) ?? null,
-      cccd: (r.cccd as string) ?? null,
-      address: (r.address as string) ?? null,
-      email: (r.email as string) ?? null,
-      department_id: departmentId,
-      position: (r.position as string) ?? null,
-      workplace: (r.workplace as string) ?? null,
-      contract_type: (r.contract_type as string) ?? null,
-      join_date: (r.join_date as string) ?? null,
-      status: (r.status as string) ?? "Đang làm việc",
-      manager: (r.manager as string) ?? null,
-      level: (r.level as string) ?? null,
-      bank: (r.bank as string) ?? null,
-      tax_code: (r.tax_code as string) ?? null,
-    };
+    // Chỉ nhận field CÓ MẶT trong dòng import (tránh ghi đè null lên dữ liệu cũ).
+    const has = (k: string) => r[k] !== undefined && r[k] !== null && String(r[k]).trim() !== "";
+    const strField = (k: string) => String(r[k]).trim();
+    const cols: Record<string, unknown> = {};
+    for (const k of ["gender", "dob", "phone", "cccd", "address", "email", "position",
+                     "workplace", "contract_type", "contract_end", "join_date", "status",
+                     "manager", "level", "bank", "tax_code",
+                     // Phase 2: các trường hồ sơ mở rộng
+                     "resign_reason", "contract_date_1", "contract_date_2", "contract_date_3",
+                     "birth_year", "birth_place", "education", "temp_address",
+                     "cccd_issue_date", "cccd_issue_place", "nationality", "religion", "ethnicity",
+                     "bank_account", "bank_branch", "bhxh_no", "bhxh_increase_date",
+                     "bhxh_decrease_date", "relative_name", "relative_relation", "relative_phone"]) {
+      if (has(k)) cols[k] = strField(k);
+    }
+    if (deptName) cols.department_id = departmentId;
 
+    let empId: number;
     if (existing) {
+      empId = existing.id;
+      // name có thể đổi; luôn cho phép cập nhật name khi có.
+      cols.name = name;
       const sets = Object.keys(cols).map((k) => `${k} = ?`).join(", ");
-      await env.DB.prepare(`UPDATE employees SET ${sets} WHERE id = ?`)
-        .bind(...Object.values(cols), existing.id)
-        .run();
+      if (sets) {
+        await env.DB.prepare(`UPDATE employees SET ${sets} WHERE id = ?`)
+          .bind(...Object.values(cols), existing.id)
+          .run();
+      }
       updated++;
     } else {
-      const keys = ["code", ...Object.keys(cols)];
+      const insertCols = { name, status: (cols.status as string) ?? "Đang làm việc", ...cols };
+      const keys = ["code", ...Object.keys(insertCols)];
       const placeholders = keys.map(() => "?").join(", ");
-      await env.DB.prepare(`INSERT INTO employees (${keys.join(", ")}) VALUES (${placeholders})`)
-        .bind(code, ...Object.values(cols))
+      const res = await env.DB.prepare(`INSERT INTO employees (${keys.join(", ")}) VALUES (${placeholders})`)
+        .bind(code, ...Object.values(insertCols))
         .run();
+      empId = res.meta.last_row_id as number;
       created++;
+    }
+
+    // Lương / phụ cấp / người phụ thuộc → bảng compensation.
+    const num = (k: string) => Number(String(r[k]).replace(/[^\d.-]/g, ""));
+    const compMap: Record<string, string> = {
+      base_salary: "base_salary", responsibility_salary: "responsibility_salary",
+      allowance: "allowance", gas_allowance: "gas_allowance",
+      attendance_bonus: "attendance_bonus", dependents: "dependents",
+    };
+    const comp: Record<string, number> = {};
+    for (const k of Object.keys(compMap)) if (has(k) && !Number.isNaN(num(k))) comp[k] = num(k);
+    if (Object.keys(comp).length) {
+      const existingComp = await env.DB.prepare("SELECT id FROM compensation WHERE employee_id = ?")
+        .bind(empId).first<{ id: number }>();
+      if (existingComp) {
+        const sets = Object.keys(comp).map((k) => `${k} = ?`).join(", ");
+        await env.DB.prepare(`UPDATE compensation SET ${sets} WHERE employee_id = ?`)
+          .bind(...Object.values(comp), empId).run();
+      } else {
+        const keys = ["employee_id", ...Object.keys(comp)];
+        const placeholders = keys.map(() => "?").join(", ");
+        await env.DB.prepare(`INSERT INTO compensation (${keys.join(", ")}) VALUES (${placeholders})`)
+          .bind(empId, ...Object.values(comp)).run();
+      }
     }
   }
 

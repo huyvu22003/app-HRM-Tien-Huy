@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Search, Upload, Download, Plus, ChevronRight, ChevronLeft, Info, Loader2, Phone, Mail, Briefcase, MapPin } from "lucide-react";
+import ExcelJS from "exceljs";
 import { fetchEmployees, fetchDepartments, importEmployees, type ApiEmployee, type ApiDepartment } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery, useMutation } from "@/lib/hooks";
@@ -10,7 +11,6 @@ import { useColumnPrefs, type ColumnDef } from "@/lib/table-prefs";
 import { ColumnMenu } from "@/components/ui/column-menu";
 import { exportStyledExcel } from "@/lib/excel-export";
 import { getEmployeePhoto } from "@/lib/photo-store";
-import { parseCsvObjects } from "@/lib/csv";
 import { X, CheckCircle2, FileDown, Settings2, Trash2, Lock, Unlock, MoreVertical, GripVertical, ArrowDownAZ, ArrowUpAZ, Pencil } from "lucide-react";
 import {
   getCustomFields,
@@ -169,11 +169,86 @@ const IMPORT_HEADER_MAP: Record<string, string> = {
   "cấp bậc": "level",
   "quản lý": "manager",
   "loại hợp đồng": "contract_type",
+  "loại hđ": "contract_type",
   "trạng thái": "status",
   "ngân hàng": "bank",
   "tài khoản ngân hàng": "bank",
   "mã số thuế": "tax_code",
+  "số cccd": "cccd",
+  "địa chỉ thường trú": "address",
+  "ngày nghỉ việc": "resign_date",
+  // Phase 2 — hồ sơ mở rộng
+  "nguyên nhân nghỉ": "resign_reason",
+  "ngày hđlđ l1": "contract_date_1",
+  "ngày hđlđ l2": "contract_date_2",
+  "ngày hđlđ l3": "contract_date_3",
+  "năm sinh": "birth_year",
+  "nơi sinh": "birth_place",
+  "học lực": "education",
+  "địa chỉ tạm trú": "temp_address",
+  "ngày cấp": "cccd_issue_date",
+  "nơi cấp": "cccd_issue_place",
+  "quốc tịch": "nationality",
+  "tôn giáo": "religion",
+  "dân tộc": "ethnicity",
+  "số tài khoản": "bank_account",
+  "chi nhánh ngân hàng": "bank_branch",
+  "mã số sổ bhxh": "bhxh_no",
+  "báo tăng bhxh": "bhxh_increase_date",
+  "báo giảm bhxh": "bhxh_decrease_date",
+  "npt": "dependents",
+  "người thân": "relative_name",
+  "mối quan hệ": "relative_relation",
+  "số đt người thân": "relative_phone",
+  "lương cơ bản": "base_salary",
+  "trách nhiệm": "responsibility_salary",
+  "pc công việc": "allowance",
+  "pc xăng xe": "gas_allowance",
+  "chuyên cần": "attendance_bonus",
+  "tổng lương": "total_salary", // chỉ để không báo "chưa hỗ trợ" — backend bỏ qua
 };
+
+// Nhãn hiển thị cho các trường được đối chiếu.
+const FIELD_LABELS: Record<string, string> = {
+  code: "Mã thẻ", name: "Họ và tên", department_name: "Bộ phận", position: "Chức vụ",
+  phone: "Điện thoại", email: "Email", gender: "Giới tính", dob: "Ngày sinh",
+  cccd: "CCCD", address: "Địa chỉ", join_date: "Ngày vào làm", workplace: "Nơi làm việc",
+  level: "Cấp bậc", manager: "Quản lý", contract_type: "Loại HĐ", status: "Trạng thái",
+  bank: "Tài khoản NH", tax_code: "Mã số thuế", resign_date: "Ngày nghỉ việc",
+  resign_reason: "Nguyên nhân nghỉ", contract_date_1: "Ngày HĐLĐ L1", contract_date_2: "Ngày HĐLĐ L2",
+  contract_date_3: "Ngày HĐLĐ L3", birth_year: "Năm sinh", birth_place: "Nơi sinh", education: "Học lực",
+  temp_address: "Địa chỉ tạm trú", cccd_issue_date: "Ngày cấp CCCD", cccd_issue_place: "Nơi cấp CCCD",
+  nationality: "Quốc tịch", religion: "Tôn giáo", ethnicity: "Dân tộc", bank_account: "Số tài khoản",
+  bank_branch: "Chi nhánh NH", bhxh_no: "Mã số sổ BHXH", bhxh_increase_date: "Báo tăng BHXH",
+  bhxh_decrease_date: "Báo giảm BHXH", relative_name: "Người thân", relative_relation: "Mối quan hệ",
+  relative_phone: "SĐT người thân", dependents: "Số phụ thuộc", base_salary: "Lương cơ bản",
+  responsibility_salary: "Trách nhiệm", allowance: "PC công việc", gas_allowance: "PC xăng xe",
+  attendance_bonus: "Chuyên cần",
+};
+
+// Các trường được so sánh/cập nhật (khớp với backend import).
+const IMPORT_COMPARE_FIELDS = [
+  "name", "department_name", "position", "phone", "email", "gender", "dob", "cccd",
+  "address", "join_date", "workplace", "level", "manager", "contract_type", "status",
+  "bank", "tax_code",
+  "resign_reason", "contract_date_1", "contract_date_2", "contract_date_3", "birth_year",
+  "birth_place", "education", "temp_address", "cccd_issue_date", "cccd_issue_place",
+  "nationality", "religion", "ethnicity", "bank_account", "bank_branch", "bhxh_no",
+  "bhxh_increase_date", "bhxh_decrease_date", "relative_name", "relative_relation", "relative_phone",
+];
+
+/** Chuẩn hoá ngày dd/mm/yyyy → yyyy-mm-dd để so sánh khỏi lệch định dạng. */
+function normalizeImportValue(field: string, value: string): string {
+  const v = (value ?? "").trim();
+  if (!v) return "";
+  if (field === "dob" || field === "join_date" || field === "resign_date") {
+    const m = v.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+    if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+    const iso = v.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})/);
+    if (iso) return `${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`;
+  }
+  return v;
+}
 
 const IMPORT_TEMPLATE_HEADERS = [
   "Mã thẻ", "Họ và tên", "Bộ phận", "Chức vụ", "Điện thoại", "Email",
@@ -181,15 +256,6 @@ const IMPORT_TEMPLATE_HEADERS = [
   "Nơi làm việc", "Cấp bậc", "Quản lý", "Loại hợp đồng", "Trạng thái",
   "Tài khoản ngân hàng", "Mã số thuế",
 ];
-
-function mapImportRow(raw: Record<string, string>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [header, value] of Object.entries(raw)) {
-    const key = IMPORT_HEADER_MAP[header.trim().toLowerCase()];
-    if (key) out[key] = value;
-  }
-  return out;
-}
 
 function downloadImportTemplate() {
   const example = [
@@ -435,60 +501,182 @@ function EmployeeHoverCard({ employee, anchorRect }: { employee: ApiEmployee; an
   );
 }
 
-function ImportModal({ onClose, onImported }: { onClose: () => void; onImported: () => void }) {
-  const [rows, setRows] = useState<Record<string, string>[]>([]);
+function cellToText(cell: ExcelJS.Cell): string {
+  const v = cell.value as unknown;
+  if (v == null) return "";
+  if (v instanceof Date) {
+    return `${String(v.getDate()).padStart(2, "0")}/${String(v.getMonth() + 1).padStart(2, "0")}/${v.getFullYear()}`;
+  }
+  if (typeof v === "object") {
+    const o = v as { text?: string; result?: unknown; richText?: { text: string }[] };
+    if (o.richText) return o.richText.map((t) => t.text).join("");
+    if (o.text != null) return String(o.text);
+    if (o.result != null) return String(o.result);
+    return "";
+  }
+  return String(v);
+}
+
+/** Đọc file .xlsx/.csv, tự tìm dòng tiêu đề ("Mã thẻ"/"Họ và tên"), ánh xạ cột.
+ *  Trả về dòng đã map + danh sách cột chưa hỗ trợ (để đánh dấu). */
+async function parseImportFile(
+  file: File,
+): Promise<{ rows: Record<string, string>[]; unsupported: string[] }> {
+  let grid: string[][] = [];
+  const isXlsx = /\.xlsx$/i.test(file.name);
+  if (isXlsx) {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(await file.arrayBuffer());
+    const ws = wb.worksheets[0];
+    const colCount = ws.columnCount;
+    ws.eachRow({ includeEmpty: false }, (row) => {
+      const arr: string[] = [];
+      for (let c = 1; c <= colCount; c++) arr.push(cellToText(row.getCell(c)));
+      grid.push(arr);
+    });
+  } else {
+    const text = await file.text();
+    grid = text.split(/\r?\n/).filter((l) => l.length).map((line) => {
+      const out: string[] = [];
+      let cur = "", inQ = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') { if (inQ && line[i + 1] === '"') { cur += '"'; i++; } else inQ = !inQ; }
+        else if (ch === "," && !inQ) { out.push(cur); cur = ""; }
+        else cur += ch;
+      }
+      out.push(cur);
+      return out.map((s) => s.replace(/^﻿/, "").trim());
+    });
+  }
+
+  // Tìm dòng tiêu đề
+  const headerIdx = grid.findIndex((r) =>
+    r.some((c) => {
+      const t = c.trim().toLowerCase();
+      return t === "mã thẻ" || t === "mã nv" || t === "họ và tên";
+    }),
+  );
+  if (headerIdx < 0) return { rows: [], unsupported: [] };
+  const headers = grid[headerIdx];
+
+  const unsupported = new Set<string>();
+  const keyByCol: (string | null)[] = headers.map((h) => {
+    const label = h.trim();
+    if (!label) return null;
+    const key = IMPORT_HEADER_MAP[label.toLowerCase()];
+    if (!key) unsupported.add(label);
+    return key ?? null;
+  });
+
+  const rows: Record<string, string>[] = [];
+  for (let r = headerIdx + 1; r < grid.length; r++) {
+    const line = grid[r];
+    const obj: Record<string, string> = {};
+    let any = false;
+    line.forEach((val, c) => {
+      const key = keyByCol[c];
+      if (key && val != null && String(val).trim() !== "") {
+        obj[key] = normalizeImportValue(key, String(val));
+        any = true;
+      }
+    });
+    if (any) rows.push(obj);
+  }
+  return { rows, unsupported: [...unsupported] };
+}
+
+type ImportStatus = "new" | "update" | "same" | "invalid";
+interface ImportRowInfo {
+  row: Record<string, string>;
+  status: ImportStatus;
+  changes: { field: string; old: string; next: string }[];
+}
+
+/** Đối chiếu dòng import với nhân viên hiện có (theo Mã thẻ). */
+function diffImportRows(rows: Record<string, string>[], existing: ApiEmployee[]): ImportRowInfo[] {
+  const byCode = new Map(existing.map((e) => [String(e.code).trim(), e]));
+  return rows.map((row) => {
+    if (!row.code || !row.name) return { row, status: "invalid" as const, changes: [] };
+    const cur = byCode.get(String(row.code).trim());
+    if (!cur) return { row, status: "new" as const, changes: [] };
+    const changes: { field: string; old: string; next: string }[] = [];
+    for (const f of IMPORT_COMPARE_FIELDS) {
+      if (!(f in row)) continue; // chỉ so sánh field có trong file
+      const next = normalizeImportValue(f, row[f] ?? "");
+      const old = normalizeImportValue(f, String((cur as unknown as Record<string, unknown>)[f] ?? ""));
+      if (next && next !== old) changes.push({ field: f, old, next });
+    }
+    return { row, status: changes.length ? ("update" as const) : ("same" as const), changes };
+  });
+}
+
+function ImportModal({ existing, onClose, onImported }: { existing: ApiEmployee[]; onClose: () => void; onImported: () => void }) {
   const [fileName, setFileName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [parsing, setParsing] = useState(false);
+  const [infos, setInfos] = useState<ImportRowInfo[]>([]);
+  const [unsupported, setUnsupported] = useState<string[]>([]);
   const [result, setResult] = useState<{ created: number; updated: number } | null>(null);
   const { mutate: doImport, isLoading } = useMutation((data: Record<string, unknown>[]) => importEmployees(data));
 
-  const invalid = rows.filter((r) => !r.code || !r.name).length;
-  const valid = rows.length - invalid;
+  const counts = useMemo(() => ({
+    new: infos.filter((r) => r.status === "new").length,
+    update: infos.filter((r) => r.status === "update").length,
+    same: infos.filter((r) => r.status === "same").length,
+    invalid: infos.filter((r) => r.status === "invalid").length,
+  }), [infos]);
+  const applyCount = counts.new + counts.update;
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setFileName(file.name);
     setError(null);
     setResult(null);
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const objs = parseCsvObjects(String(reader.result));
-        const mapped = objs.map(mapImportRow);
-        if (mapped.length === 0) {
-          setError("Không đọc được dòng dữ liệu nào. Kiểm tra lại file (cần dòng tiêu đề + dữ liệu).");
-          setRows([]);
-          return;
-        }
-        setRows(mapped);
-      } catch {
-        setError("File không hợp lệ. Vui lòng dùng file CSV (UTF-8).");
+    setParsing(true);
+    try {
+      const { rows, unsupported } = await parseImportFile(file);
+      if (rows.length === 0) {
+        setError("Không đọc được dòng dữ liệu nào (cần dòng tiêu đề có 'Mã thẻ'/'Họ và tên' + dữ liệu).");
+        setInfos([]);
+        setUnsupported([]);
+      } else {
+        setInfos(diffImportRows(rows, existing));
+        setUnsupported(unsupported);
       }
-    };
-    reader.readAsText(file);
+    } catch {
+      setError("File không hợp lệ. Dùng file .xlsx hoặc .csv (UTF-8).");
+    } finally {
+      setParsing(false);
+    }
   }
 
   async function handleImport() {
-    const payload = rows.filter((r) => r.code && r.name);
+    // Chỉ gửi dòng Mới + Cập nhật.
+    const payload = infos.filter((r) => r.status === "new" || r.status === "update").map((r) => r.row);
     if (payload.length === 0) return;
     try {
       const res = await doImport(payload);
       setResult({ created: res.created, updated: res.updated });
       onImported();
     } catch {
-      setError("Nhập dữ liệu thất bại. Vui lòng thử lại.");
+      setError("Cập nhật thất bại. Vui lòng thử lại.");
     }
   }
 
-  const previewCols = ["code", "name", "department_name", "position", "phone"];
-  const previewLabels = ["Mã thẻ", "Họ và tên", "Bộ phận", "Chức vụ", "Điện thoại"];
+  const badge: Record<ImportStatus, { label: string; cls: string }> = {
+    new: { label: "Mới", cls: "bg-emerald-100 text-emerald-700" },
+    update: { label: "Cập nhật", cls: "bg-amber-100 text-amber-700" },
+    same: { label: "Không đổi", cls: "bg-gray-100 text-gray-500" },
+    invalid: { label: "Lỗi", cls: "bg-red-100 text-red-700" },
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4">
-      <div className="my-6 w-full max-w-[720px] rounded-[14px] bg-white p-5 shadow-xl">
+      <div className="my-6 w-full max-w-[860px] rounded-[14px] bg-white p-5 shadow-xl">
         <div className="mb-3 flex items-center justify-between">
-          <div className="text-[15px] font-semibold text-[var(--color-text-primary)]">Import nhân viên từ Excel/CSV</div>
+          <div className="text-[15px] font-semibold text-[var(--color-text-primary)]">Import nhân viên · kiểm tra & cập nhật</div>
           <button onClick={onClose} className="text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]">
             <X size={18} />
           </button>
@@ -498,48 +686,88 @@ function ImportModal({ onClose, onImported }: { onClose: () => void; onImported:
           <div className="flex flex-col items-center gap-3 py-8 text-center">
             <CheckCircle2 size={40} className="text-[var(--color-success)]" />
             <div className="text-[14px] font-medium text-[var(--color-text-primary)]">
-              Đã nhập xong: {result.created} thêm mới, {result.updated} cập nhật
+              Đã cập nhật: {result.created} thêm mới, {result.updated} cập nhật
             </div>
-            <button
-              onClick={onClose}
-              className="mt-2 rounded-[8px] bg-[var(--color-accent)] px-4 py-1.5 text-[12.5px] font-medium text-white"
-            >
-              Đóng
-            </button>
+            <button onClick={onClose} className="mt-2 rounded-[8px] bg-[var(--color-accent)] px-4 py-1.5 text-[12.5px] font-medium text-white">Đóng</button>
           </div>
         ) : (
           <>
             <div className="mb-3 flex items-center justify-between rounded-[10px] bg-[var(--color-page-bg)] px-3 py-2.5 text-[12.5px] text-[var(--color-text-muted)]">
-              <span>Chưa có file mẫu? Tải về, điền dữ liệu rồi lưu dạng CSV.</span>
+              <span>Hỗ trợ file <b>.xlsx</b> (xuất từ hệ thống) hoặc <b>.csv</b>. Đối chiếu theo <b>Mã thẻ</b>.</span>
               <button onClick={downloadImportTemplate} className="flex items-center gap-1.5 font-medium text-[var(--color-accent)] hover:underline">
                 <FileDown size={14} /> Tải file mẫu
               </button>
             </div>
 
             <label className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-[10px] border border-dashed border-[var(--color-border)] px-4 py-6 text-[12.5px] text-[var(--color-text-muted)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]">
-              <Upload size={16} />
-              {fileName || "Chọn file CSV để tải lên"}
-              <input type="file" accept=".csv,text/csv" onChange={handleFile} className="hidden" />
+              {parsing ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+              {parsing ? "Đang đọc file..." : fileName || "Chọn file .xlsx hoặc .csv để tải lên"}
+              <input type="file" accept=".xlsx,.csv,text/csv" onChange={handleFile} className="hidden" />
             </label>
 
             {error && (
               <div className="mt-3 rounded-[10px] bg-[var(--color-danger-bg)] px-3 py-2 text-[12.5px] text-[var(--color-danger)]">{error}</div>
             )}
 
-            {rows.length > 0 && (
+            {unsupported.length > 0 && (
+              <div className="mt-3 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+                ⚠️ {unsupported.length} cột chưa được hỗ trợ (sẽ bỏ qua): {unsupported.join(", ")}
+              </div>
+            )}
+
+            {infos.length > 0 && (
               <>
-                <div className="mt-3 flex items-center gap-3 text-[12.5px]">
-                  <span className="text-[var(--color-text-muted)]">Đọc được <b className="text-[var(--color-text-primary)]">{rows.length}</b> dòng · hợp lệ <b className="text-[var(--color-success)]">{valid}</b>{invalid > 0 && <> · thiếu mã/tên <b className="text-[var(--color-danger)]">{invalid}</b></>}</span>
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px]">
+                  <span className="rounded-[20px] bg-emerald-100 px-2.5 py-0.5 font-medium text-emerald-700">Mới: {counts.new}</span>
+                  <span className="rounded-[20px] bg-amber-100 px-2.5 py-0.5 font-medium text-amber-700">Cập nhật: {counts.update}</span>
+                  <span className="rounded-[20px] bg-gray-100 px-2.5 py-0.5 font-medium text-gray-500">Không đổi: {counts.same}</span>
+                  {counts.invalid > 0 && <span className="rounded-[20px] bg-red-100 px-2.5 py-0.5 font-medium text-red-700">Lỗi: {counts.invalid}</span>}
                 </div>
-                <div className="mt-2 max-h-[280px] overflow-auto rounded-[10px] border border-[var(--color-border-light)]">
+                <div className="mt-2 max-h-[340px] overflow-auto rounded-[10px] border border-[var(--color-border-light)]">
                   <table className="w-full text-[12px]">
                     <thead className="sticky top-0 bg-[var(--color-page-bg)] text-left text-[10.5px] uppercase tracking-wide text-[var(--color-text-lighter)]">
-                      <tr>{previewLabels.map((l) => <th key={l} className="px-2.5 py-2 font-medium">{l}</th>)}</tr>
+                      <tr>
+                        <th className="px-2.5 py-2 font-medium">Mã thẻ</th>
+                        <th className="px-2.5 py-2 font-medium">Họ và tên</th>
+                        <th className="px-2.5 py-2 font-medium">Trạng thái</th>
+                        <th className="px-2.5 py-2 font-medium">Thay đổi</th>
+                      </tr>
                     </thead>
                     <tbody>
-                      {rows.slice(0, 50).map((r, i) => (
-                        <tr key={i} className={cn("border-t border-[var(--color-border-light)]", (!r.code || !r.name) && "bg-[var(--color-danger-bg)]")}>
-                          {previewCols.map((c) => <td key={c} className="px-2.5 py-1.5 text-[var(--color-text-secondary)]">{r[c] || "-"}</td>)}
+                      {infos.map((info, i) => (
+                        <tr
+                          key={i}
+                          className={cn(
+                            "border-t border-[var(--color-border-light)] align-top",
+                            info.status === "new" && "bg-emerald-50/60",
+                            info.status === "update" && "bg-amber-50/50",
+                            info.status === "invalid" && "bg-red-50/60",
+                          )}
+                        >
+                          <td className="px-2.5 py-1.5 font-[family-name:var(--font-mono)] text-[var(--color-text-muted)]">{info.row.code || "—"}</td>
+                          <td className="px-2.5 py-1.5 font-medium text-[var(--color-text-primary)]">{info.row.name || "—"}</td>
+                          <td className="px-2.5 py-1.5">
+                            <span className={cn("rounded-[6px] px-1.5 py-0.5 text-[10.5px] font-medium", badge[info.status].cls)}>{badge[info.status].label}</span>
+                          </td>
+                          <td className="px-2.5 py-1.5 text-[11.5px] text-[var(--color-text-secondary)]">
+                            {info.status === "new" ? (
+                              <span className="text-emerald-700">Thêm mới toàn bộ</span>
+                            ) : info.status === "update" ? (
+                              <div className="flex flex-col gap-0.5">
+                                {info.changes.map((c) => (
+                                  <div key={c.field}>
+                                    <span className="text-[var(--color-text-lighter)]">{FIELD_LABELS[c.field] ?? c.field}:</span>{" "}
+                                    <span className="text-[var(--color-text-muted)] line-through">{c.old || "—"}</span>{" "}
+                                    <span className="font-medium text-amber-700">→ {c.next}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : info.status === "invalid" ? (
+                              <span className="text-red-600">Thiếu mã thẻ hoặc họ tên</span>
+                            ) : (
+                              <span className="text-[var(--color-text-lighter)]">—</span>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -552,11 +780,11 @@ function ImportModal({ onClose, onImported }: { onClose: () => void; onImported:
               <button onClick={onClose} className="rounded-[8px] border border-[var(--color-border)] px-4 py-1.5 text-[12.5px] text-[var(--color-text-secondary)]">Huỷ</button>
               <button
                 onClick={handleImport}
-                disabled={valid === 0 || isLoading}
+                disabled={applyCount === 0 || isLoading}
                 className="flex items-center gap-1.5 rounded-[8px] bg-[var(--color-accent)] px-4 py-1.5 text-[12.5px] font-medium text-white disabled:opacity-60"
               >
                 {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                {isLoading ? "Đang nhập..." : `Nhập ${valid} nhân viên`}
+                {isLoading ? "Đang cập nhật..." : `Cập nhật (${counts.new} mới · ${counts.update} sửa)`}
               </button>
             </div>
           </>
@@ -1001,6 +1229,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
     <div className="flex flex-col gap-4">
       {importOpen && (
         <ImportModal
+          existing={allItems}
           onClose={() => setImportOpen(false)}
           onImported={() => {
             setPage(1);

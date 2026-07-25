@@ -204,6 +204,28 @@ export interface ApiEmployee {
   allowance: number | null;
   ins_status: string | null;
   ins_salary_base: number | null;
+  // Hồ sơ mở rộng (Phase 2)
+  resign_reason: string | null;
+  contract_date_1: string | null;
+  contract_date_2: string | null;
+  contract_date_3: string | null;
+  birth_year: string | null;
+  birth_place: string | null;
+  education: string | null;
+  temp_address: string | null;
+  cccd_issue_date: string | null;
+  cccd_issue_place: string | null;
+  nationality: string | null;
+  religion: string | null;
+  ethnicity: string | null;
+  bank_account: string | null;
+  bank_branch: string | null;
+  bhxh_no: string | null;
+  bhxh_increase_date: string | null;
+  bhxh_decrease_date: string | null;
+  relative_name: string | null;
+  relative_relation: string | null;
+  relative_phone: string | null;
 }
 
 export interface ApiCompensation {
