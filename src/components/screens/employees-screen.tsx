@@ -238,6 +238,8 @@ const IMPORT_COMPARE_FIELDS = [
 ];
 
 // Bộ cột xuất ĐẦY ĐỦ theo mẫu danh sách nhân sự công ty (tiêu đề khớp dữ liệu 1:1).
+// Ngày rỗng → để TRỐNG (không xuất "-", tránh khi import lại "-" thành dữ liệu).
+const exDate = (v: string | null | undefined) => (v ? formatDate(v) : "");
 type FullExportCol = { label: string; value: (e: ApiEmployee) => string | number; align?: "left" | "right" | "center"; format?: "money" | "int" | "text" };
 const FULL_EXPORT_COLUMNS: FullExportCol[] = [
   { label: "Mã thẻ", value: (e) => e.code },
@@ -247,21 +249,21 @@ const FULL_EXPORT_COLUMNS: FullExportCol[] = [
   { label: "Điện thoại", value: (e) => e.phone ?? "" },
   { label: "Email", value: (e) => e.email ?? "" },
   { label: "Giới tính", value: (e) => e.gender ?? "" },
-  { label: "Ngày vào làm", value: (e) => formatDate(e.join_date) },
-  { label: "Ngày nghỉ việc", value: (e) => formatDate(e.resign_date) },
+  { label: "Ngày vào làm", value: (e) => exDate(e.join_date) },
+  { label: "Ngày nghỉ việc", value: (e) => exDate(e.resign_date) },
   { label: "Nguyên nhân nghỉ", value: (e) => e.resign_reason ?? "" },
-  { label: "Ngày HĐLĐ L1", value: (e) => formatDate(e.contract_date_1) },
+  { label: "Ngày HĐLĐ L1", value: (e) => exDate(e.contract_date_1) },
   { label: "Loại HĐ", value: (e) => e.contract_type ?? "" },
   { label: "Trạng thái", value: (e) => e.status ?? "" },
-  { label: "Ngày HĐLĐ L2", value: (e) => formatDate(e.contract_date_2) },
-  { label: "Ngày HĐLĐ L3", value: (e) => formatDate(e.contract_date_3) },
+  { label: "Ngày HĐLĐ L2", value: (e) => exDate(e.contract_date_2) },
+  { label: "Ngày HĐLĐ L3", value: (e) => exDate(e.contract_date_3) },
   { label: "Năm sinh", value: (e) => e.birth_year ?? "" },
   { label: "Nơi sinh", value: (e) => e.birth_place ?? "" },
   { label: "Học lực", value: (e) => e.education ?? "" },
   { label: "Địa chỉ thường trú", value: (e) => e.address ?? "" },
   { label: "Địa chỉ tạm trú", value: (e) => e.temp_address ?? "" },
   { label: "Số CCCD", value: (e) => e.cccd ?? "" },
-  { label: "Ngày cấp", value: (e) => formatDate(e.cccd_issue_date) },
+  { label: "Ngày cấp", value: (e) => exDate(e.cccd_issue_date) },
   { label: "Nơi cấp", value: (e) => e.cccd_issue_place ?? "" },
   { label: "Quốc tịch", value: (e) => e.nationality ?? "" },
   { label: "Tôn giáo", value: (e) => e.religion ?? "" },
@@ -270,8 +272,8 @@ const FULL_EXPORT_COLUMNS: FullExportCol[] = [
   { label: "Ngân hàng", value: (e) => e.bank ?? "" },
   { label: "Chi nhánh ngân hàng", value: (e) => e.bank_branch ?? "" },
   { label: "Mã số sổ BHXH", value: (e) => e.bhxh_no ?? "" },
-  { label: "Báo tăng BHXH", value: (e) => formatDate(e.bhxh_increase_date) },
-  { label: "Báo giảm BHXH", value: (e) => formatDate(e.bhxh_decrease_date) },
+  { label: "Báo tăng BHXH", value: (e) => exDate(e.bhxh_increase_date) },
+  { label: "Báo giảm BHXH", value: (e) => exDate(e.bhxh_decrease_date) },
   { label: "NPT", value: (e) => e.dependents ?? 0, align: "right", format: "int" },
   { label: "Người thân", value: (e) => e.relative_name ?? "" },
   { label: "Mối quan hệ", value: (e) => e.relative_relation ?? "" },
@@ -623,8 +625,10 @@ async function parseImportFile(
     let any = false;
     line.forEach((val, c) => {
       const key = keyByCol[c];
-      if (key && val != null && String(val).trim() !== "") {
-        obj[key] = normalizeImportValue(key, String(val));
+      const t = val == null ? "" : String(val).trim();
+      // Bỏ qua ô rỗng và các ký hiệu placeholder "-", "—", "–".
+      if (key && t !== "" && !["-", "—", "–"].includes(t)) {
+        obj[key] = normalizeImportValue(key, t);
         any = true;
       }
     });
