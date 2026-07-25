@@ -11,7 +11,7 @@ import { useColumnPrefs, type ColumnDef } from "@/lib/table-prefs";
 import { ColumnMenu } from "@/components/ui/column-menu";
 import { exportStyledExcel } from "@/lib/excel-export";
 import { getEmployeePhoto } from "@/lib/photo-store";
-import { X, CheckCircle2, FileDown, Settings2, Trash2, Lock, Unlock, MoreVertical, GripVertical, ArrowDownAZ, ArrowUpAZ, Pencil } from "lucide-react";
+import { X, CheckCircle2, FileDown, Settings2, Trash2, Lock, Unlock, MoreVertical, GripVertical, ArrowDownAZ, ArrowUpAZ, Pencil, EyeOff } from "lucide-react";
 import {
   getCustomFields,
   addCustomField,
@@ -353,7 +353,9 @@ function ColumnHeaderMenu({
   onRename,
   onClear,
   sortDir,
-  canDelete,
+  canRemove,
+  isCustom,
+  onHide,
   onDelete,
 }: {
   label: string;
@@ -363,7 +365,9 @@ function ColumnHeaderMenu({
   onRename: (label: string) => void;
   onClear: () => void;
   sortDir: "asc" | "desc" | null;
-  canDelete: boolean;
+  canRemove: boolean;
+  isCustom: boolean;
+  onHide: () => void;
   onDelete: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -474,7 +478,14 @@ function ColumnHeaderMenu({
             <X size={14} /> Xóa lọc & sắp xếp
           </button>
           <div className="my-1 h-px bg-[var(--color-border-light)]" />
-          {canDelete ? (
+          {!canRemove ? (
+            <div
+              className={cn(item, "cursor-not-allowed opacity-50")}
+              title="Cột dùng cho công thức/đối chiếu — không thể xóa"
+            >
+              <Lock size={14} /> Không thể xóa cột
+            </div>
+          ) : isCustom ? (
             <button
               className={cn(item, "text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)]")}
               onClick={() => {
@@ -482,15 +493,19 @@ function ColumnHeaderMenu({
                 onDelete();
               }}
             >
-              <Trash2 size={14} /> Xóa cột
+              <Trash2 size={14} /> Xóa cột (vĩnh viễn)
             </button>
           ) : (
-            <div
-              className={cn(item, "cursor-not-allowed opacity-50")}
-              title="Cột dùng cho công thức/đối chiếu — không thể xóa"
+            <button
+              className={item}
+              onClick={() => {
+                setOpen(false);
+                onHide();
+              }}
+              title="Gỡ cột khỏi bảng — dữ liệu không mất, khôi phục lại trong menu “Cột”"
             >
-              <Lock size={14} /> Không thể xóa cột
-            </div>
+              <EyeOff size={14} /> Ẩn cột khỏi bảng
+            </button>
           )}
         </div>
       )}
@@ -1193,15 +1208,10 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
     const { id } = pendingDeleteCol;
     setDeletingCol(true);
     try {
-      if (id.startsWith("cf_")) {
-        // Cột tùy chỉnh — xóa vĩnh viễn (kèm dữ liệu).
-        await removeCustomField(id);
-        await hydrateCustomData(true);
-        setCustomFields(getCustomFields());
-      } else if (!hidden.has(id)) {
-        // Cột hệ thống — gỡ khỏi bảng (có thể khôi phục ở menu "Cột").
-        toggle(id);
-      }
+      // Chỉ cột tùy chỉnh mới qua hộp xác nhận này — xóa vĩnh viễn kèm dữ liệu.
+      await removeCustomField(id);
+      await hydrateCustomData(true);
+      setCustomFields(getCustomFields());
       // Dọn lọc/sắp xếp còn sót của cột vừa xóa.
       setColFilters((s) => {
         const next = { ...s };
@@ -1403,15 +1413,9 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
               </div>
             </div>
             <p className="mb-4 text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
-              {pendingDeleteCol.id.startsWith("cf_") ? (
-                <>
-                  Đây là <b>cột tùy chỉnh</b>. Xóa sẽ <b className="text-[var(--color-danger)]">xóa vĩnh viễn cột và toàn bộ dữ liệu</b> đã nhập ở cột này cho mọi nhân viên. Hành động không thể hoàn tác.
-                </>
-              ) : (
-                <>
-                  Cột sẽ được <b>gỡ khỏi bảng</b> danh sách. Dữ liệu của nhân viên không bị mất — bạn có thể hiển thị lại bất cứ lúc nào trong menu <b>“Cột”</b>.
-                </>
-              )}
+              Đây là <b>cột tùy chỉnh</b>. Xóa sẽ{" "}
+              <b className="text-[var(--color-danger)]">xóa vĩnh viễn cột và toàn bộ dữ liệu</b>{" "}
+              đã nhập ở cột này cho mọi nhân viên (kể cả trong hồ sơ chi tiết). Hành động không thể hoàn tác.
             </p>
             <div className="flex justify-end gap-2">
               <button
@@ -1625,7 +1629,17 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
                                 setColFilters((s) => ({ ...s, [c.id]: "" }));
                                 setSortState((s) => (s?.colId === c.id ? null : s));
                               }}
-                              canDelete={!c.locked && !NON_DELETABLE_COL_IDS.has(c.id)}
+                              canRemove={!c.locked && !NON_DELETABLE_COL_IDS.has(c.id)}
+                              isCustom={c.id.startsWith("cf_")}
+                              onHide={() => {
+                                toggle(c.id);
+                                setColFilters((s) => {
+                                  const next = { ...s };
+                                  delete next[c.id];
+                                  return next;
+                                });
+                                setSortState((s) => (s?.colId === c.id ? null : s));
+                              }}
                               onDelete={() => setPendingDeleteCol({ id: c.id, label: c.label })}
                             />
                           </span>
