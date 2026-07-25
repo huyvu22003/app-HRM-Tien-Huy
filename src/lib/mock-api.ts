@@ -42,6 +42,9 @@ function toApiEmployee(e: (typeof EMPLOYEES)[number], idx: number) {
     dependents: e.dependents ?? 0,
     base_salary: e.baseSalary ?? null,
     allowance: e.allowance ?? null,
+    responsibility_salary: null,
+    gas_allowance: null,
+    attendance_bonus: null,
     ins_status: e.insStatus || null,
     ins_salary_base: e.insSalaryBase ?? null,
     resign_reason: null, contract_date_1: null, contract_date_2: null, contract_date_3: null,
@@ -83,6 +86,9 @@ type ApiEmp = {
   dependents: number | null;
   base_salary: number | null;
   allowance: number | null;
+  responsibility_salary: number | null;
+  gas_allowance: number | null;
+  attendance_bonus: number | null;
   ins_status: string | null;
   ins_salary_base: number | null;
   resign_reason: string | null;
@@ -213,6 +219,9 @@ function makeImportedEmployee(input: Record<string, unknown>, id: number): ApiEm
     dependents: (input.dependents as number) ?? 0,
     base_salary: (input.base_salary as number) ?? null,
     allowance: (input.allowance as number) ?? null,
+    responsibility_salary: (input.responsibility_salary as number) ?? null,
+    gas_allowance: (input.gas_allowance as number) ?? null,
+    attendance_bonus: (input.attendance_bonus as number) ?? null,
     ins_status: (input.ins_status as string) || null,
     ins_salary_base: (input.ins_salary_base as number) ?? null,
     resign_reason: (input.resign_reason as string) || null,

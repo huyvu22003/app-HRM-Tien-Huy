@@ -36,6 +36,7 @@ export async function listEmployees(request: Request, env: Env): Promise<Respons
   const { results } = await env.DB.prepare(
     `SELECT e.*, d.name as department_name, manager_employee.name as manager_name,
             c.dependents, c.base_salary, c.allowance,
+            c.responsibility_salary, c.gas_allowance, c.attendance_bonus,
             ins.status as ins_status, ins.salary_base as ins_salary_base
      FROM employees e
      LEFT JOIN departments d ON d.id = e.department_id
