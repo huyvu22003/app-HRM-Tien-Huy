@@ -1250,16 +1250,34 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
     }
   }
 
+  // Trả về danh sách để xuất, đã sắp xếp theo bộ phận → mã thẻ.
+  // Nếu chưa có dữ liệu (đang tải hoặc bộ lọc rỗng) thì báo cho người dùng
+  // và trả về null để KHÔNG tạo ra file trắng.
+  function getExportRows(): ApiEmployee[] | null {
+    if (isLoading && allItems.length === 0) {
+      window.alert("Dữ liệu nhân viên đang tải, vui lòng đợi trong giây lát rồi xuất lại.");
+      return null;
+    }
+    // Nếu bộ lọc/tìm kiếm khiến danh sách rỗng nhưng vẫn còn dữ liệu gốc,
+    // xuất theo dữ liệu gốc để tránh file trắng ngoài ý muốn.
+    const base = filtered.length > 0 ? filtered : allItems;
+    if (base.length === 0) {
+      window.alert("Không có nhân viên nào để xuất.");
+      return null;
+    }
+    return [...base].sort(
+      (a: ApiEmployee, b: ApiEmployee) =>
+        (a.department_name ?? "").localeCompare(b.department_name ?? "", "vi") ||
+        a.code.localeCompare(b.code, "vi"),
+    );
+  }
+
   async function handleExport() {
     const cols = visibleColumns.filter((c) => c.exportValue && c.id !== "actions");
+    const sorted = getExportRows();
+    if (!sorted) return;
     setExporting(true);
     try {
-      // Export the current filtered set (all matching rows), grouped by department.
-      const sorted = [...filtered].sort(
-        (a: ApiEmployee, b: ApiEmployee) =>
-          (a.department_name ?? "").localeCompare(b.department_name ?? "", "vi") ||
-          a.code.localeCompare(b.code, "vi"),
-      );
       await exportStyledExcel({
         filename: `nhan-vien-${new Date().toISOString().slice(0, 10)}`,
         title: "DANH SÁCH NHÂN VIÊN",
@@ -1278,13 +1296,10 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
 
   // Xuất ĐẦY ĐỦ theo mẫu công ty — tiêu đề khớp dữ liệu, đủ mọi trường.
   async function handleFullExport() {
+    const sorted = getExportRows();
+    if (!sorted) return;
     setExporting(true);
     try {
-      const sorted = [...filtered].sort(
-        (a: ApiEmployee, b: ApiEmployee) =>
-          (a.department_name ?? "").localeCompare(b.department_name ?? "", "vi") ||
-          a.code.localeCompare(b.code, "vi"),
-      );
       await exportStyledExcel({
         filename: `nhan-vien-day-du-${new Date().toISOString().slice(0, 10)}`,
         title: "DANH SÁCH NHÂN VIÊN",
