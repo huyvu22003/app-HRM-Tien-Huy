@@ -1582,7 +1582,13 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
                         c.align === "center" && "text-center",
                       )}
                     >
-                      <span className={cn("flex min-w-0 items-center gap-1", c.align === "right" && "flex-row-reverse")}>
+                      <span
+                        className={cn(
+                          "flex min-w-0 items-center gap-1",
+                          c.align === "right" && "justify-end",
+                          c.align === "center" && "justify-center",
+                        )}
+                      >
                         {canDrag && (
                           <span
                             draggable
