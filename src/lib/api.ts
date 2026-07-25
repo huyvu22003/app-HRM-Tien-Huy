@@ -202,6 +202,9 @@ export interface ApiEmployee {
   dependents: number | null;
   base_salary: number | null;
   allowance: number | null;
+  responsibility_salary: number | null;
+  gas_allowance: number | null;
+  attendance_bonus: number | null;
   ins_status: string | null;
   ins_salary_base: number | null;
   // Hồ sơ mở rộng (Phase 2)

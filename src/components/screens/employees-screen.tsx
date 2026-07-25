@@ -237,6 +237,53 @@ const IMPORT_COMPARE_FIELDS = [
   "bhxh_increase_date", "bhxh_decrease_date", "relative_name", "relative_relation", "relative_phone",
 ];
 
+// Bộ cột xuất ĐẦY ĐỦ theo mẫu danh sách nhân sự công ty (tiêu đề khớp dữ liệu 1:1).
+type FullExportCol = { label: string; value: (e: ApiEmployee) => string | number; align?: "left" | "right" | "center"; format?: "money" | "int" | "text" };
+const FULL_EXPORT_COLUMNS: FullExportCol[] = [
+  { label: "Mã thẻ", value: (e) => e.code },
+  { label: "Họ và tên", value: (e) => e.name },
+  { label: "Bộ phận", value: (e) => e.department_name ?? "" },
+  { label: "Chức vụ", value: (e) => e.position ?? "" },
+  { label: "Điện thoại", value: (e) => e.phone ?? "" },
+  { label: "Email", value: (e) => e.email ?? "" },
+  { label: "Giới tính", value: (e) => e.gender ?? "" },
+  { label: "Ngày vào làm", value: (e) => formatDate(e.join_date) },
+  { label: "Ngày nghỉ việc", value: (e) => formatDate(e.resign_date) },
+  { label: "Nguyên nhân nghỉ", value: (e) => e.resign_reason ?? "" },
+  { label: "Ngày HĐLĐ L1", value: (e) => formatDate(e.contract_date_1) },
+  { label: "Loại HĐ", value: (e) => e.contract_type ?? "" },
+  { label: "Trạng thái", value: (e) => e.status ?? "" },
+  { label: "Ngày HĐLĐ L2", value: (e) => formatDate(e.contract_date_2) },
+  { label: "Ngày HĐLĐ L3", value: (e) => formatDate(e.contract_date_3) },
+  { label: "Năm sinh", value: (e) => e.birth_year ?? "" },
+  { label: "Nơi sinh", value: (e) => e.birth_place ?? "" },
+  { label: "Học lực", value: (e) => e.education ?? "" },
+  { label: "Địa chỉ thường trú", value: (e) => e.address ?? "" },
+  { label: "Địa chỉ tạm trú", value: (e) => e.temp_address ?? "" },
+  { label: "Số CCCD", value: (e) => e.cccd ?? "" },
+  { label: "Ngày cấp", value: (e) => formatDate(e.cccd_issue_date) },
+  { label: "Nơi cấp", value: (e) => e.cccd_issue_place ?? "" },
+  { label: "Quốc tịch", value: (e) => e.nationality ?? "" },
+  { label: "Tôn giáo", value: (e) => e.religion ?? "" },
+  { label: "Dân tộc", value: (e) => e.ethnicity ?? "" },
+  { label: "Số tài khoản", value: (e) => e.bank_account ?? "" },
+  { label: "Ngân hàng", value: (e) => e.bank ?? "" },
+  { label: "Chi nhánh ngân hàng", value: (e) => e.bank_branch ?? "" },
+  { label: "Mã số sổ BHXH", value: (e) => e.bhxh_no ?? "" },
+  { label: "Báo tăng BHXH", value: (e) => formatDate(e.bhxh_increase_date) },
+  { label: "Báo giảm BHXH", value: (e) => formatDate(e.bhxh_decrease_date) },
+  { label: "NPT", value: (e) => e.dependents ?? 0, align: "right", format: "int" },
+  { label: "Người thân", value: (e) => e.relative_name ?? "" },
+  { label: "Mối quan hệ", value: (e) => e.relative_relation ?? "" },
+  { label: "Số ĐT người thân", value: (e) => e.relative_phone ?? "" },
+  { label: "Lương cơ bản", value: (e) => e.base_salary ?? 0, align: "right", format: "money" },
+  { label: "Trách nhiệm", value: (e) => e.responsibility_salary ?? 0, align: "right", format: "money" },
+  { label: "PC công việc", value: (e) => e.allowance ?? 0, align: "right", format: "money" },
+  { label: "PC xăng xe", value: (e) => e.gas_allowance ?? 0, align: "right", format: "money" },
+  { label: "Chuyên cần", value: (e) => e.attendance_bonus ?? 0, align: "right", format: "money" },
+  { label: "Tổng lương", value: (e) => (e.base_salary ?? 0) + (e.responsibility_salary ?? 0) + (e.allowance ?? 0) + (e.gas_allowance ?? 0) + (e.attendance_bonus ?? 0), align: "right", format: "money" },
+];
+
 /** Chuẩn hoá ngày dd/mm/yyyy → yyyy-mm-dd để so sánh khỏi lệch định dạng. */
 function normalizeImportValue(field: string, value: string): string {
   const v = (value ?? "").trim();
@@ -1225,6 +1272,31 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
     }
   }
 
+  // Xuất ĐẦY ĐỦ theo mẫu công ty — tiêu đề khớp dữ liệu, đủ mọi trường.
+  async function handleFullExport() {
+    setExporting(true);
+    try {
+      const sorted = [...filtered].sort(
+        (a: ApiEmployee, b: ApiEmployee) =>
+          (a.department_name ?? "").localeCompare(b.department_name ?? "", "vi") ||
+          a.code.localeCompare(b.code, "vi"),
+      );
+      await exportStyledExcel({
+        filename: `nhan-vien-day-du-${new Date().toISOString().slice(0, 10)}`,
+        title: "DANH SÁCH NHÂN VIÊN",
+        meta: [
+          dept === "all" ? "Bộ phận: Tất cả" : `Bộ phận: ${dept}`,
+          `Ngày xuất: ${new Date().toLocaleDateString("vi-VN")}`,
+          `Số lượng: ${sorted.length} nhân viên`,
+        ],
+        columns: FULL_EXPORT_COLUMNS.map((c) => ({ label: c.label, align: c.align, format: c.format })),
+        rows: sorted.map((e) => FULL_EXPORT_COLUMNS.map((c) => c.value(e))),
+      });
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {importOpen && (
@@ -1317,10 +1389,19 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
           <button
             onClick={handleExport}
             disabled={exporting}
+            title="Xuất các cột đang hiển thị"
             className="flex items-center gap-1.5 rounded-[8px] border border-[var(--color-border)] px-3 py-1.5 text-[12.5px] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)] disabled:opacity-60"
           >
             {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
             {exporting ? "Đang xuất..." : "Xuất Excel"}
+          </button>
+          <button
+            onClick={handleFullExport}
+            disabled={exporting}
+            title="Xuất đầy đủ tất cả cột theo mẫu (tiêu đề khớp dữ liệu) — dùng để import lại"
+            className="flex items-center gap-1.5 rounded-[8px] border border-[var(--color-border)] px-3 py-1.5 text-[12.5px] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)] disabled:opacity-60"
+          >
+            <Download size={14} /> Xuất đầy đủ
           </button>
           {canEdit && (
             <>
