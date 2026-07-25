@@ -177,37 +177,33 @@ export async function importEmployees(request: Request, env: Env): Promise<Respo
       .bind(code)
       .first<{ id: number }>();
 
-    const cols = {
-      name,
-      gender: (r.gender as string) ?? null,
-      dob: (r.dob as string) ?? null,
-      phone: (r.phone as string) ?? null,
-      cccd: (r.cccd as string) ?? null,
-      address: (r.address as string) ?? null,
-      email: (r.email as string) ?? null,
-      department_id: departmentId,
-      position: (r.position as string) ?? null,
-      workplace: (r.workplace as string) ?? null,
-      contract_type: (r.contract_type as string) ?? null,
-      join_date: (r.join_date as string) ?? null,
-      status: (r.status as string) ?? "Đang làm việc",
-      manager: (r.manager as string) ?? null,
-      level: (r.level as string) ?? null,
-      bank: (r.bank as string) ?? null,
-      tax_code: (r.tax_code as string) ?? null,
-    };
+    // Chỉ nhận field CÓ MẶT trong dòng import (tránh ghi đè null lên dữ liệu cũ).
+    const has = (k: string) => r[k] !== undefined && r[k] !== null && String(r[k]).trim() !== "";
+    const strField = (k: string) => String(r[k]).trim();
+    const cols: Record<string, unknown> = {};
+    for (const k of ["gender", "dob", "phone", "cccd", "address", "email", "position",
+                     "workplace", "contract_type", "contract_end", "join_date", "status",
+                     "manager", "level", "bank", "tax_code"]) {
+      if (has(k)) cols[k] = strField(k);
+    }
+    if (deptName) cols.department_id = departmentId;
 
     if (existing) {
+      // name có thể đổi; luôn cho phép cập nhật name khi có.
+      cols.name = name;
       const sets = Object.keys(cols).map((k) => `${k} = ?`).join(", ");
-      await env.DB.prepare(`UPDATE employees SET ${sets} WHERE id = ?`)
-        .bind(...Object.values(cols), existing.id)
-        .run();
+      if (sets) {
+        await env.DB.prepare(`UPDATE employees SET ${sets} WHERE id = ?`)
+          .bind(...Object.values(cols), existing.id)
+          .run();
+      }
       updated++;
     } else {
-      const keys = ["code", ...Object.keys(cols)];
+      const insertCols = { name, status: (cols.status as string) ?? "Đang làm việc", ...cols };
+      const keys = ["code", ...Object.keys(insertCols)];
       const placeholders = keys.map(() => "?").join(", ");
       await env.DB.prepare(`INSERT INTO employees (${keys.join(", ")}) VALUES (${placeholders})`)
-        .bind(code, ...Object.values(cols))
+        .bind(code, ...Object.values(insertCols))
         .run();
       created++;
     }
