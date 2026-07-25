@@ -39,6 +39,11 @@ function toApiEmployee(e: (typeof EMPLOYEES)[number], idx: number) {
     bank: e.bank || null,
     tax_code: e.taxCode || null,
     updated_at: "2026-07-19 00:00:00",
+    dependents: e.dependents ?? 0,
+    base_salary: e.baseSalary ?? null,
+    allowance: e.allowance ?? null,
+    ins_status: e.insStatus || null,
+    ins_salary_base: e.insSalaryBase ?? null,
   };
 }
 
@@ -70,6 +75,11 @@ type ApiEmp = {
   bank: string | null;
   tax_code: string | null;
   updated_at: string | null;
+  dependents: number | null;
+  base_salary: number | null;
+  allowance: number | null;
+  ins_status: string | null;
+  ins_salary_base: number | null;
 };
 
 const baseEmployees: ApiEmp[] = EMPLOYEES.map(toApiEmployee);
@@ -174,6 +184,11 @@ function makeImportedEmployee(input: Record<string, unknown>, id: number): ApiEm
     bank: (input.bank as string) || null,
     tax_code: (input.tax_code as string) || null,
     updated_at: new Date().toISOString(),
+    dependents: (input.dependents as number) ?? 0,
+    base_salary: (input.base_salary as number) ?? null,
+    allowance: (input.allowance as number) ?? null,
+    ins_status: (input.ins_status as string) || null,
+    ins_salary_base: (input.ins_salary_base as number) ?? null,
   };
 }
 

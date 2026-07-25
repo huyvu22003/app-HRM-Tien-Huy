@@ -198,6 +198,12 @@ export interface ApiEmployee {
   bank: string | null;
   tax_code: string | null;
   updated_at: string | null;
+  // Tổng hợp lương/bảo hiểm (để cột danh sách khớp với chi tiết)
+  dependents: number | null;
+  base_salary: number | null;
+  allowance: number | null;
+  ins_status: string | null;
+  ins_salary_base: number | null;
 }
 
 export interface ApiCompensation {
