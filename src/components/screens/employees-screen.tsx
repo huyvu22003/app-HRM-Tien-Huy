@@ -103,37 +103,15 @@ function CustomFieldsModal({
           )}
         </div>
 
-        {/* Danh sách cột đã tạo (cuộn riêng, không đẩy form) */}
-        <div className="mt-3 flex max-h-[240px] flex-col gap-1 overflow-y-auto">
+        {/* Cột đã tạo hiển thị ngay trên bảng. Ẩn/Xóa cột thực hiện ở menu (⋮)
+            trên tiêu đề cột — nên không liệt kê lại ở đây để tránh trùng lặp. */}
+        <div className="mt-3 rounded-[8px] bg-[var(--color-page-bg)] px-3 py-2.5 text-[12.5px] leading-relaxed text-[var(--color-text-muted)]">
           {fields.length === 0 ? (
-            <div className="rounded-[8px] bg-[var(--color-page-bg)] px-3 py-2.5 text-[12.5px] text-[var(--color-text-muted)]">
-              Chưa có cột tùy chỉnh. Thêm cột riêng của bạn phía trên (VD: Tay nghề, Ca làm việc, Ghi chú HR).
-            </div>
+            <>Chưa có cột tùy chỉnh. Thêm cột riêng của bạn phía trên (VD: Tay nghề, Ca làm việc, Ghi chú HR).</>
           ) : (
             <>
-              <div className="px-1 text-[11px] text-[var(--color-text-lighter)]">
-                {fields.length} cột đã tạo · Xoá cột ở menu <span className="font-medium">Cột</span> trên bảng.
-              </div>
-              {fields.map((f) => (
-                <div key={f.id} className="flex items-center justify-between rounded-[8px] border border-[var(--color-border-light)] px-3 py-2">
-                  <div className="text-[12.5px]">
-                    <span className="font-medium text-[var(--color-text-primary)]">{f.label}</span>
-                    <span className="ml-2 text-[11px] text-[var(--color-text-lighter)]">
-                      {f.type === "text" ? "Văn bản" : f.type === "number" ? "Số" : "Lựa chọn"}
-                    </span>
-                  </div>
-                  <button
-                    onClick={async () => {
-                      await removeCustomField(f.id);
-                      onChanged();
-                    }}
-                    className="text-[var(--color-text-lighter)] hover:text-[var(--color-danger)]"
-                    title="Xóa cột"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ))}
+              Đã có <span className="font-medium text-[var(--color-text-secondary)]">{fields.length} cột tùy chỉnh</span> — hiển thị ngay trên bảng danh sách.
+              Muốn <b>ẩn</b> hoặc <b>xóa</b> một cột, mở menu <span className="font-medium">(⋮)</span> ở tiêu đề cột đó.
             </>
           )}
         </div>
