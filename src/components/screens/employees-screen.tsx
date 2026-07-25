@@ -339,6 +339,12 @@ function downloadImportTemplate() {
   URL.revokeObjectURL(url);
 }
 
+// Cột liên quan công thức tính lương & đối chiếu import — KHÔNG cho xóa.
+const NON_DELETABLE_COL_IDS = new Set([
+  "code", "name", "department_name", "status",
+  "dependents", "base_salary", "allowance", "ins_status", "ins_salary_base",
+]);
+
 function ColumnHeaderMenu({
   label,
   value,
@@ -347,6 +353,8 @@ function ColumnHeaderMenu({
   onRename,
   onClear,
   sortDir,
+  canDelete,
+  onDelete,
 }: {
   label: string;
   value: string;
@@ -355,6 +363,8 @@ function ColumnHeaderMenu({
   onRename: (label: string) => void;
   onClear: () => void;
   sortDir: "asc" | "desc" | null;
+  canDelete: boolean;
+  onDelete: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
@@ -463,6 +473,25 @@ function ColumnHeaderMenu({
           >
             <X size={14} /> Xóa lọc & sắp xếp
           </button>
+          <div className="my-1 h-px bg-[var(--color-border-light)]" />
+          {canDelete ? (
+            <button
+              className={cn(item, "text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)]")}
+              onClick={() => {
+                setOpen(false);
+                onDelete();
+              }}
+            >
+              <Trash2 size={14} /> Xóa cột
+            </button>
+          ) : (
+            <div
+              className={cn(item, "cursor-not-allowed opacity-50")}
+              title="Cột dùng cho công thức/đối chiếu — không thể xóa"
+            >
+              <Lock size={14} /> Không thể xóa cột
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1156,6 +1185,36 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
     useColumnPrefs("employees", displayColumns);
 
   const [sortState, setSortState] = useState<{ colId: string; dir: "asc" | "desc" } | null>(null);
+  const [pendingDeleteCol, setPendingDeleteCol] = useState<{ id: string; label: string } | null>(null);
+  const [deletingCol, setDeletingCol] = useState(false);
+
+  async function confirmDeleteColumn() {
+    if (!pendingDeleteCol) return;
+    const { id } = pendingDeleteCol;
+    setDeletingCol(true);
+    try {
+      if (id.startsWith("cf_")) {
+        // Cột tùy chỉnh — xóa vĩnh viễn (kèm dữ liệu).
+        await removeCustomField(id);
+        await hydrateCustomData(true);
+        setCustomFields(getCustomFields());
+      } else if (!hidden.has(id)) {
+        // Cột hệ thống — gỡ khỏi bảng (có thể khôi phục ở menu "Cột").
+        toggle(id);
+      }
+      // Dọn lọc/sắp xếp còn sót của cột vừa xóa.
+      setColFilters((s) => {
+        const next = { ...s };
+        delete next[id];
+        return next;
+      });
+      setSortState((s) => (s?.colId === id ? null : s));
+      setPendingDeleteCol(null);
+    } finally {
+      setDeletingCol(false);
+    }
+  }
+
   const tableRef = useRef<HTMLTableElement>(null);
 
   // Drag the divider on a header's right edge to resize that column.
@@ -1332,6 +1391,48 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
 
   return (
     <div className="flex flex-col gap-4">
+      {pendingDeleteCol && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-[420px] rounded-[14px] bg-white p-5 shadow-xl">
+            <div className="mb-3 flex items-center gap-3">
+              <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[var(--color-danger-bg)]">
+                <Trash2 size={18} className="text-[var(--color-danger)]" />
+              </span>
+              <div className="text-[15px] font-semibold text-[var(--color-text-primary)]">
+                Xóa cột “{pendingDeleteCol.label}”?
+              </div>
+            </div>
+            <p className="mb-4 text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
+              {pendingDeleteCol.id.startsWith("cf_") ? (
+                <>
+                  Đây là <b>cột tùy chỉnh</b>. Xóa sẽ <b className="text-[var(--color-danger)]">xóa vĩnh viễn cột và toàn bộ dữ liệu</b> đã nhập ở cột này cho mọi nhân viên. Hành động không thể hoàn tác.
+                </>
+              ) : (
+                <>
+                  Cột sẽ được <b>gỡ khỏi bảng</b> danh sách. Dữ liệu của nhân viên không bị mất — bạn có thể hiển thị lại bất cứ lúc nào trong menu <b>“Cột”</b>.
+                </>
+              )}
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setPendingDeleteCol(null)}
+                disabled={deletingCol}
+                className="rounded-[8px] border border-[var(--color-border)] px-4 py-1.5 text-[12.5px] font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)] disabled:opacity-60"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={confirmDeleteColumn}
+                disabled={deletingCol}
+                className="flex items-center gap-1.5 rounded-[8px] bg-[var(--color-danger)] px-4 py-1.5 text-[12.5px] font-medium text-white hover:opacity-90 disabled:opacity-60"
+              >
+                {deletingCol ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                Đồng ý xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {importOpen && (
         <ImportModal
           existing={allItems}
@@ -1524,6 +1625,8 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
                                 setColFilters((s) => ({ ...s, [c.id]: "" }));
                                 setSortState((s) => (s?.colId === c.id ? null : s));
                               }}
+                              canDelete={!c.locked && !NON_DELETABLE_COL_IDS.has(c.id)}
+                              onDelete={() => setPendingDeleteCol({ id: c.id, label: c.label })}
                             />
                           </span>
                         )}
