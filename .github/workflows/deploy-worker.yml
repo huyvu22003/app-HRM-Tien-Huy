@@ -1,0 +1,35 @@
+name: Deploy Worker API
+
+# Tự động deploy Worker (api/) lên Cloudflare mỗi khi có thay đổi trong api/ hoặc
+# db/ trên nhánh main — giống cách Cloudflare Pages tự deploy frontend.
+# Có thể chạy tay bằng nút "Run workflow" (workflow_dispatch).
+on:
+  push:
+    branches: [main]
+    paths:
+      - "api/**"
+      - "db/**"
+      - ".github/workflows/deploy-worker.yml"
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Cài dependencies cho api
+        run: npm ci
+        working-directory: api
+
+      - name: Deploy Worker lên Cloudflare
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: api
+          # Mặc định chạy `wrangler deploy` (dùng api/wrangler.toml: binding DB + STORAGE).
