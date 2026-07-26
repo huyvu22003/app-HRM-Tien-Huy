@@ -843,13 +843,22 @@ export function EmployeeDetailScreen({
     setForm((prev) => (prev ? { ...prev, [field]: value } : prev));
   }
 
-  function savePhoto() {
-    if (!photoDraft || !employee) return;
-    setEmployeePhoto(employee.id, photoDraft);
-    setPhotoUrl(photoDraft);
+  async function savePhoto() {
+    if (!photoDraft || !employee || !employeeId) return;
+    const draft = photoDraft;
+    // Cache cục bộ: hiển thị tức thì trên máy này + dự phòng khi chạy demo/offline.
+    setEmployeePhoto(employee.id, draft);
+    setPhotoUrl(draft);
     setPhotoDraft(null);
     setPhotoSaved(true);
     setTimeout(() => setPhotoSaved(false), 3000);
+    // Lưu lên server (cột employees.photo_url) để đồng bộ sang mọi máy.
+    try {
+      await updateEmployee(employeeId, { photoUrl: draft });
+      refetch();
+    } catch {
+      /* Backend chưa sẵn sàng — vẫn giữ ảnh trong localStorage làm dự phòng. */
+    }
   }
 
   function cancelPhoto() {
@@ -873,7 +882,28 @@ export function EmployeeDetailScreen({
     }
     const reader = new FileReader();
     reader.onload = () => {
-      setPhotoDraft(reader.result as string);
+      const raw = reader.result as string;
+      // Thu nhỏ ảnh về cỡ avatar (tối đa 320px, JPEG) để base64 gọn — lưu
+      // xuống D1/localStorage nhẹ và tải nhanh trên mọi máy.
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 320;
+        const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, w, h);
+          setPhotoDraft(canvas.toDataURL("image/jpeg", 0.85));
+        } else {
+          setPhotoDraft(raw);
+        }
+      };
+      img.onerror = () => setPhotoDraft(raw);
+      img.src = raw;
     };
     reader.readAsDataURL(file);
   }

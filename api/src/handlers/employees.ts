@@ -111,6 +111,7 @@ interface EmployeeBody {
   level?: string;
   bank?: string;
   taxCode?: string;
+  photoUrl?: string | null;
   compensation?: CompensationBody;
   insurance?: InsuranceBody;
 }
@@ -287,6 +288,7 @@ export async function updateEmployee(request: Request, env: Env, id: string): Pr
     level: body.level,
     bank: body.bank,
     tax_code: body.taxCode,
+    photo_url: body.photoUrl,
   };
 
   for (const [key, value] of Object.entries(map)) {
