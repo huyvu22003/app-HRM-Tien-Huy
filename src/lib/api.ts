@@ -313,6 +313,29 @@ export function updateEmployee(id: number | string, data: Record<string, unknown
   return api.put<{ success: boolean }>(`/employees/${id}`, data);
 }
 
+/**
+ * Tải avatar lên R2 qua Worker. Nhận data URL (base64), gửi bytes thô lên
+ * `/employees/:id/avatar`; server lưu R2 + cập nhật photo_url và trả URL công khai.
+ * Ném lỗi nếu R2 chưa bật (503) để nơi gọi fallback về D1.
+ */
+export async function uploadEmployeeAvatar(
+  id: number | string,
+  dataUrl: string,
+): Promise<{ url: string; key: string }> {
+  const blob = await (await fetch(dataUrl)).blob();
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/employees/${id}/avatar`, {
+    method: "POST",
+    headers: {
+      "Content-Type": blob.type || "image/jpeg",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: blob,
+  });
+  if (!res.ok) throw new ApiError(res.status, "Tải avatar lên R2 thất bại");
+  return res.json();
+}
+
 export type HierarchyMutation =
   | { action: "move"; employeeId: number; managerEmployeeId: number | null; expectedUpdatedAt?: string | null }
   | { action: "insert"; candidateId: number; branchRootId: number; expectedUpdatedAt?: string | null }
