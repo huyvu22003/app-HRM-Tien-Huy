@@ -2,6 +2,9 @@ import type { Env } from "../middleware/auth";
 import { error } from "../utils";
 
 export async function uploadFile(request: Request, env: Env): Promise<Response> {
+  if (!env.STORAGE) {
+    return error("Kho lưu trữ R2 chưa được bật. Vui lòng enable R2 trong Cloudflare rồi thử lại.", 503);
+  }
   const contentType = request.headers.get("content-type") || "";
 
   if (contentType.includes("multipart/form-data")) {
@@ -41,6 +44,9 @@ export async function uploadFile(request: Request, env: Env): Promise<Response> 
 }
 
 export async function downloadFile(_request: Request, env: Env, key: string): Promise<Response> {
+  if (!env.STORAGE) {
+    return error("Kho lưu trữ R2 chưa được bật.", 503);
+  }
   const object = await env.STORAGE.get(key);
   if (!object) return error("Không tìm thấy tệp tin", 404);
 
@@ -48,5 +54,45 @@ export async function downloadFile(_request: Request, env: Env, key: string): Pr
   object.writeHttpMetadata(headers);
   headers.set("etag", object.httpEtag);
 
+  return new Response(object.body, { headers });
+}
+
+/**
+ * Avatar nhân viên: lưu ảnh vào R2 (không nhét vào D1) và ghi URL công khai
+ * vào cột employees.photo_url. Trả về URL để frontend hiển thị ngay.
+ */
+export async function uploadAvatar(request: Request, env: Env, id: string): Promise<Response> {
+  if (!env.STORAGE) {
+    return error("Kho lưu trữ R2 chưa được bật.", 503);
+  }
+  const contentType = request.headers.get("content-type") || "image/jpeg";
+  const bytes = await request.arrayBuffer();
+  if (!bytes.byteLength) return error("Thiếu dữ liệu ảnh", 400);
+
+  const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
+  const key = `avatar-${id}-${Date.now()}.${ext}`;
+  await env.STORAGE.put(key, bytes, { httpMetadata: { contentType } });
+
+  const url = `${new URL(request.url).origin}/api/avatars/${key}`;
+  await env.DB.prepare("UPDATE employees SET photo_url = ?, updated_at = datetime('now') WHERE id = ?")
+    .bind(url, id)
+    .run();
+
+  return new Response(JSON.stringify({ url, key }), {
+    status: 201,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+/** Phục vụ ảnh avatar từ R2 (route công khai, để thẻ <img> tải được). */
+export async function serveAvatar(_request: Request, env: Env, key: string): Promise<Response> {
+  if (!env.STORAGE) return error("Kho lưu trữ R2 chưa được bật.", 503);
+  const object = await env.STORAGE.get(key);
+  if (!object) return error("Không tìm thấy ảnh", 404);
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set("etag", object.httpEtag);
+  headers.set("cache-control", "public, max-age=86400");
   return new Response(object.body, { headers });
 }

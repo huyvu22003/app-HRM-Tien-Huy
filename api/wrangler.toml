@@ -7,12 +7,14 @@ binding = "DB"
 database_name = "hrm-tien-huy-db"
 database_id = "8231e20c-8a17-482d-90a9-ae5de9ff9bdc"
 
-# R2 tạm tắt: tài khoản chưa bật R2 (cần enable trong Cloudflare Dashboard).
-# Chỉ dùng cho upload tệp đính kèm — không ảnh hưởng các chức năng khác.
-# Bật lại khi đã enable R2:
-# [[r2_buckets]]
-# binding = "STORAGE"
-# bucket_name = "hrm-tien-huy-files"
+# R2 — kho lưu tệp đính kèm / ảnh. YÊU CẦU trước khi deploy Worker:
+#   1) Bật R2 trong Cloudflare Dashboard (Storage & Databases → R2 → Enable)
+#   2) Tạo bucket:  wrangler r2 bucket create hrm-tien-huy-files
+# Nếu chưa tạo bucket mà deploy, wrangler sẽ báo lỗi binding.
+# Handler đã guard: nếu binding vắng mặt, route /api/files trả 503 thân thiện.
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "hrm-tien-huy-files"
 
 # JWT_SECRET được đặt qua `wrangler secret put JWT_SECRET` (không lưu trong repo).
 [vars]

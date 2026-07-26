@@ -18,7 +18,7 @@ import {
   ArrowUp,
   ArrowDown,
 } from "lucide-react";
-import { fetchEmployee, updateEmployee, fetchDepartments, type ApiEmployee, type ApiCompensation, type ApiInsurance, type ApiDepartment } from "@/lib/api";
+import { fetchEmployee, updateEmployee, uploadEmployeeAvatar, fetchDepartments, type ApiEmployee, type ApiCompensation, type ApiInsurance, type ApiDepartment } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery, useMutation } from "@/lib/hooks";
 import { getInitials, cn, formatDate, formatMoney, seededRandom } from "@/lib/utils";
@@ -852,12 +852,20 @@ export function EmployeeDetailScreen({
     setPhotoDraft(null);
     setPhotoSaved(true);
     setTimeout(() => setPhotoSaved(false), 3000);
-    // Lưu lên server (cột employees.photo_url) để đồng bộ sang mọi máy.
+    // Ưu tiên R2: upload ảnh, server lưu file + cập nhật photo_url = URL công khai.
     try {
-      await updateEmployee(employeeId, { photoUrl: draft });
+      const { url } = await uploadEmployeeAvatar(employeeId, draft);
+      setPhotoUrl(url);
+      setEmployeePhoto(employee.id, url); // cache URL thay cho base64
       refetch();
     } catch {
-      /* Backend chưa sẵn sàng — vẫn giữ ảnh trong localStorage làm dự phòng. */
+      // R2 chưa bật / lỗi → fallback: lưu base64 vào D1 như trước (không hỏng avatar).
+      try {
+        await updateEmployee(employeeId, { photoUrl: draft });
+        refetch();
+      } catch {
+        /* Offline — vẫn giữ ảnh trong localStorage làm dự phòng. */
+      }
     }
   }
 

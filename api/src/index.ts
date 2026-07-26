@@ -29,7 +29,7 @@ import {
 } from "./handlers/recognition";
 import { getConfig, updateConfig } from "./handlers/config";
 import { getPermissions, updatePermissions } from "./handlers/permissions";
-import { uploadFile, downloadFile } from "./handlers/files";
+import { uploadFile, downloadFile, uploadAvatar, serveAvatar } from "./handlers/files";
 import { updateHierarchy } from "./handlers/org";
 import {
   listCustomFields,
@@ -46,6 +46,8 @@ const PUBLIC_ROUTES: Array<{ method: string; pathname: string }> = [
 ];
 
 function isPublicRoute(method: string, pathname: string): boolean {
+  // Ảnh avatar phục vụ công khai để thẻ <img> tải được (không gửi được token).
+  if (method === "GET" && pathname.startsWith("/api/avatars/")) return true;
   return PUBLIC_ROUTES.some((r) => r.method === method && r.pathname === pathname);
 }
 
@@ -102,6 +104,19 @@ export default {
         const id = parseIdFromPath(pathname, "/api/employees/");
         if (!id) return withCors(error("Thiếu id nhân viên", 400));
         return withCors(await saveCustomValues(request, env, id));
+      }
+
+      // Avatar: upload ảnh lên R2 (đặt trước route PUT employees/:id).
+      if (method === "POST" && /^\/api\/employees\/\d+\/avatar$/.test(pathname)) {
+        const id = parseIdFromPath(pathname, "/api/employees/");
+        if (!id) return withCors(error("Thiếu id nhân viên", 400));
+        return withCors(await uploadAvatar(request, env, id));
+      }
+      // Phục vụ ảnh avatar công khai từ R2.
+      if (method === "GET" && pathname.startsWith("/api/avatars/")) {
+        const key = pathname.slice("/api/avatars/".length);
+        if (!key) return withCors(error("Thiếu key ảnh", 400));
+        return withCors(await serveAvatar(request, env, key));
       }
 
       if (method === "GET" && pathname.startsWith("/api/employees/")) {
