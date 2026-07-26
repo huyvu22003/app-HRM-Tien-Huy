@@ -37,7 +37,8 @@ export async function createCustomField(request: Request, env: Env): Promise<Res
   const body = await readJson<CustomFieldBody>(request);
   const label = (body.label ?? "").trim();
   if (!label) return error("Thiếu tên cột", 400);
-  const type = body.type === "number" || body.type === "select" ? body.type : "text";
+  const type =
+    body.type === "number" || body.type === "select" || body.type === "date" ? body.type : "text";
   const id = `cf_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   const options = type === "select" && body.options?.length ? JSON.stringify(body.options) : null;
 

@@ -21,7 +21,7 @@ import {
   type CustomValuesMap,
 } from "@/lib/api";
 
-export type CustomFieldType = "text" | "number" | "select";
+export type CustomFieldType = "text" | "number" | "select" | "date";
 
 export interface CustomField {
   id: string;

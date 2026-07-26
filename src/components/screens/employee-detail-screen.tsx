@@ -1231,14 +1231,21 @@ export function EmployeeDetailScreen({
                         </select>
                       ) : (
                         <input
-                          type={f.type === "number" ? "number" : "text"}
+                          type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
+                          inputMode={f.type === "number" ? "numeric" : undefined}
                           value={customVals[f.id] ?? ""}
                           onChange={(e) => setCustomVals((s) => ({ ...s, [f.id]: e.target.value }))}
                           className="mt-1 h-9 w-full rounded-[8px] border border-[var(--color-accent)] px-2.5 text-[13px] outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
                         />
                       )
                     ) : (
-                      <div className="mt-1 text-[13.5px] text-[var(--color-text-primary)]">{customVals[f.id] || "-"}</div>
+                      <div className="mt-1 text-[13.5px] text-[var(--color-text-primary)]">
+                        {customVals[f.id]
+                          ? f.type === "date"
+                            ? formatDate(customVals[f.id])
+                            : customVals[f.id]
+                          : "-"}
+                      </div>
                     )}
                   </div>
                 ))}
