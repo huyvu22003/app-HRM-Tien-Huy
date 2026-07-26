@@ -83,6 +83,7 @@ function CustomFieldsModal({
             >
               <option value="text">Văn bản</option>
               <option value="number">Số</option>
+              <option value="date">Ngày</option>
               <option value="select">Lựa chọn</option>
             </select>
             <button
@@ -1158,12 +1159,15 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
     },
   ];
 
+  const fmtCustom = (f: CustomField, raw: string) =>
+    raw && f.type === "date" ? formatDate(raw) : raw;
   const customColumns: ColumnDef<ApiEmployee>[] = customFields.map((f) => ({
     id: f.id,
     label: f.label,
+    align: f.type === "number" ? "right" : undefined,
     cellClass: "text-[var(--color-text-muted)]",
-    cell: (e) => getCustomValue(e.id, f.id) || "-",
-    exportValue: (e) => getCustomValue(e.id, f.id),
+    cell: (e) => fmtCustom(f, getCustomValue(e.id, f.id)) || "-",
+    exportValue: (e) => fmtCustom(f, getCustomValue(e.id, f.id)),
     exportFormat: f.type === "number" ? "int" : "text",
   }));
 

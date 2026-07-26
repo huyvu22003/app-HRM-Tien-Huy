@@ -572,7 +572,7 @@ const CF_VALUES_KEY = "hrm_custom_field_values";
 interface MockCustomField {
   id: string;
   label: string;
-  type: "text" | "number" | "select";
+  type: "text" | "number" | "select" | "date";
   options?: string[];
 }
 type MockValuesMap = Record<string, Record<string, string>>;
