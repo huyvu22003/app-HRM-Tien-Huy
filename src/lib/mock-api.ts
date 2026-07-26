@@ -856,6 +856,19 @@ const MOCK_ROUTES: MockRoute[] = [
     },
   },
   {
+    match: /^\/attendance\/periods$/,
+    handler: () => ({ data: ["2026-06"] }),
+  },
+  {
+    match: /^\/attendance\/import$/,
+    method: "POST",
+    handler: (_path, _params, body) => {
+      const b = parseBody(body);
+      const rows = Array.isArray(b.rows) ? b.rows : [];
+      return { success: true, imported: rows.length, unmatched: [] };
+    },
+  },
+  {
     match: /^\/attendance$/,
     handler: (_path, params) => {
       const period = params.get("period") || "2026-06";

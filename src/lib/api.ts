@@ -434,6 +434,11 @@ export interface ApiAttendance {
   vr: number;
   kp: number;
   overtime_hours: number;
+  ot_weekday_hours?: number;
+  ot_sunday_hours?: number;
+  ot_holiday_hours?: number;
+  gas_days?: number;
+  meal_allowance?: number;
   is_edited: number;
   locked: number;
 }
@@ -449,6 +454,32 @@ export function updateAttendance(
   data: Record<string, unknown>,
 ) {
   return api.put<{ success: boolean }>(`/attendance/${id}`, data);
+}
+
+/** Danh sách kỳ đã có dữ liệu chấm công (mới nhất trước). */
+export function fetchAttendancePeriods() {
+  return api.get<{ data: string[] }>("/attendance/periods");
+}
+
+export interface AttendanceImportRow {
+  code?: string;
+  name?: string;
+  stdDays?: number;
+  actualDays?: number;
+  overtimeHours?: number;
+  otWeekdayHours?: number;
+  otSundayHours?: number;
+  otHolidayHours?: number;
+  gasDays?: number;
+  mealAllowance?: number;
+}
+
+/** Nhập chấm công hàng loạt cho 1 kỳ (bulk upsert). */
+export function importAttendance(period: string, rows: AttendanceImportRow[]) {
+  return api.post<{ success: boolean; imported: number; unmatched: string[] }>(
+    "/attendance/import",
+    { period, rows },
+  );
 }
 
 // --- Leave ---
