@@ -2,6 +2,9 @@ import type { Env } from "../middleware/auth";
 import { error } from "../utils";
 
 export async function uploadFile(request: Request, env: Env): Promise<Response> {
+  if (!env.STORAGE) {
+    return error("Kho lưu trữ R2 chưa được bật. Vui lòng enable R2 trong Cloudflare rồi thử lại.", 503);
+  }
   const contentType = request.headers.get("content-type") || "";
 
   if (contentType.includes("multipart/form-data")) {
@@ -41,6 +44,9 @@ export async function uploadFile(request: Request, env: Env): Promise<Response> 
 }
 
 export async function downloadFile(_request: Request, env: Env, key: string): Promise<Response> {
+  if (!env.STORAGE) {
+    return error("Kho lưu trữ R2 chưa được bật.", 503);
+  }
   const object = await env.STORAGE.get(key);
   if (!object) return error("Không tìm thấy tệp tin", 404);
 

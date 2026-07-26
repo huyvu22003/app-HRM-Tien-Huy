@@ -4,7 +4,10 @@
 
 export interface Env {
   DB: D1Database;
-  STORAGE: R2Bucket;
+  // STORAGE (R2) là optional: chỉ có khi đã bật R2 + khai báo binding trong
+  // wrangler.toml. Handler file phải guard trước khi dùng để Worker vẫn chạy
+  // được khi R2 chưa bật.
+  STORAGE?: R2Bucket;
   JWT_SECRET: string;
   CORS_ORIGIN: string;
 }
