@@ -13,6 +13,7 @@ import {
 import { useQuery } from "@/lib/hooks";
 import { type ColumnDef } from "@/lib/table-prefs";
 import { DataTable } from "@/components/ui/data-table";
+import { useCustomColumns } from "@/lib/use-custom-columns";
 import { exportStyledExcel } from "@/lib/excel-export";
 import { parseAttendanceWorkbook, type ParsedAttendance } from "@/lib/attendance-import";
 
@@ -197,6 +198,14 @@ export function AttendanceScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingRow, draft, saving]);
 
+  // Cột tùy chỉnh dùng chung (đồng bộ theo nhân viên) — chèn trước cột thao tác.
+  const { customColumns, addColumn, deleteColumn, isCustomColumn } = useCustomColumns<AttRow>((d) => d.row.employee_id);
+  const actionsIdx = columns.findIndex((c) => c.id === "actions");
+  const displayColumns =
+    actionsIdx >= 0
+      ? [...columns.slice(0, actionsIdx), ...customColumns, ...columns.slice(actionsIdx)]
+      : [...columns, ...customColumns];
+
   async function handleExport(exportRows: AttRow[], exportCols: ColumnDef<AttRow>[]) {
     const cols = exportCols.filter((c) => c.exportValue);
     await exportStyledExcel({
@@ -243,7 +252,12 @@ export function AttendanceScreen() {
       ) : (
         <DataTable<AttRow>
           tableKey="attendance"
-          columns={columns}
+          columns={displayColumns}
+          onAddColumn={(_after, opts) => addColumn(opts)}
+          isColumnDeletable={(c) => isCustomColumn(c.id)}
+          onDeleteColumn={(id) => {
+            if (confirm("Xoá cột tùy chỉnh này khỏi toàn bộ hệ thống? Dữ liệu của cột sẽ mất.")) deleteColumn(id);
+          }}
           rows={filtered}
           getRowKey={(d) => d.row.id}
           minWidth={1400}

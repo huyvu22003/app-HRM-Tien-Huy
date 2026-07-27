@@ -4,6 +4,7 @@ import { useMemo, useState, useRef } from "react";
 import { X, Printer, Download } from "lucide-react";
 import { fetchSalary, fetchDepartments, type ApiSalaryRow } from "@/lib/api";
 import { useQuery } from "@/lib/hooks";
+import { useCustomColumns } from "@/lib/use-custom-columns";
 import { formatMoney, cn } from "@/lib/utils";
 import { type ColumnDef } from "@/lib/table-prefs";
 import { DataTable } from "@/components/ui/data-table";
@@ -604,6 +605,10 @@ export function SalaryScreen() {
   const { data, isLoading } = useQuery(() => fetchSalary(period), [period]);
   const { data: deptData } = useQuery(() => fetchDepartments(), []);
 
+  // Cột tùy chỉnh dùng chung (đồng bộ theo nhân viên).
+  const { customColumns, addColumn, deleteColumn, isCustomColumn } = useCustomColumns<SalaryDisplayRow>((d) => d.row.employee_id);
+  const displayColumns = [...SAL_COLUMNS, ...customColumns];
+
   const rows = useMemo<SalaryDisplayRow[]>(() => {
     if (!data?.data) return [];
     return data.data
@@ -719,7 +724,12 @@ export function SalaryScreen() {
       ) : (
         <DataTable<SalaryDisplayRow>
           tableKey="salary"
-          columns={SAL_COLUMNS}
+          columns={displayColumns}
+          onAddColumn={(_after, opts) => addColumn(opts)}
+          isColumnDeletable={(c) => isCustomColumn(c.id)}
+          onDeleteColumn={(id) => {
+            if (confirm("Xoá cột tùy chỉnh này khỏi toàn bộ hệ thống? Dữ liệu của cột sẽ mất.")) deleteColumn(id);
+          }}
           rows={rows}
           getRowKey={(d) => d.row.code}
           onRowClick={(d) => setSelected(d)}

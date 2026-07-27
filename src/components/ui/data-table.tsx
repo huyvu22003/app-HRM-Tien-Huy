@@ -243,6 +243,10 @@ export interface DataTableProps<Row> {
   defaultColWidth?: (c: ColumnDef<Row>) => number;
   /** Cho phép thêm cột mới ngay bên phải một cột (chèn cột tùy chỉnh). */
   onAddColumn?: (afterColumnId: string, opts: { label: string; type: AddColumnFormat }) => void;
+  /** Cột nào được phép xoá (VD: cột tùy chỉnh) — hiện nút xoá trong menu "Cột". */
+  isColumnDeletable?: (c: ColumnDef<Row>) => boolean;
+  /** Xoá cột (thường là cột tùy chỉnh). */
+  onDeleteColumn?: (id: string) => void;
 }
 
 export function DataTable<Row>({
@@ -259,6 +263,8 @@ export function DataTable<Row>({
   emptyText = "Không có dữ liệu.",
   defaultColWidth,
   onAddColumn,
+  isColumnDeletable,
+  onDeleteColumn,
 }: DataTableProps<Row>) {
   const {
     hidden,
@@ -268,6 +274,7 @@ export function DataTable<Row>({
     reorderLocked,
     toggleReorderLock,
     moveColumn,
+    placeColumnAfter,
     renameColumn,
     widths,
     setColumnWidth,
@@ -277,6 +284,22 @@ export function DataTable<Row>({
   const [sortState, setSortState] = useState<{ colId: string; dir: "asc" | "desc" } | null>(null);
   const [page, setPage] = useState(1);
   const tableRef = useRef<HTMLTableElement>(null);
+
+  // Khi thêm cột mới: nhớ "chèn sau cột nào", rồi khi cột mới xuất hiện trong
+  // `columns` (screen tạo xong custom field) thì đặt nó ngay bên phải cột đó.
+  const pendingAfterRef = useRef<string | null>(null);
+  const knownColIdsRef = useRef<Set<string>>(new Set(columns.map((c) => c.id)));
+  useEffect(() => {
+    const ids = columns.map((c) => c.id);
+    if (pendingAfterRef.current) {
+      const newId = ids.find((id) => !knownColIdsRef.current.has(id));
+      if (newId) {
+        placeColumnAfter(newId, pendingAfterRef.current);
+        pendingAfterRef.current = null;
+      }
+    }
+    knownColIdsRef.current = new Set(ids);
+  }, [columns, placeColumnAfter]);
 
   const filterKey = JSON.stringify(colFilters) + JSON.stringify(sortState);
   useEffect(() => {
@@ -349,7 +372,7 @@ export function DataTable<Row>({
       <div className="flex flex-wrap items-center gap-2">
         {toolbarLeft}
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <ColumnMenu columns={columns} hidden={hidden} onToggle={toggle} onReset={reset} />
+          <ColumnMenu columns={columns} hidden={hidden} onToggle={toggle} onReset={reset} isDeletable={isColumnDeletable} onDeleteColumn={onDeleteColumn} />
           <button
             onClick={toggleReorderLock}
             className={cn(
@@ -436,7 +459,14 @@ export function DataTable<Row>({
                               setColFilters((s) => ({ ...s, [c.id]: "" }));
                               setSortState((s) => (s?.colId === c.id ? null : s));
                             }}
-                            onAddColumn={onAddColumn ? (opts) => onAddColumn(c.id, opts) : undefined}
+                            onAddColumn={
+                              onAddColumn
+                                ? (opts) => {
+                                    pendingAfterRef.current = c.id;
+                                    onAddColumn(c.id, opts);
+                                  }
+                                : undefined
+                            }
                           />
                         </span>
                       )}
