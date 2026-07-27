@@ -11,7 +11,7 @@ import { useColumnPrefs, type ColumnDef } from "@/lib/table-prefs";
 import { ColumnMenu } from "@/components/ui/column-menu";
 import { exportStyledExcel } from "@/lib/excel-export";
 import { getEmployeePhoto } from "@/lib/photo-store";
-import { X, CheckCircle2, FileDown, Settings2, Trash2, Lock, Unlock, MoreVertical, GripVertical, ArrowDownAZ, ArrowUpAZ, Pencil, EyeOff } from "lucide-react";
+import { X, CheckCircle2, FileDown, Settings2, Trash2, Lock, Unlock, MoreVertical, GripVertical, ArrowDownAZ, ArrowUpAZ, Pencil, EyeOff, Type, Hash, Calendar } from "lucide-react";
 import {
   getCustomFields,
   addCustomField,
@@ -336,6 +336,7 @@ function ColumnHeaderMenu({
   isCustom,
   onHide,
   onDelete,
+  onAddColumn,
 }: {
   label: string;
   value: string;
@@ -348,10 +349,15 @@ function ColumnHeaderMenu({
   isCustom: boolean;
   onHide: () => void;
   onDelete: () => void;
+  /** Thêm cột mới ngay bên phải cột này. */
+  onAddColumn?: (opts: { label: string; type: CustomFieldType }) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameText, setRenameText] = useState(label);
+  const [adding, setAdding] = useState(false);
+  const [newColName, setNewColName] = useState("");
+  const [newColType, setNewColType] = useState<CustomFieldType>("text");
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const ref = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -363,6 +369,7 @@ function ColumnHeaderMenu({
       if (menuRef.current?.contains(t)) return;
       setOpen(false);
       setRenaming(false);
+      setAdding(false);
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
@@ -447,6 +454,75 @@ function ColumnHeaderMenu({
             <button className={item} onClick={() => setRenaming(true)}>
               <Pencil size={14} /> Đổi tên cột
             </button>
+          )}
+          {onAddColumn && (
+            <>
+              <div className="my-1 h-px bg-[var(--color-border-light)]" />
+              {adding ? (
+                <div className="px-1 py-1">
+                  <input
+                    autoFocus
+                    value={newColName}
+                    onChange={(e) => setNewColName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && newColName.trim()) {
+                        onAddColumn({ label: newColName.trim(), type: newColType });
+                        setNewColName("");
+                        setAdding(false);
+                        setOpen(false);
+                      }
+                    }}
+                    placeholder="Tên cột mới..."
+                    className="h-8 w-full rounded-[6px] border border-[var(--color-accent)] px-2 text-[12.5px] outline-none"
+                  />
+                  <div className="mt-1.5 mb-1 text-[10.5px] uppercase tracking-wide text-[var(--color-text-lighter)]">Định dạng</div>
+                  <div className="flex gap-1">
+                    {([["text", "Văn bản", Type], ["number", "Số", Hash], ["date", "Ngày", Calendar]] as [CustomFieldType, string, typeof Type][]).map(([val, lbl, Icon]) => {
+                      const on = newColType === val;
+                      return (
+                        <button
+                          key={val}
+                          onClick={() => setNewColType(val)}
+                          className={cn(
+                            "flex flex-1 flex-col items-center gap-0.5 rounded-[6px] border py-1.5 text-[10.5px]",
+                            on
+                              ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-white"
+                              : "border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]",
+                          )}
+                        >
+                          <Icon size={14} /> {lbl}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-2 flex gap-1">
+                    <button
+                      onClick={() => {
+                        if (!newColName.trim()) return;
+                        onAddColumn({ label: newColName.trim(), type: newColType });
+                        setNewColName("");
+                        setAdding(false);
+                        setOpen(false);
+                      }}
+                      disabled={!newColName.trim()}
+                      className="flex-1 rounded-[6px] bg-[var(--color-accent)] px-2 py-1.5 text-[11.5px] font-medium text-white disabled:opacity-50"
+                    >
+                      Thêm cột bên phải
+                    </button>
+                    <button
+                      onClick={() => { setAdding(false); setNewColName(""); }}
+                      className="rounded-[6px] border border-[var(--color-border)] px-2 py-1.5 text-[11.5px] text-[var(--color-text-secondary)]"
+                    >
+                      Huỷ
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button className={item} onClick={() => { setAdding(true); setNewColName(""); setNewColType("text"); }}>
+                  <Plus size={14} /> Thêm cột
+                </button>
+              )}
+            </>
           )}
           <div className="my-1 h-px bg-[var(--color-border-light)]" />
           <button
@@ -1178,7 +1254,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
       ? [...columns.slice(0, actionsIdx), ...customColumns, ...columns.slice(actionsIdx)]
       : [...columns, ...customColumns];
 
-  const { hidden, toggle, reset, visibleColumns, reorderLocked, toggleReorderLock, moveColumn, renameColumn, widths, setColumnWidth } =
+  const { hidden, toggle, reset, visibleColumns, orderedColumns, reorderLocked, toggleReorderLock, moveColumn, placeColumnAfter, renameColumn, widths, setColumnWidth } =
     useColumnPrefs("employees", displayColumns);
 
   const [sortState, setSortState] = useState<{ colId: string; dir: "asc" | "desc" } | null>(null);
@@ -1206,6 +1282,26 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
       setDeletingCol(false);
     }
   }
+
+  // Thêm cột mới (custom field) từ menu 3-chấm, đặt ngay bên phải cột thao tác.
+  // Dùng ref cho "đơn đặt vị trí" để không setState trong effect (cascading render).
+  const pendingPlaceRef = useRef<{ newId: string; afterId: string } | null>(null);
+  const handleAddColumn = useCallback(
+    async (afterColumnId: string, opts: { label: string; type: CustomFieldType }) => {
+      const created = await addCustomField({ label: opts.label, type: opts.type });
+      pendingPlaceRef.current = { newId: created.id, afterId: afterColumnId };
+      setCustomFields(getCustomFields());
+    },
+    [],
+  );
+  useEffect(() => {
+    const p = pendingPlaceRef.current;
+    if (!p) return;
+    const ids = orderedColumns.map((c) => c.id);
+    if (!ids.includes(p.newId)) return; // chờ cột xuất hiện sau re-render
+    pendingPlaceRef.current = null;
+    placeColumnAfter(p.newId, p.afterId);
+  }, [orderedColumns, placeColumnAfter]);
 
   const tableRef = useRef<HTMLTableElement>(null);
 
@@ -1619,6 +1715,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
                               }}
                               canRemove={!c.locked && !NON_DELETABLE_COL_IDS.has(c.id)}
                               isCustom={c.id.startsWith("cf_")}
+                              onAddColumn={(opts) => handleAddColumn(c.id, opts)}
                               onHide={() => {
                                 toggle(c.id);
                                 setColFilters((s) => {
