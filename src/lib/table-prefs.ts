@@ -206,6 +206,22 @@ export function useColumnPrefs<Row>(tableKey: string, columns: ColumnDef<Row>[])
     [ordered, persistOrder],
   );
 
+  /** Đặt cột `id` ngay bên phải cột `afterId` (dùng khi thêm cột mới). */
+  const placeColumnAfter = useCallback(
+    (id: string, afterId: string) => {
+      const ids = ordered.map((c) => c.id);
+      const from = ids.indexOf(id);
+      if (from < 0) return;
+      ids.splice(from, 1);
+      const to = ids.indexOf(afterId);
+      if (to < 0) ids.push(id);
+      else ids.splice(to + 1, 0, id);
+      setOrderState(ids);
+      persistOrder(ids);
+    },
+    [ordered, persistOrder],
+  );
+
   const isVisible = useCallback((id: string) => !hidden.has(id), [hidden]);
   const visibleColumns = ordered.filter((c) => !hidden.has(c.id));
 
@@ -219,6 +235,7 @@ export function useColumnPrefs<Row>(tableKey: string, columns: ColumnDef<Row>[])
     reorderLocked,
     toggleReorderLock,
     moveColumn,
+    placeColumnAfter,
     renameColumn,
     widths,
     setColumnWidth,

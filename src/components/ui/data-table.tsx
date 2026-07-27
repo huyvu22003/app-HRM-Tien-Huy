@@ -7,6 +7,10 @@ import {
   ArrowDownAZ,
   ArrowUpAZ,
   Pencil,
+  Plus,
+  Type,
+  Hash,
+  Calendar,
   X,
   Lock,
   Unlock,
@@ -17,7 +21,15 @@ import { useColumnPrefs, type ColumnDef } from "@/lib/table-prefs";
 import { ColumnMenu } from "@/components/ui/column-menu";
 import { cn } from "@/lib/utils";
 
-/** Per-column 3-dot menu: filter box + sort A→Z / Z→A + rename + clear. */
+export type AddColumnFormat = "text" | "number" | "date";
+
+const ADD_COL_FORMATS: { value: AddColumnFormat; label: string; icon: typeof Type }[] = [
+  { value: "text", label: "Văn bản", icon: Type },
+  { value: "number", label: "Số", icon: Hash },
+  { value: "date", label: "Ngày", icon: Calendar },
+];
+
+/** Per-column 3-dot menu: filter box + sort A→Z / Z→A + rename + add-column + clear. */
 export function ColumnHeaderMenu({
   label,
   value,
@@ -25,6 +37,7 @@ export function ColumnHeaderMenu({
   onSort,
   onRename,
   onClear,
+  onAddColumn,
   sortDir,
 }: {
   label: string;
@@ -33,11 +46,16 @@ export function ColumnHeaderMenu({
   onSort: (dir: "asc" | "desc") => void;
   onRename: (label: string) => void;
   onClear: () => void;
+  /** Thêm cột mới ngay bên phải cột này (VD: cột tùy chỉnh). */
+  onAddColumn?: (opts: { label: string; type: AddColumnFormat }) => void;
   sortDir: "asc" | "desc" | null;
 }) {
   const [open, setOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameText, setRenameText] = useState(label);
+  const [adding, setAdding] = useState(false);
+  const [newColName, setNewColName] = useState("");
+  const [newColType, setNewColType] = useState<AddColumnFormat>("text");
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const ref = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -48,6 +66,7 @@ export function ColumnHeaderMenu({
       if (ref.current?.contains(t) || menuRef.current?.contains(t)) return;
       setOpen(false);
       setRenaming(false);
+      setAdding(false);
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
@@ -127,6 +146,76 @@ export function ColumnHeaderMenu({
               <Pencil size={14} /> Đổi tên cột
             </button>
           )}
+          {onAddColumn && (
+            <>
+              <div className="my-1 h-px bg-[var(--color-border-light)]" />
+              {adding ? (
+                <div className="px-1 py-1">
+                  <input
+                    autoFocus
+                    value={newColName}
+                    onChange={(e) => setNewColName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && newColName.trim()) {
+                        onAddColumn({ label: newColName.trim(), type: newColType });
+                        setNewColName("");
+                        setAdding(false);
+                        setOpen(false);
+                      }
+                    }}
+                    placeholder="Tên cột mới..."
+                    className="h-8 w-full rounded-[6px] border border-[var(--color-accent)] px-2 text-[12.5px] outline-none"
+                  />
+                  <div className="mt-1.5 mb-1 text-[10.5px] uppercase tracking-wide text-[var(--color-text-lighter)]">Định dạng</div>
+                  <div className="flex gap-1">
+                    {ADD_COL_FORMATS.map((f) => {
+                      const Icon = f.icon;
+                      const on = newColType === f.value;
+                      return (
+                        <button
+                          key={f.value}
+                          onClick={() => setNewColType(f.value)}
+                          className={cn(
+                            "flex flex-1 flex-col items-center gap-0.5 rounded-[6px] border py-1.5 text-[10.5px]",
+                            on
+                              ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-white"
+                              : "border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]",
+                          )}
+                        >
+                          <Icon size={14} /> {f.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-2 flex gap-1">
+                    <button
+                      onClick={() => {
+                        if (!newColName.trim()) return;
+                        onAddColumn({ label: newColName.trim(), type: newColType });
+                        setNewColName("");
+                        setAdding(false);
+                        setOpen(false);
+                      }}
+                      disabled={!newColName.trim()}
+                      className="flex-1 rounded-[6px] bg-[var(--color-accent)] px-2 py-1.5 text-[11.5px] font-medium text-white disabled:opacity-50"
+                    >
+                      Thêm cột bên phải
+                    </button>
+                    <button
+                      onClick={() => { setAdding(false); setNewColName(""); }}
+                      className="rounded-[6px] border border-[var(--color-border)] px-2 py-1.5 text-[11.5px] text-[var(--color-text-secondary)]"
+                    >
+                      Huỷ
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button className={item} onClick={() => { setAdding(true); setNewColName(""); setNewColType("text"); }}>
+                  <Plus size={14} /> Thêm cột
+                </button>
+              )}
+            </>
+          )}
           <div className="my-1 h-px bg-[var(--color-border-light)]" />
           <button className={cn(item, !active && "opacity-50")} disabled={!active} onClick={onClear}>
             <X size={14} /> Xóa lọc & sắp xếp
@@ -152,6 +241,8 @@ export interface DataTableProps<Row> {
   pageSize?: number;
   emptyText?: string;
   defaultColWidth?: (c: ColumnDef<Row>) => number;
+  /** Cho phép thêm cột mới ngay bên phải một cột (chèn cột tùy chỉnh). */
+  onAddColumn?: (afterColumnId: string, opts: { label: string; type: AddColumnFormat }) => void;
 }
 
 export function DataTable<Row>({
@@ -167,6 +258,7 @@ export function DataTable<Row>({
   pageSize,
   emptyText = "Không có dữ liệu.",
   defaultColWidth,
+  onAddColumn,
 }: DataTableProps<Row>) {
   const {
     hidden,
@@ -344,6 +436,7 @@ export function DataTable<Row>({
                               setColFilters((s) => ({ ...s, [c.id]: "" }));
                               setSortState((s) => (s?.colId === c.id ? null : s));
                             }}
+                            onAddColumn={onAddColumn ? (opts) => onAddColumn(c.id, opts) : undefined}
                           />
                         </span>
                       )}
