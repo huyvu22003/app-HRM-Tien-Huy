@@ -91,7 +91,7 @@ export function AttendanceScreen() {
     if (!f) return;
     setParsing(true);
     try {
-      const parsed = await parseAttendanceWorkbook(await f.arrayBuffer());
+      const parsed = await parseAttendanceWorkbook(await f.arrayBuffer(), period);
       setImportResult(null);
       setPreview(parsed);
     } catch (err) {

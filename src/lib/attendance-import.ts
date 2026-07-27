@@ -4,18 +4,22 @@ import ExcelJS from "exceljs";
 import type { AttendanceImportRow } from "@/lib/api";
 
 /**
- * Đọc file "BẢNG CHẤM CÔNG" (2 sheet: "Chấm công" + "tăng ca") do máy chấm công
- * + HR tổng hợp, và tự tính các cột tổng theo đúng công thức trong file:
+ * Đọc file chấm công. Hỗ trợ 2 loại file:
  *
- *  Sheet "Chấm công" (giờ công/ngày; "-" nghỉ; "NL" làm lễ):
- *    - Tổng N.C  = Σ(giờ)/8 + số ngày "NL"
- *    - Xăng xe ngày thường = số ngày có công ≥ 4h
- *  Sheet "tăng ca" (giờ OT/ngày; cột có thứ = "CN" là Chủ Nhật):
- *    - OT CN(h)  = Σ giờ các cột Chủ Nhật
- *    - OT NT(h)  = Σ tất cả − OT CN
- *    - OT Lễ(h)  = cột "TC Lể" (nếu có)
- *    - Tiền cơm TC = (số buổi OT 2–5h × 25.000) + (số buổi OT 1–1.5h × 10.000)
- *    - Xăng xe CN (ngày) = OT CN(h) / 8
+ * 1) FILE GỐC máy chấm công + HR (2 sheet: "Chấm công" + "tăng ca", lưới giờ/ngày):
+ *    Sheet "Chấm công" (giờ công/ngày; "-" nghỉ; "NL" làm lễ):
+ *      - Tổng N.C  = Σ(giờ)/8 + số ngày "NL"
+ *      - Xăng xe ngày thường = số ngày có công ≥ 4h
+ *    Sheet "tăng ca" (giờ OT/ngày; cột có thứ = "CN" là Chủ Nhật):
+ *      - OT CN(h)  = Σ giờ các cột Chủ Nhật
+ *      - OT NT(h)  = Σ tất cả − OT CN
+ *      - OT Lễ(h)  = cột "TC Lể" (nếu có)
+ *      - Tiền cơm TC = (buổi OT 2–5h × 25.000) + (buổi OT 1–1.5h × 10.000)
+ *      - Xăng xe CN (ngày) = OT CN(h) / 8
+ *
+ * 2) FILE APP TỰ XUẤT ("Xuất Excel" → sheet "Bảng dữ liệu", các cột tổng đã tính
+ *    sẵn): đọc trực tiếp giá trị theo tiêu đề cột (round-trip). Khớp nhân viên
+ *    theo "Mã thẻ".
  */
 
 export interface ParsedAttendance {
@@ -35,7 +39,9 @@ function toNum(v: CellVal): number | null {
   if (typeof v === "string") {
     const t = v.trim();
     if (!t || t === "-") return null;
-    const n = parseFloat(t.replace(",", "."));
+    // Bỏ ký tự tiền tệ / phân tách nghìn khi đọc lại file app xuất ("1.234 ₫").
+    const cleaned = t.replace(/[₫\s]/g, "").replace(/\.(?=\d{3}\b)/g, "").replace(",", ".");
+    const n = parseFloat(cleaned);
     return Number.isFinite(n) ? n : null;
   }
   if (typeof v === "object") {
@@ -75,6 +81,17 @@ interface SheetShape {
   period: string;
   year: number;
   month: number;
+}
+
+/** Sheet có phải lưới ngày (file gốc) không? — có ≥ 5 ô kiểu ngày trên một hàng. */
+function hasDateHeader(ws: ExcelJS.Worksheet): boolean {
+  const maxScan = Math.min(14, ws.rowCount || 14);
+  for (let r = 1; r <= maxScan; r++) {
+    let cnt = 0;
+    for (let c = 1; c <= 45; c++) if (toDate(ws.getRow(r).getCell(c).value)) cnt++;
+    if (cnt >= 5) return true;
+  }
+  return false;
 }
 
 function analyzeSheet(ws: ExcelJS.Worksheet): SheetShape {
@@ -125,14 +142,40 @@ function isDataName(name: string): boolean {
   return !!name && !STOP_RE.test(name);
 }
 
-export async function parseAttendanceWorkbook(buf: ArrayBuffer): Promise<ParsedAttendance> {
+export async function parseAttendanceWorkbook(
+  buf: ArrayBuffer,
+  fallbackPeriod?: string,
+): Promise<ParsedAttendance> {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buf);
-  const warnings: string[] = [];
 
-  const ccWs = wb.getWorksheet("Chấm công") || wb.worksheets.find((w) => /chấm công/i.test(w.name));
-  const tcWs = wb.getWorksheet("tăng ca") || wb.worksheets.find((w) => /tăng ca/i.test(w.name));
-  if (!ccWs) throw new Error('Không tìm thấy sheet "Chấm công".');
+  // Ưu tiên file gốc: sheet "Chấm công" dạng lưới ngày.
+  const ccWs =
+    wb.getWorksheet("Chấm công") || wb.worksheets.find((w) => /chấm công/i.test(w.name));
+  if (ccWs && hasDateHeader(ccWs)) {
+    const tcWs =
+      wb.getWorksheet("tăng ca") || wb.worksheets.find((w) => /tăng ca/i.test(w.name));
+    return parseRawWorkbook(ccWs, tcWs);
+  }
+
+  // Ngược lại: thử đọc bảng app tự xuất ("Bảng dữ liệu").
+  const summary = parseSummaryWorkbook(wb, fallbackPeriod);
+  if (summary) return summary;
+
+  throw new Error(
+    'Không nhận dạng được file. Cần file gốc máy chấm công (có sheet "Chấm công") ' +
+      "hoặc file do chính app xuất ra (nút Xuất Excel).",
+  );
+}
+
+// ---------------------------------------------------------------------------
+// (1) FILE GỐC — 2 sheet lưới ngày
+// ---------------------------------------------------------------------------
+function parseRawWorkbook(
+  ccWs: ExcelJS.Worksheet,
+  tcWs: ExcelJS.Worksheet | undefined,
+): ParsedAttendance {
+  const warnings: string[] = [];
 
   type Agg = {
     name: string;
@@ -238,4 +281,107 @@ export async function parseAttendanceWorkbook(buf: ArrayBuffer): Promise<ParsedA
   });
 
   return { period, rows, warnings };
+}
+
+// ---------------------------------------------------------------------------
+// (2) FILE APP TỰ XUẤT — sheet "Bảng dữ liệu" với cột tổng đã tính sẵn
+// ---------------------------------------------------------------------------
+type SummaryField =
+  | "code"
+  | "name"
+  | "stdDays"
+  | "actualDays"
+  | "gasDays"
+  | "otWeekdayHours"
+  | "otSundayHours"
+  | "otHolidayHours"
+  | "overtimeHours"
+  | "mealAllowance";
+
+function matchField(labelLc: string): SummaryField | null {
+  const l = labelLc;
+  if (l.includes("mã thẻ") || l.includes("ma the")) return "code";
+  if (l.includes("họ và tên") || l.includes("họ tên") || l.includes("ho va ten")) return "name";
+  if (l.includes("công chuẩn")) return "stdDays";
+  if (l.includes("tổng n.c") || l.includes("tổng nc") || l.includes("công thực")) return "actualDays";
+  if (l.includes("xăng")) return "gasDays";
+  if (l.includes("tổng ot")) return "overtimeHours";
+  if (l.includes("ot nt")) return "otWeekdayHours";
+  if (l.includes("ot cn")) return "otSundayHours";
+  if (l.includes("ot lễ") || l.includes("ot lể") || l.includes("ot le")) return "otHolidayHours";
+  if (l.includes("cơm")) return "mealAllowance";
+  return null;
+}
+
+function findPeriodInSheet(ws: ExcelJS.Worksheet, headerRow: number): string | null {
+  // Tìm "KỲ MM/YYYY" (hoặc MM/YYYY) trong các hàng banner phía trên tiêu đề.
+  for (let r = 1; r < headerRow; r++) {
+    for (let c = 1; c <= 30; c++) {
+      const s = toStr(ws.getRow(r).getCell(c).value);
+      if (!s) continue;
+      const m = s.match(/(\d{1,2})\s*\/\s*(\d{4})/);
+      if (m) return `${m[2]}-${String(Number(m[1])).padStart(2, "0")}`;
+    }
+  }
+  return null;
+}
+
+function parseSummaryWorkbook(
+  wb: ExcelJS.Workbook,
+  fallbackPeriod?: string,
+): ParsedAttendance | null {
+  for (const ws of wb.worksheets) {
+    // Tìm hàng tiêu đề có cả "Họ và tên" và "Tổng N.C".
+    const maxScan = Math.min(20, ws.rowCount || 20);
+    let headerRow = 0;
+    let colMap: Partial<Record<SummaryField, number>> = {};
+    for (let r = 1; r <= maxScan; r++) {
+      const m: Partial<Record<SummaryField, number>> = {};
+      for (let c = 1; c <= 40; c++) {
+        const label = toStr(ws.getRow(r).getCell(c).value).toLowerCase();
+        if (!label) continue;
+        const f = matchField(label);
+        if (f && m[f] == null) m[f] = c;
+      }
+      if (m.name != null && m.actualDays != null) {
+        headerRow = r;
+        colMap = m;
+        break;
+      }
+    }
+    if (!headerRow) continue;
+
+    const period = findPeriodInSheet(ws, headerRow) || fallbackPeriod || "";
+    const warnings: string[] = ["Đọc từ bảng đã xuất của app (không phải file gốc máy chấm công)."];
+    if (!period) {
+      warnings.push("Không xác định được kỳ trong file — hãy chọn đúng kỳ trước khi nhập.");
+    }
+
+    const rows: AttendanceImportRow[] = [];
+    const num = (r: number, f: SummaryField): number | undefined => {
+      const c = colMap[f];
+      if (c == null) return undefined;
+      return toNum(ws.getRow(r).getCell(c).value) ?? undefined;
+    };
+    for (let r = headerRow + 1; r <= (ws.rowCount || headerRow + 1); r++) {
+      const name = colMap.name ? toStr(ws.getRow(r).getCell(colMap.name).value) : "";
+      const code = colMap.code ? toStr(ws.getRow(r).getCell(colMap.code).value) : "";
+      if (!name && !code) continue;
+      if (name && !isDataName(name)) break;
+      rows.push({
+        code: code || undefined,
+        name: name || undefined,
+        stdDays: num(r, "stdDays") ?? 26,
+        actualDays: num(r, "actualDays") ?? 0,
+        otWeekdayHours: num(r, "otWeekdayHours") ?? 0,
+        otSundayHours: num(r, "otSundayHours") ?? 0,
+        otHolidayHours: num(r, "otHolidayHours") ?? 0,
+        overtimeHours: num(r, "overtimeHours"),
+        gasDays: num(r, "gasDays") ?? 0,
+        mealAllowance: num(r, "mealAllowance") ?? 0,
+      });
+    }
+    if (rows.length) return { period, rows, warnings };
+  }
+  return null;
 }
