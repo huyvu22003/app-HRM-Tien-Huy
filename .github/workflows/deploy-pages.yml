@@ -30,4 +30,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy out --project-name=hrm-tien-huy --branch=main
+          command: pages deploy out --project-name=app-hrm-tien-huy --branch=main --commit-dirty=true
