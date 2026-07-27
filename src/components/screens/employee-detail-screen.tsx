@@ -738,7 +738,7 @@ export function EmployeeDetailScreen({
     );
   }
 
-  const currentPhoto = photoDraft ?? photoUrl ?? getEmployeePhoto(employee.id) ?? employee.photo_url;
+  const currentPhoto = photoDraft ?? photoUrl ?? employee.photo_url ?? getEmployeePhoto(employee.id);
 
   const kpiScore = seededRandom(employee.name + "kpi", 65, 98);
   const kpiRank = kpiScore >= 90 ? "Tốt" : kpiScore >= 70 ? "Khá" : kpiScore >= 50 ? "TB" : "Yếu";

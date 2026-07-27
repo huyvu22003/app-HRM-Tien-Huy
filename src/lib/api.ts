@@ -121,6 +121,7 @@ export interface ApiUser {
   name?: string;
   department_id?: number;
   position?: string;
+  photo_url?: string | null;
 }
 
 export async function apiLogin(phone: string, password: string) {

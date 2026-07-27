@@ -288,8 +288,13 @@ export function AppShell({
                 }}
                 className="flex items-center gap-2 rounded-[8px] py-1 pl-1 pr-2 hover:bg-[var(--color-page-bg)]"
               >
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-accent)] text-[12px] font-semibold text-white">
-                  {getInitials(user?.name ?? "?")}
+                <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[var(--color-accent)] text-[12px] font-semibold text-white">
+                  {user?.photoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={user.photoUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    getInitials(user?.name ?? "?")
+                  )}
                 </div>
                 <div className="hidden text-left leading-tight sm:block">
                   <div className="text-[12.5px] font-medium text-[var(--color-text-primary)]">{user?.name}</div>

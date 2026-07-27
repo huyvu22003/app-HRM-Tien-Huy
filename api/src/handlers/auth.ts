@@ -72,7 +72,7 @@ export async function me(request: Request, env: Env): Promise<Response> {
   if (!auth) return error("Unauthorized", 401);
 
   const user = await env.DB.prepare(
-    `SELECT u.id, u.employee_id, u.phone, u.role, e.name, e.department_id, e.position
+    `SELECT u.id, u.employee_id, u.phone, u.role, e.name, e.department_id, e.position, e.photo_url
      FROM users u LEFT JOIN employees e ON e.id = u.employee_id
      WHERE u.id = ?`
   )
