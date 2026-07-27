@@ -82,7 +82,7 @@ function ManagementNode({
   onOpenEmployees: (managerId: number) => void;
 }) {
   const isCollapsed = collapsed.has(node.person.id);
-  const photo = getEmployeePhoto(node.person.id);
+  const photo = node.person.photoUrl ?? getEmployeePhoto(node.person.id);
 
   return (
     <li className="relative flex shrink-0 flex-col items-center px-3 pt-5">

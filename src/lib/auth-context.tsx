@@ -31,6 +31,7 @@ export interface AuthUser {
   department: string;
   code: string;
   email: string;
+  photoUrl: string | null;
 }
 
 interface AuthContextValue {
@@ -55,6 +56,7 @@ function apiUserToAuthUser(u: ApiUser): AuthUser {
     department: "",
     code: "",
     email: "",
+    photoUrl: u.photo_url ?? null,
   };
 }
 

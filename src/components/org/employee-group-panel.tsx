@@ -157,7 +157,7 @@ export function EmployeeGroupPanel({
           {filteredEmployees.length > 0 ? (
             <ul>
               {filteredEmployees.map((employee) => {
-                const photo = employeePhotos.get(employee.id);
+                const photo = employee.photoUrl ?? employeePhotos.get(employee.id);
                 return (
                   <li key={employee.id}>
                     <button

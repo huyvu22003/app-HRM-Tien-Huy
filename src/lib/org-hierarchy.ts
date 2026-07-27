@@ -13,6 +13,7 @@ export interface OrgPerson {
   managerEmployeeId: number | null;
   managerName: string | null;
   phone: string | null;
+  photoUrl?: string | null;
 }
 
 export interface OrgNode {
@@ -63,6 +64,7 @@ export function apiEmployeeToOrgPerson(employee: {
   manager_name?: string | null;
   manager?: string | null;
   phone: string | null;
+  photo_url?: string | null;
 }): OrgPerson {
   return {
     id: employee.id,
@@ -75,6 +77,7 @@ export function apiEmployeeToOrgPerson(employee: {
     managerEmployeeId: employee.manager_employee_id ?? null,
     managerName: employee.manager_name ?? employee.manager ?? null,
     phone: employee.phone,
+    photoUrl: employee.photo_url ?? null,
   };
 }
 

@@ -23,7 +23,7 @@ function DialogFrame({ title, onClose, children }: { title: string; onClose: () 
 }
 
 export function EmployeeQuickProfileModal({ employee, onClose, onViewFullProfile }: { employee: ApiEmployee; onClose: () => void; onViewFullProfile: (id: number) => void }) {
-  const photo = getEmployeePhoto(employee.id);
+  const photo = employee.photo_url ?? getEmployeePhoto(employee.id);
   return (
     <DialogFrame title={`Hồ sơ ${employee.name}`} onClose={onClose}>
       <div className="flex gap-4">

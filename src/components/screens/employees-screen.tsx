@@ -493,7 +493,7 @@ function ColumnHeaderMenu({
 }
 
 function Avatar({ id, name, photoUrl, className }: { id: number; name: string; photoUrl?: string | null; className?: string }) {
-  const photo = getEmployeePhoto(id) ?? photoUrl;
+  const photo = photoUrl ?? getEmployeePhoto(id);
   return (
     <div className={cn("flex items-center justify-center overflow-hidden rounded-full bg-[var(--color-accent)] font-semibold text-white", className)}>
       {photo ? (
