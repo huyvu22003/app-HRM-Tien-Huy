@@ -346,10 +346,13 @@ export function updateHierarchy(data: HierarchyMutation) {
   return api.post<{ success: boolean; affectedEmployeeIds: number[] }>("/org/hierarchy", data);
 }
 
-export function importEmployees(employees: Record<string, unknown>[]) {
-  return api.post<{ success: boolean; created: number; updated: number }>(
+export function importEmployees(
+  employees: Record<string, unknown>[],
+  mode: "upsert" | "replace" = "upsert",
+) {
+  return api.post<{ success: boolean; created: number; updated: number; deleted: number }>(
     "/employees/import",
-    { employees },
+    { employees, mode },
   );
 }
 

@@ -155,15 +155,20 @@ export async function createEmployee(request: Request, env: Env): Promise<Respon
 }
 
 export async function importEmployees(request: Request, env: Env): Promise<Response> {
-  const body = await readJson<{ employees?: Array<Record<string, unknown>> }>(request);
+  const body = await readJson<{ employees?: Array<Record<string, unknown>>; mode?: string }>(request);
   const rows = Array.isArray(body.employees) ? body.employees : [];
+  // "replace" = đồng bộ sạch theo file: xoá trắng ô trống + xoá NV không có trong file.
+  const isReplace = body.mode === "replace";
+  const fileCodes = new Set<string>();
   let created = 0;
   let updated = 0;
+  let deleted = 0;
 
   for (const r of rows) {
     const code = String(r.code ?? "").trim();
     const name = String(r.name ?? "").trim();
     if (!code || !name) continue;
+    fileCodes.add(code);
 
     // Resolve department by name
     let departmentId: number | null = null;
@@ -193,8 +198,12 @@ export async function importEmployees(request: Request, env: Env): Promise<Respo
                      "bank_account", "bank_branch", "bhxh_no", "bhxh_increase_date",
                      "bhxh_decrease_date", "relative_name", "relative_relation", "relative_phone"]) {
       if (has(k)) cols[k] = strField(k);
+      else if (isReplace) cols[k] = null; // đồng bộ sạch: xoá trắng ô trống trong file
     }
+    // Trạng thái là trường chức năng — nếu file để trống thì mặc định "Đang làm việc".
+    if (isReplace && !has("status")) cols.status = "Đang làm việc";
     if (deptName) cols.department_id = departmentId;
+    else if (isReplace) cols.department_id = null;
 
     let empId: number;
     if (existing) {
@@ -228,6 +237,8 @@ export async function importEmployees(request: Request, env: Env): Promise<Respo
     };
     const comp: Record<string, number> = {};
     for (const k of Object.keys(compMap)) if (has(k) && !Number.isNaN(num(k))) comp[k] = num(k);
+    // Đồng bộ sạch: ô lương để trống → 0 (ghi đè giá trị cũ).
+    if (isReplace) for (const k of Object.keys(compMap)) if (!(k in comp)) comp[k] = 0;
     if (Object.keys(comp).length) {
       const existingComp = await env.DB.prepare("SELECT id FROM compensation WHERE employee_id = ?")
         .bind(empId).first<{ id: number }>();
@@ -244,7 +255,31 @@ export async function importEmployees(request: Request, env: Env): Promise<Respo
     }
   }
 
-  return json({ success: true, created, updated });
+  // Đồng bộ sạch: xoá nhân viên KHÔNG có trong file (kèm dữ liệu con) để roster
+  // khớp đúng file. Gỡ tham chiếu ngược trước để tránh lỗi khoá ngoại.
+  if (isReplace) {
+    const { results } = await env.DB.prepare("SELECT id, code FROM employees").all<{ id: number; code: string }>();
+    const removed = (results ?? []).filter((e) => !fileCodes.has(String(e.code).trim())).map((e) => e.id);
+    if (removed.length) {
+      const ph = removed.map(() => "?").join(",");
+      const childTables = [
+        "compensation", "insurance", "attendance", "leave_requests", "leave_balances",
+        "maternity_leaves", "kpi_scores", "employee_documents", "rewards",
+        "improvement_plans", "employee_custom_values",
+      ];
+      const stmts = childTables.map((t) =>
+        env.DB.prepare(`DELETE FROM ${t} WHERE employee_id IN (${ph})`).bind(...removed),
+      );
+      stmts.push(env.DB.prepare(`UPDATE employees SET manager_employee_id = NULL WHERE manager_employee_id IN (${ph})`).bind(...removed));
+      stmts.push(env.DB.prepare(`UPDATE departments SET head_employee_id = NULL WHERE head_employee_id IN (${ph})`).bind(...removed));
+      stmts.push(env.DB.prepare(`UPDATE users SET employee_id = NULL WHERE employee_id IN (${ph})`).bind(...removed));
+      stmts.push(env.DB.prepare(`DELETE FROM employees WHERE id IN (${ph})`).bind(...removed));
+      await env.DB.batch(stmts);
+      deleted = removed.length;
+    }
+  }
+
+  return json({ success: true, created, updated, deleted });
 }
 
 export async function updateEmployee(request: Request, env: Env, id: string): Promise<Response> {

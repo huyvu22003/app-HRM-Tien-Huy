@@ -781,8 +781,12 @@ function ImportModal({ existing, onClose, onImported }: { existing: ApiEmployee[
   const [parsing, setParsing] = useState(false);
   const [infos, setInfos] = useState<ImportRowInfo[]>([]);
   const [unsupported, setUnsupported] = useState<string[]>([]);
-  const [result, setResult] = useState<{ created: number; updated: number } | null>(null);
-  const { mutate: doImport, isLoading } = useMutation((data: Record<string, unknown>[]) => importEmployees(data));
+  const [result, setResult] = useState<{ created: number; updated: number; deleted: number } | null>(null);
+  const [replaceMode, setReplaceMode] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  const { mutate: doImport, isLoading } = useMutation(
+    (args: { rows: Record<string, unknown>[]; mode: "upsert" | "replace" }) => importEmployees(args.rows, args.mode),
+  );
 
   const counts = useMemo(() => ({
     new: infos.filter((r) => r.status === "new").length,
@@ -816,13 +820,28 @@ function ImportModal({ existing, onClose, onImported }: { existing: ApiEmployee[
     }
   }
 
+  // Đồng bộ sạch: NV hiện có mà mã thẻ KHÔNG có trong file sẽ bị xoá.
+  const fileCodeSet = useMemo(
+    () => new Set(infos.filter((i) => i.status !== "invalid").map((i) => String(i.row.code).trim())),
+    [infos],
+  );
+  const toDeleteCount = useMemo(
+    () => (replaceMode ? existing.filter((e) => !fileCodeSet.has(String(e.code).trim())).length : 0),
+    [replaceMode, existing, fileCodeSet],
+  );
+  const confirmOk = !replaceMode || confirmText.trim().toUpperCase() === "XÓA";
+
   async function handleImport() {
-    // Chỉ gửi dòng Mới + Cập nhật.
-    const payload = infos.filter((r) => r.status === "new" || r.status === "update").map((r) => r.row);
+    // Upsert: chỉ gửi Mới + Cập nhật. Replace: gửi mọi dòng hợp lệ (kể cả "không đổi")
+    // để backend biết đủ tập mã thẻ trong file mà xoá NV thừa + xoá trắng ô trống.
+    const payload = infos
+      .filter((r) => r.status === "new" || r.status === "update" || (replaceMode && r.status === "same"))
+      .map((r) => r.row);
     if (payload.length === 0) return;
+    if (!confirmOk) return;
     try {
-      const res = await doImport(payload);
-      setResult({ created: res.created, updated: res.updated });
+      const res = await doImport({ rows: payload, mode: replaceMode ? "replace" : "upsert" });
+      setResult({ created: res.created, updated: res.updated, deleted: res.deleted ?? 0 });
       onImported();
     } catch {
       setError("Cập nhật thất bại. Vui lòng thử lại.");
@@ -850,7 +869,7 @@ function ImportModal({ existing, onClose, onImported }: { existing: ApiEmployee[
           <div className="flex flex-col items-center gap-3 py-8 text-center">
             <CheckCircle2 size={40} className="text-[var(--color-success)]" />
             <div className="text-[14px] font-medium text-[var(--color-text-primary)]">
-              Đã cập nhật: {result.created} thêm mới, {result.updated} cập nhật
+              Đã đồng bộ: {result.created} thêm mới, {result.updated} cập nhật{result.deleted > 0 ? `, ${result.deleted} đã xoá` : ""}
             </div>
             <button onClick={onClose} className="mt-2 rounded-[8px] bg-[var(--color-accent)] px-4 py-1.5 text-[12.5px] font-medium text-white">Đóng</button>
           </div>
@@ -940,15 +959,60 @@ function ImportModal({ existing, onClose, onImported }: { existing: ApiEmployee[
               </>
             )}
 
+            {infos.length > 0 && (
+              <div className="mt-4 rounded-[10px] border border-[var(--color-border)] p-3">
+                <label className="flex cursor-pointer items-start gap-2">
+                  <input
+                    type="checkbox"
+                    checked={replaceMode}
+                    onChange={(e) => { setReplaceMode(e.target.checked); setConfirmText(""); }}
+                    className="mt-0.5 h-4 w-4 accent-[var(--color-danger)]"
+                  />
+                  <span className="text-[12.5px] text-[var(--color-text-secondary)]">
+                    <b className="text-[var(--color-danger)]">Thay toàn bộ danh sách (đồng bộ sạch)</b> — làm cho danh sách khớp
+                    <b> đúng file</b>: ô để trống sẽ <b>xoá trắng</b>, và nhân viên không có trong file sẽ bị <b>xoá</b>.
+                  </span>
+                </label>
+                {replaceMode && (
+                  <div className="mt-3 rounded-[8px] bg-[var(--color-danger-bg)] px-3 py-2.5 text-[12px] text-[var(--color-danger)]">
+                    <div className="font-medium">⚠️ Thao tác không thể hoàn tác:</div>
+                    <ul className="ml-4 mt-1 list-disc space-y-0.5">
+                      <li><b>{toDeleteCount}</b> nhân viên không có trong file sẽ bị <b>xoá vĩnh viễn</b> (kèm dữ liệu chấm công, lương, KPI… liên quan).</li>
+                      <li>Các ô để trống trong file sẽ <b>xoá trắng</b> dữ liệu cũ tương ứng.</li>
+                    </ul>
+                    <div className="mt-2 flex items-center gap-2">
+                      <span>Gõ <b>XÓA</b> để xác nhận:</span>
+                      <input
+                        value={confirmText}
+                        onChange={(e) => setConfirmText(e.target.value)}
+                        placeholder="XÓA"
+                        className="h-8 w-28 rounded-[6px] border border-[var(--color-danger)] bg-white px-2 text-[12.5px] text-[var(--color-text-primary)] outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="mt-4 flex justify-end gap-2">
               <button onClick={onClose} className="rounded-[8px] border border-[var(--color-border)] px-4 py-1.5 text-[12.5px] text-[var(--color-text-secondary)]">Huỷ</button>
               <button
                 onClick={handleImport}
-                disabled={applyCount === 0 || isLoading}
-                className="flex items-center gap-1.5 rounded-[8px] bg-[var(--color-accent)] px-4 py-1.5 text-[12.5px] font-medium text-white disabled:opacity-60"
+                disabled={
+                  isLoading || !confirmOk ||
+                  (replaceMode ? counts.new + counts.update + counts.same === 0 && toDeleteCount === 0 : applyCount === 0)
+                }
+                className={cn(
+                  "flex items-center gap-1.5 rounded-[8px] px-4 py-1.5 text-[12.5px] font-medium text-white disabled:opacity-60",
+                  replaceMode ? "bg-[var(--color-danger)]" : "bg-[var(--color-accent)]",
+                )}
               >
                 {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                {isLoading ? "Đang cập nhật..." : `Cập nhật (${counts.new} mới · ${counts.update} sửa)`}
+                {isLoading
+                  ? "Đang đồng bộ..."
+                  : replaceMode
+                    ? `Đồng bộ sạch (${counts.new + counts.update + counts.same} theo file · ${toDeleteCount} xoá)`
+                    : `Cập nhật (${counts.new} mới · ${counts.update} sửa)`}
               </button>
             </div>
           </>
