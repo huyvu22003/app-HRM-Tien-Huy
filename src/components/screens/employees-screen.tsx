@@ -1075,6 +1075,28 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
     setPage(1);
   }, [search, dept, colFilterKey]);
 
+  // Helper dựng nhanh cột hồ sơ (text) và cột tiền (money) — đều ẩn mặc định.
+  const textCol = (id: keyof ApiEmployee, label: string): ColumnDef<ApiEmployee> => ({
+    id,
+    label,
+    defaultHidden: true,
+    cellClass: "text-[var(--color-text-muted)]",
+    cell: (e) => (e[id] as string) || "-",
+    exportValue: (e) => String(e[id] ?? ""),
+  });
+  const moneyCol = (id: keyof ApiEmployee, label: string): ColumnDef<ApiEmployee> => ({
+    id,
+    label,
+    defaultHidden: true,
+    align: "right",
+    cellClass: "font-[family-name:var(--font-mono)] text-[var(--color-text-muted)]",
+    cell: (e) => (e[id] ? formatMoney(e[id] as number) : "-"),
+    exportValue: (e) => (e[id] as number) ?? 0,
+    exportFormat: "money",
+  });
+  const totalSalary = (e: ApiEmployee) =>
+    (e.base_salary ?? 0) + (e.responsibility_salary ?? 0) + (e.allowance ?? 0) + (e.gas_allowance ?? 0) + (e.attendance_bonus ?? 0);
+
   const columns: ColumnDef<ApiEmployee>[] = [
     {
       id: "code",
@@ -1256,7 +1278,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
     },
     {
       id: "allowance",
-      label: "Phụ cấp",
+      label: "PC công việc",
       defaultHidden: true,
       align: "right",
       cellClass: "font-[family-name:var(--font-mono)] text-[var(--color-text-muted)]",
@@ -1264,6 +1286,41 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
       exportValue: (e) => e.allowance ?? 0,
       exportFormat: "money",
     },
+    moneyCol("responsibility_salary", "Trách nhiệm"),
+    moneyCol("gas_allowance", "PC xăng xe"),
+    moneyCol("attendance_bonus", "Chuyên cần"),
+    {
+      id: "total_salary",
+      label: "Tổng lương",
+      defaultHidden: true,
+      align: "right",
+      cellClass: "font-[family-name:var(--font-mono)] font-medium text-[var(--color-text-secondary)]",
+      cell: (e) => formatMoney(totalSalary(e)),
+      exportValue: (e) => totalSalary(e),
+      exportFormat: "money",
+    },
+    textCol("birth_year", "Năm sinh"),
+    textCol("birth_place", "Nơi sinh"),
+    textCol("education", "Học lực"),
+    textCol("temp_address", "Địa chỉ tạm trú"),
+    textCol("cccd_issue_date", "Ngày cấp CCCD"),
+    textCol("cccd_issue_place", "Nơi cấp CCCD"),
+    textCol("nationality", "Quốc tịch"),
+    textCol("religion", "Tôn giáo"),
+    textCol("ethnicity", "Dân tộc"),
+    textCol("resign_date", "Ngày nghỉ việc"),
+    textCol("resign_reason", "Nguyên nhân nghỉ"),
+    textCol("contract_date_1", "Ngày HĐLĐ L1"),
+    textCol("contract_date_2", "Ngày HĐLĐ L2"),
+    textCol("contract_date_3", "Ngày HĐLĐ L3"),
+    textCol("bank_account", "Số tài khoản"),
+    textCol("bank_branch", "Chi nhánh ngân hàng"),
+    textCol("bhxh_no", "Mã số sổ BHXH"),
+    textCol("bhxh_increase_date", "Báo tăng BHXH"),
+    textCol("bhxh_decrease_date", "Báo giảm BHXH"),
+    textCol("relative_name", "Người thân"),
+    textCol("relative_relation", "Mối quan hệ"),
+    textCol("relative_phone", "SĐT người thân"),
     {
       id: "ins_status",
       label: "Tình trạng BHXH",
