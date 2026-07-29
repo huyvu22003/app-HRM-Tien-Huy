@@ -367,6 +367,20 @@ export function DataTable<Row>({
     if (max > 0) setColumnWidth(colId, Math.max(60, Math.min(600, max + 28)));
   }
 
+  // Đóng băng khi cuộn ngang: cột STT + các cột đầu tới cột `locked` đầu tiên
+  // (thường là cột Họ và tên). Offset trái tính động theo độ rộng cột.
+  const STT_W = 52;
+  const firstLockedIdx = visibleColumns.findIndex((c) => c.locked);
+  const frozenLeft: Record<string, number> = {};
+  if (firstLockedIdx >= 0) {
+    let acc = STT_W;
+    for (let idx = 0; idx <= firstLockedIdx; idx++) {
+      const c = visibleColumns[idx];
+      frozenLeft[c.id] = acc;
+      acc += colWidth(c);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -394,7 +408,7 @@ export function DataTable<Row>({
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-[14px] border border-[var(--color-border)] bg-white">
+      <div className="max-h-[calc(100vh-260px)] overflow-auto rounded-[14px] border border-[var(--color-border)] bg-white">
         <table ref={tableRef} className="w-full table-fixed text-[13px]" style={{ minWidth }}>
           <colgroup>
             <col style={{ width: 52 }} />
@@ -404,7 +418,7 @@ export function DataTable<Row>({
           </colgroup>
           <thead>
             <tr className="text-left text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">
-              <th className="px-4 py-3 text-center font-medium">STT</th>
+              <th style={{ left: 0 }} className="sticky top-0 left-0 z-30 bg-white px-4 py-3 text-center font-medium">STT</th>
               {visibleColumns.map((c) => {
                 const canDrag = !reorderLocked && !c.noReorder;
                 const canMenu = !!c.exportValue && !c.noReorder;
@@ -422,8 +436,10 @@ export function DataTable<Row>({
                       const dragId = e.dataTransfer.getData("text/plain");
                       if (dragId) moveColumn(dragId, c.id);
                     }}
+                    style={frozenLeft[c.id] != null ? { left: frozenLeft[c.id] } : undefined}
                     className={cn(
-                      "relative border-l border-[var(--color-border-light)] px-3 py-3 font-medium",
+                      "sticky top-0 relative border-l border-[var(--color-border-light)] bg-white px-3 py-3 font-medium",
+                      frozenLeft[c.id] != null ? "z-30" : "z-20",
                       c.align === "right" && "text-right",
                       c.align === "center" && "text-center",
                     )}
@@ -492,20 +508,22 @@ export function DataTable<Row>({
                   key={getRowKey(row, i)}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
                   className={cn(
-                    "border-t border-[var(--color-border-light)]",
+                    "group border-t border-[var(--color-border-light)]",
                     onRowClick && "cursor-pointer hover:bg-[var(--color-page-bg)]",
                     rowClassName?.(row, i),
                   )}
                 >
-                  <td className="px-4 py-2.5 text-center font-[family-name:var(--font-mono)] text-[var(--color-text-lighter)]">
+                  <td style={{ left: 0 }} className="sticky left-0 z-10 bg-white px-4 py-2.5 text-center font-[family-name:var(--font-mono)] text-[var(--color-text-lighter)] group-hover:bg-[var(--color-page-bg)]">
                     {stt}
                   </td>
                   {visibleColumns.map((c) => (
                     <td
                       key={c.id}
                       data-col={c.id}
+                      style={frozenLeft[c.id] != null ? { left: frozenLeft[c.id] } : undefined}
                       className={cn(
                         "overflow-hidden border-l border-[var(--color-border-light)] px-3 py-2.5",
+                        frozenLeft[c.id] != null && "sticky z-10 bg-white group-hover:bg-[var(--color-page-bg)]",
                         c.align === "right" && "text-right",
                         c.align === "center" && "text-center",
                         c.cellClass,

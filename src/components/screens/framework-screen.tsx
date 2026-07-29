@@ -43,7 +43,7 @@ const GROUPS: { title: string; items: Item[] }[] = [
     title: "Vận hành",
     items: [
       { key: "attendance", label: "Chấm công", icon: Clock, status: "live" },
-      { key: "leave", label: "Phép năm", icon: CalendarDays, status: "live" },
+      { key: "leave", label: "Nghỉ phép", icon: CalendarDays, status: "live" },
       { key: "salary", label: "Lương thưởng", icon: Banknote, status: "live" },
       { key: "report", label: "Báo cáo ngày", icon: FileText, status: "live" },
     ],
