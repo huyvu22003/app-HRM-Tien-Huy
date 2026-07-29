@@ -1822,7 +1822,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-[14px] border border-[var(--color-border)] bg-white">
+      <div className="max-h-[calc(100vh-230px)] overflow-auto rounded-[14px] border border-[var(--color-border)] bg-white">
         {isLoading ? (
           <div className="flex items-center justify-center py-20 text-[var(--color-text-muted)]">
             <Loader2 size={20} className="animate-spin" />
@@ -1840,9 +1840,9 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
             <thead>
               <tr className="text-left text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">
                 {/* Cột xoá dòng — cố định ngoài cùng trái, chỉ hiện khi mở khoá cột */}
-                {showDeleteCol && <th className="px-2 py-3 text-center font-medium text-[var(--color-danger)]">Xoá</th>}
+                {showDeleteCol && <th className="sticky top-0 z-20 bg-white px-2 py-3 text-center font-medium text-[var(--color-danger)]">Xoá</th>}
                 {/* Fixed STT column — always first, never reordered */}
-                <th className="px-4 py-3 text-center font-medium">STT</th>
+                <th className="sticky top-0 z-20 bg-white px-4 py-3 text-center font-medium">STT</th>
                 {visibleColumns.map((c) => {
                   const canDrag = !reorderLocked && !c.noReorder;
                   const canMenu = !!c.exportValue && !c.noReorder;
@@ -1861,7 +1861,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
                         if (dragId) moveColumn(dragId, c.id);
                       }}
                       className={cn(
-                        "relative border-l border-[var(--color-border-light)] px-3 py-3 font-medium",
+                        "sticky top-0 z-20 relative border-l border-[var(--color-border-light)] bg-white px-3 py-3 font-medium",
                         c.align === "right" && "text-right",
                         c.align === "center" && "text-center",
                       )}
