@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Search, Upload, Download, Plus, ChevronRight, ChevronLeft, Info, Loader2, Phone, Mail, Briefcase, MapPin } from "lucide-react";
 import ExcelJS from "exceljs";
-import { fetchEmployees, fetchDepartments, importEmployees, deleteEmployee, type ApiEmployee, type ApiDepartment } from "@/lib/api";
+import { fetchEmployees, fetchDepartments, importEmployees, deleteEmployee, updateEmployee, type ApiEmployee, type ApiDepartment } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery, useMutation } from "@/lib/hooks";
 import { getInitials, cn, formatDate, formatMoney, seededRandom } from "@/lib/utils";
@@ -1030,6 +1030,9 @@ const PAGE_SIZE = 15;
 /** Nhân viên đã nghỉ việc (tách khỏi danh sách tổng). */
 const isResigned = (e: ApiEmployee) => (e.status ?? "").trim().toLowerCase() === "nghỉ việc";
 
+/** 4 trạng thái làm việc — dùng cho chọn nhanh trong ô Trạng thái. */
+const STATUS_OPTIONS = ["Đang làm việc", "Nghỉ việc", "Nghỉ thai sản", "Thử việc"];
+
 export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, id?: string) => void }) {
   const { role } = useAuth();
   const canEdit = role === "super" || role === "hr";
@@ -1463,6 +1466,19 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
   // Cột "xoá dòng" (cố định ngoài cùng trái) chỉ hiện khi đang ở chế độ chỉnh cột
   // (bấm nút Khoá cột để mở khoá) — để HR thao tác xoá trực tiếp khi cần.
   const showDeleteCol = !reorderLocked;
+  // Chỉnh nhanh trạng thái ngay trong bảng (khi ở chế độ chỉnh cột).
+  const [savingStatus, setSavingStatus] = useState<number | null>(null);
+  async function handleStatusChange(emp: ApiEmployee, status: string) {
+    if (status === emp.status) return;
+    setSavingStatus(emp.id);
+    try {
+      await updateEmployee(emp.id, { status });
+      refetch();
+    } finally {
+      setSavingStatus(null);
+    }
+  }
+
   const [deletingRow, setDeletingRow] = useState<number | null>(null);
   async function handleDeleteRow(emp: ApiEmployee) {
     if (!window.confirm(`Xoá nhân viên "${emp.name}" (${emp.code})?\nThao tác xoá kèm dữ liệu chấm công/lương/KPI liên quan và KHÔNG thể hoàn tác.`)) return;
@@ -1795,7 +1811,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
                     >
                       <span
                         className={cn(
-                          "flex min-w-0 items-center gap-1",
+                          "flex min-w-0 items-start gap-1",
                           c.align === "right" && "justify-end",
                           c.align === "center" && "justify-center",
                         )}
@@ -1804,13 +1820,13 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
                           <span
                             draggable
                             onDragStart={(e) => e.dataTransfer.setData("text/plain", c.id)}
-                            className="flex-shrink-0 cursor-grab text-[var(--color-text-lighter)] hover:text-[var(--color-accent)] active:cursor-grabbing"
+                            className="mt-0.5 flex-shrink-0 cursor-grab text-[var(--color-text-lighter)] hover:text-[var(--color-accent)] active:cursor-grabbing"
                             title="Kéo để đổi vị trí cột"
                           >
                             <GripVertical size={13} />
                           </span>
                         )}
-                        <span className="truncate">{c.label}</span>
+                        <span className="min-w-0 whitespace-normal break-words leading-tight">{c.label}</span>
                         {canMenu && (
                           <span className="flex-shrink-0">
                             <ColumnHeaderMenu
@@ -1955,7 +1971,30 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
                         c.cellClass,
                       )}
                     >
-                      <div className={cn("min-w-0 truncate", c.align === "center" && "mx-auto")}>{c.cell(e, i)}</div>
+                      <div className={cn("min-w-0 truncate", c.align === "center" && "mx-auto")}>
+                        {c.id === "status" && showDeleteCol ? (
+                          <select
+                            value={e.status ?? ""}
+                            disabled={savingStatus === e.id}
+                            onClick={(ev) => ev.stopPropagation()}
+                            onChange={(ev) => handleStatusChange(e, ev.target.value)}
+                            className={cn(
+                              "w-full max-w-[150px] cursor-pointer rounded-[6px] border px-1.5 py-1 text-[11.5px] font-medium outline-none focus:border-[var(--color-accent)] disabled:opacity-50",
+                              e.status === "Đang làm việc"
+                                ? "border-[var(--color-success)] bg-[var(--color-success-bg)] text-[var(--color-success)]"
+                                : isResigned(e)
+                                  ? "border-[var(--color-danger)] bg-[var(--color-danger-bg)] text-[var(--color-danger)]"
+                                  : "border-[var(--color-border)] bg-white text-[var(--color-text-muted)]",
+                            )}
+                          >
+                            {STATUS_OPTIONS.map((s) => (
+                              <option key={s} value={s} className="text-[var(--color-text-primary)]">{s}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          c.cell(e, i)
+                        )}
+                      </div>
                     </td>
                   ))}
                 </tr>
