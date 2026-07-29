@@ -1523,6 +1523,20 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
   // Cột "xoá dòng" (cố định ngoài cùng trái) chỉ hiện khi đang ở chế độ chỉnh cột
   // (bấm nút Khoá cột để mở khoá) — để HR thao tác xoá trực tiếp khi cần.
   const showDeleteCol = !reorderLocked;
+
+  // Cố định (đóng băng) khi cuộn ngang: STT + Mã thẻ + Họ và tên luôn ở bên trái.
+  // Tính offset trái tích luỹ theo thứ tự cột hiện tại + độ rộng từng cột.
+  const FROZEN_IDS = new Set(["code", "name"]);
+  const sttLeft = showDeleteCol ? 44 : 0;
+  const frozenLeft: Record<string, number> = {};
+  {
+    let acc = sttLeft + 52; // sau cột Xoá (nếu có) + cột STT
+    for (const c of visibleColumns) {
+      if (FROZEN_IDS.has(c.id)) frozenLeft[c.id] = acc;
+      acc += colWidth(c);
+    }
+  }
+
   // Chỉnh nhanh trạng thái ngay trong bảng (khi ở chế độ chỉnh cột).
   const [savingStatus, setSavingStatus] = useState<number | null>(null);
   async function handleStatusChange(emp: ApiEmployee, status: string) {
@@ -1840,9 +1854,9 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
             <thead>
               <tr className="text-left text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">
                 {/* Cột xoá dòng — cố định ngoài cùng trái, chỉ hiện khi mở khoá cột */}
-                {showDeleteCol && <th className="sticky top-0 z-20 bg-white px-2 py-3 text-center font-medium text-[var(--color-danger)]">Xoá</th>}
+                {showDeleteCol && <th style={{ left: 0 }} className="sticky top-0 left-0 z-30 bg-white px-2 py-3 text-center font-medium text-[var(--color-danger)]">Xoá</th>}
                 {/* Fixed STT column — always first, never reordered */}
-                <th className="sticky top-0 z-20 bg-white px-4 py-3 text-center font-medium">STT</th>
+                <th style={{ left: sttLeft }} className="sticky top-0 z-30 bg-white px-4 py-3 text-center font-medium">STT</th>
                 {visibleColumns.map((c) => {
                   const canDrag = !reorderLocked && !c.noReorder;
                   const canMenu = !!c.exportValue && !c.noReorder;
@@ -1860,8 +1874,10 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
                         const dragId = e.dataTransfer.getData("text/plain");
                         if (dragId) moveColumn(dragId, c.id);
                       }}
+                      style={frozenLeft[c.id] != null ? { left: frozenLeft[c.id] } : undefined}
                       className={cn(
-                        "sticky top-0 z-20 relative border-l border-[var(--color-border-light)] bg-white px-3 py-3 font-medium",
+                        "sticky top-0 relative border-l border-[var(--color-border-light)] bg-white px-3 py-3 font-medium",
+                        frozenLeft[c.id] != null ? "z-30" : "z-20",
                         c.align === "right" && "text-right",
                         c.align === "center" && "text-center",
                       )}
@@ -2000,10 +2016,10 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
                 <tr
                   key={e.id}
                   onClick={() => onNavigate("employee-detail", String(e.id))}
-                  className="cursor-pointer border-t border-[var(--color-border-light)] hover:bg-[var(--color-page-bg)]"
+                  className="group cursor-pointer border-t border-[var(--color-border-light)] hover:bg-[var(--color-page-bg)]"
                 >
                   {showDeleteCol && (
-                    <td className="px-1 py-2.5 text-center" onClick={(ev) => ev.stopPropagation()}>
+                    <td style={{ left: 0 }} className="sticky left-0 z-10 bg-white px-1 py-2.5 text-center group-hover:bg-[var(--color-page-bg)]" onClick={(ev) => ev.stopPropagation()}>
                       <button
                         onClick={() => handleDeleteRow(e)}
                         disabled={deletingRow === e.id}
@@ -2014,15 +2030,17 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
                       </button>
                     </td>
                   )}
-                  <td className="px-4 py-2.5 text-center font-[family-name:var(--font-mono)] text-[var(--color-text-lighter)]">
+                  <td style={{ left: sttLeft }} className="sticky z-10 bg-white px-4 py-2.5 text-center font-[family-name:var(--font-mono)] text-[var(--color-text-lighter)] group-hover:bg-[var(--color-page-bg)]">
                     {(page - 1) * PAGE_SIZE + i + 1}
                   </td>
                   {visibleColumns.map((c) => (
                     <td
                       key={c.id}
                       data-col={c.id}
+                      style={frozenLeft[c.id] != null ? { left: frozenLeft[c.id] } : undefined}
                       className={cn(
                         "overflow-hidden border-l border-[var(--color-border-light)] px-3 py-2.5",
+                        frozenLeft[c.id] != null && "sticky z-10 bg-white group-hover:bg-[var(--color-page-bg)]",
                         c.align === "right" && "text-right",
                         c.align === "center" && "text-center",
                         c.cellClass,
