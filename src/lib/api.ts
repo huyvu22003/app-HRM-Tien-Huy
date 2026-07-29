@@ -346,6 +346,10 @@ export function updateHierarchy(data: HierarchyMutation) {
   return api.post<{ success: boolean; affectedEmployeeIds: number[] }>("/org/hierarchy", data);
 }
 
+export function deleteEmployee(id: number) {
+  return api.delete<{ success: boolean }>(`/employees/${id}`);
+}
+
 export function importEmployees(
   employees: Record<string, unknown>[],
   mode: "upsert" | "replace" = "upsert",
