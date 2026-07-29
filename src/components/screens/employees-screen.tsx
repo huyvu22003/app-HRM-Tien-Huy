@@ -829,7 +829,10 @@ function ImportModal({ existing, onClose, onImported }: { existing: ApiEmployee[
     () => (replaceMode ? existing.filter((e) => !fileCodeSet.has(String(e.code).trim())).length : 0),
     [replaceMode, existing, fileCodeSet],
   );
-  const confirmOk = !replaceMode || confirmText.trim().toUpperCase() === "XÓA";
+  // Chấp nhận mọi cách gõ dấu: "XÓA" / "XOÁ" / "xoa" (bỏ dấu khi so sánh).
+  const confirmOk =
+    !replaceMode ||
+    confirmText.normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toUpperCase() === "XOA";
 
   async function handleImport() {
     // Upsert: chỉ gửi Mới + Cập nhật. Replace: gửi mọi dòng hợp lệ (kể cả "không đổi")
