@@ -282,6 +282,27 @@ export async function importEmployees(request: Request, env: Env): Promise<Respo
   return json({ success: true, created, updated, deleted });
 }
 
+/** Xoá 1 nhân viên + dữ liệu con (chấm công, lương, BH, KPI, nghỉ phép…). */
+export async function deleteEmployee(_request: Request, env: Env, id: string): Promise<Response> {
+  const empId = Number(id);
+  if (!Number.isFinite(empId)) return error("Thiếu id nhân viên", 400);
+  const existing = await env.DB.prepare("SELECT id FROM employees WHERE id = ?").bind(empId).first();
+  if (!existing) return error("Không tìm thấy nhân viên", 404);
+
+  const childTables = [
+    "compensation", "insurance", "attendance", "leave_requests", "leave_balances",
+    "maternity_leaves", "kpi_scores", "employee_documents", "rewards",
+    "improvement_plans", "employee_custom_values",
+  ];
+  const stmts = childTables.map((t) => env.DB.prepare(`DELETE FROM ${t} WHERE employee_id = ?`).bind(empId));
+  stmts.push(env.DB.prepare("UPDATE employees SET manager_employee_id = NULL WHERE manager_employee_id = ?").bind(empId));
+  stmts.push(env.DB.prepare("UPDATE departments SET head_employee_id = NULL WHERE head_employee_id = ?").bind(empId));
+  stmts.push(env.DB.prepare("UPDATE users SET employee_id = NULL WHERE employee_id = ?").bind(empId));
+  stmts.push(env.DB.prepare("DELETE FROM employees WHERE id = ?").bind(empId));
+  await env.DB.batch(stmts);
+  return json({ success: true });
+}
+
 export async function updateEmployee(request: Request, env: Env, id: string): Promise<Response> {
   const body = await readJson<EmployeeBody>(request);
 

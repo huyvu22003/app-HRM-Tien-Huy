@@ -4,7 +4,7 @@ import { corsHeaders, handlePreflight } from "./middleware/cors";
 import { error, parseIdFromPath } from "./utils";
 
 import { login, logout, me } from "./handlers/auth";
-import { listEmployees, getEmployee, createEmployee, updateEmployee, importEmployees } from "./handlers/employees";
+import { listEmployees, getEmployee, createEmployee, updateEmployee, deleteEmployee, importEmployees } from "./handlers/employees";
 import {
   listDepartments,
   createDepartment,
@@ -128,6 +128,11 @@ export default {
         const id = parseIdFromPath(pathname, "/api/employees/");
         if (!id) return withCors(error("Thiếu id nhân viên", 400));
         return withCors(await updateEmployee(request, env, id));
+      }
+      if (method === "DELETE" && pathname.startsWith("/api/employees/")) {
+        const id = parseIdFromPath(pathname, "/api/employees/");
+        if (!id) return withCors(error("Thiếu id nhân viên", 400));
+        return withCors(await deleteEmployee(request, env, id));
       }
 
       // --- Departments ---

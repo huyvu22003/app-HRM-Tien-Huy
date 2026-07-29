@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Search, Upload, Download, Plus, ChevronRight, ChevronLeft, Info, Loader2, Phone, Mail, Briefcase, MapPin } from "lucide-react";
 import ExcelJS from "exceljs";
-import { fetchEmployees, fetchDepartments, importEmployees, type ApiEmployee, type ApiDepartment } from "@/lib/api";
+import { fetchEmployees, fetchDepartments, importEmployees, deleteEmployee, type ApiEmployee, type ApiDepartment } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery, useMutation } from "@/lib/hooks";
 import { getInitials, cn, formatDate, formatMoney, seededRandom } from "@/lib/utils";
@@ -1027,6 +1027,9 @@ function ImportModal({ existing, onClose, onImported }: { existing: ApiEmployee[
 
 const PAGE_SIZE = 15;
 
+/** Nhân viên đã nghỉ việc (tách khỏi danh sách tổng). */
+const isResigned = (e: ApiEmployee) => (e.status ?? "").trim().toLowerCase() === "nghỉ việc";
+
 export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, id?: string) => void }) {
   const { role } = useAuth();
   const canEdit = role === "super" || role === "hr";
@@ -1035,6 +1038,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
   const [search, setSearch] = useState("");
   const [dept, setDept] = useState("all");
   const [page, setPage] = useState(1);
+  const [view, setView] = useState<"active" | "resigned">("active");
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
   const [hoveredEmployee, setHoveredEmployee] = useState<ApiEmployee | null>(null);
   const [hoverRect, setHoverRect] = useState<DOMRect | null>(null);
@@ -1418,7 +1422,8 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
 
   // Apply search + department + per-column filters + sort, then paginate — all client-side.
   const filtered = useMemo(() => {
-    let list = allItems;
+    // Tách danh sách đang làm việc / đã nghỉ việc theo tab.
+    let list: ApiEmployee[] = view === "resigned" ? allItems.filter(isResigned) : allItems.filter((e) => !isResigned(e));
     if (search) {
       const q = search.toLowerCase();
       list = list.filter(
@@ -1450,7 +1455,25 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
       }
     }
     return list;
-  }, [allItems, search, dept, colFilters, displayColumns, sortState]);
+  }, [allItems, view, search, dept, colFilters, displayColumns, sortState]);
+
+  const activeCount = useMemo(() => allItems.filter((e) => !isResigned(e)).length, [allItems]);
+  const resignedCount = useMemo(() => allItems.filter(isResigned).length, [allItems]);
+
+  // Cột "xoá dòng" (cố định ngoài cùng trái) chỉ hiện khi đang ở chế độ chỉnh cột
+  // (bấm nút Khoá cột để mở khoá) — để HR thao tác xoá trực tiếp khi cần.
+  const showDeleteCol = !reorderLocked;
+  const [deletingRow, setDeletingRow] = useState<number | null>(null);
+  async function handleDeleteRow(emp: ApiEmployee) {
+    if (!window.confirm(`Xoá nhân viên "${emp.name}" (${emp.code})?\nThao tác xoá kèm dữ liệu chấm công/lương/KPI liên quan và KHÔNG thể hoàn tác.`)) return;
+    setDeletingRow(emp.id);
+    try {
+      await deleteEmployee(emp.id);
+      refetch();
+    } finally {
+      setDeletingRow(null);
+    }
+  }
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const items = useMemo(
@@ -1606,6 +1629,24 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
         </div>
       )}
 
+      <div className="flex items-center gap-1.5">
+        {([["active", "Đang làm việc", activeCount], ["resigned", "Đã nghỉ việc", resignedCount]] as [typeof view, string, number][]).map(([key, label, count]) => (
+          <button
+            key={key}
+            onClick={() => { setView(key); setPage(1); }}
+            className={cn(
+              "flex items-center gap-1.5 rounded-[8px] border px-3 py-1.5 text-[12.5px] font-medium transition-colors",
+              view === key
+                ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-white"
+                : "border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]",
+            )}
+          >
+            {label}
+            <span className={cn("rounded-full px-1.5 text-[11px]", view === key ? "bg-white/25" : "bg-[var(--color-page-bg)] text-[var(--color-text-muted)]")}>{count}</span>
+          </button>
+        ))}
+      </div>
+
       <div className="flex flex-wrap items-center gap-3 rounded-[14px] border border-[var(--color-border)] bg-white p-[14px]">
         <div className="relative min-w-[220px] flex-1">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-lighter)]" />
@@ -1717,6 +1758,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
         ) : (
           <table ref={tableRef} className="w-full min-w-[900px] table-fixed text-[13px]">
             <colgroup>
+              {showDeleteCol && <col style={{ width: 44 }} />}
               <col style={{ width: 52 }} />
               {visibleColumns.map((c) => (
                 <col key={c.id} style={{ width: colWidth(c) }} />
@@ -1724,6 +1766,8 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
             </colgroup>
             <thead>
               <tr className="text-left text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">
+                {/* Cột xoá dòng — cố định ngoài cùng trái, chỉ hiện khi mở khoá cột */}
+                {showDeleteCol && <th className="px-2 py-3 text-center font-medium text-[var(--color-danger)]">Xoá</th>}
                 {/* Fixed STT column — always first, never reordered */}
                 <th className="px-4 py-3 text-center font-medium">STT</th>
                 {visibleColumns.map((c) => {
@@ -1813,7 +1857,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
             <tbody>
               {adding && (
                 <tr className="border-t border-[var(--color-accent)] bg-[var(--color-page-bg)]">
-                  <td colSpan={visibleColumns.length + 1} className="px-4 py-3">
+                  <td colSpan={visibleColumns.length + 1 + (showDeleteCol ? 1 : 0)} className="px-4 py-3">
                     <div className="flex flex-wrap items-end gap-2">
                       <input
                         autoFocus
@@ -1885,6 +1929,18 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
                   onClick={() => onNavigate("employee-detail", String(e.id))}
                   className="cursor-pointer border-t border-[var(--color-border-light)] hover:bg-[var(--color-page-bg)]"
                 >
+                  {showDeleteCol && (
+                    <td className="px-1 py-2.5 text-center" onClick={(ev) => ev.stopPropagation()}>
+                      <button
+                        onClick={() => handleDeleteRow(e)}
+                        disabled={deletingRow === e.id}
+                        title={`Xoá ${e.name}`}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-[6px] text-[var(--color-text-lighter)] hover:bg-[var(--color-danger-bg)] hover:text-[var(--color-danger)] disabled:opacity-50"
+                      >
+                        {deletingRow === e.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={14} />}
+                      </button>
+                    </td>
+                  )}
                   <td className="px-4 py-2.5 text-center font-[family-name:var(--font-mono)] text-[var(--color-text-lighter)]">
                     {(page - 1) * PAGE_SIZE + i + 1}
                   </td>
@@ -1906,7 +1962,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
               ))}
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={visibleColumns.length + 1} className="px-4 py-12 text-center text-[var(--color-text-muted)]">
+                  <td colSpan={visibleColumns.length + 1 + (showDeleteCol ? 1 : 0)} className="px-4 py-12 text-center text-[var(--color-text-muted)]">
                     Không tìm thấy nhân viên nào.
                   </td>
                 </tr>
