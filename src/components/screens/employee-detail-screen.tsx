@@ -45,6 +45,7 @@ type EditableFields = {
   contract_type: string;
   contract_end: string;
   join_date: string;
+  resign_date: string;
   level: string;
   manager: string;
   status: string;
@@ -760,6 +761,7 @@ export function EmployeeDetailScreen({
       contract_type: employee.contract_type ?? "",
       contract_end: employee.contract_end ?? "",
       join_date: employee.join_date ?? "",
+      resign_date: employee.resign_date ?? "",
       level: employee.level ?? "",
       manager: employee.manager ?? "",
       status: employee.status ?? "",
@@ -807,6 +809,7 @@ export function EmployeeDetailScreen({
       contractType: form.contract_type,
       contractEnd: form.contract_end,
       joinDate: form.join_date,
+      resignDate: form.resign_date,
       status: form.status,
       manager: form.manager,
       level: form.level,
@@ -1120,7 +1123,7 @@ export function EmployeeDetailScreen({
               {(editing || employee.contract_end) && (
                 <Field label="Ngày hết hạn HĐ" value={formatDate(employee.contract_end)} editing={editing} field="contract_end" form={form!} onChange={handleFieldChange} type="date" />
               )}
-              <Field label="Trạng thái" value={employee.status} editing={editing} field="status" form={form!} onChange={handleFieldChange} type="select" options={["Đang làm việc", "Nghỉ việc", "Nghỉ thai sản", "Thử việc"]} />
+              <Field label="Ngày nghỉ việc" value={formatDate(employee.resign_date)} editing={editing} field="resign_date" form={form!} onChange={handleFieldChange} type="date" />
               {employee.contract_date_1 && <ReadOnlyField label="Ngày HĐLĐ L1" value={employee.contract_date_1} />}
               {employee.contract_date_2 && <ReadOnlyField label="Ngày HĐLĐ L2" value={employee.contract_date_2} />}
               {employee.contract_date_3 && <ReadOnlyField label="Ngày HĐLĐ L3" value={employee.contract_date_3} />}

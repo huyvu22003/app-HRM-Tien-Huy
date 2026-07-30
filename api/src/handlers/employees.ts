@@ -105,6 +105,7 @@ interface EmployeeBody {
   workplace?: string;
   contractType?: string;
   contractEnd?: string;
+  resignDate?: string | null;
   joinDate?: string;
   status?: string;
   manager?: string;
@@ -338,6 +339,7 @@ export async function updateEmployee(request: Request, env: Env, id: string): Pr
     workplace: body.workplace,
     contract_type: body.contractType,
     contract_end: body.contractEnd,
+    resign_date: body.resignDate,
     join_date: body.joinDate,
     status: body.status,
     manager: body.manager,
