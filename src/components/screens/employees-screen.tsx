@@ -161,7 +161,7 @@ const IMPORT_HEADER_MAP: Record<string, string> = {
   "ngày hđlđ l1": "contract_date_1",
   "ngày hđlđ l2": "contract_date_2",
   "ngày hđlđ l3": "contract_date_3",
-  "năm sinh": "birth_year",
+  "năm sinh": "dob",
   "nơi sinh": "birth_place",
   "học lực": "education",
   "địa chỉ tạm trú": "temp_address",
@@ -1260,8 +1260,9 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
       label: "Ngày sinh",
       defaultHidden: true,
       cellClass: "text-[var(--color-text-muted)]",
-      cell: (e) => formatDate(e.dob),
-      exportValue: (e) => formatDate(e.dob),
+      // Dữ liệu cũ có thể còn ở birth_year (import trước đây) → hiển thị dự phòng.
+      cell: (e) => formatDate(e.dob || e.birth_year),
+      exportValue: (e) => formatDate(e.dob || e.birth_year),
     },
     {
       id: "cccd",
@@ -1338,7 +1339,6 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
       exportValue: (e) => totalSalary(e),
       exportFormat: "money",
     },
-    textCol("birth_year", "Năm sinh"),
     textCol("birth_place", "Nơi sinh"),
     textCol("education", "Học lực"),
     textCol("temp_address", "Địa chỉ tạm trú"),
