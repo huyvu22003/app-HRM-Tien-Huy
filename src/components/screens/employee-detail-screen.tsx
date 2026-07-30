@@ -1177,7 +1177,6 @@ export function EmployeeDetailScreen({
                 <Field label="Chuyên cần" value={compensation?.attendance_bonus ? formatMoney(compensation.attendance_bonus) : "-"} editing={editing} field="attendance_bonus" form={form!} onChange={handleFieldChange} />
                 <Field label="Ngân hàng" value={employee.bank} editing={editing} field="bank" form={form!} onChange={handleFieldChange} />
                 {employee.bank_account && <ReadOnlyField label="Số tài khoản" value={employee.bank_account} />}
-                {employee.bank_branch && <ReadOnlyField label="Chi nhánh ngân hàng" value={employee.bank_branch} />}
               </div>
               {!editing && (
                 <SalaryHistorySection
