@@ -323,7 +323,7 @@ function PrintPreviewModal({
                     ["CCCD", mask(employee.cccd, 0)],
                     ["Địa chỉ", employee.address ? (employee.address.length > 25 ? "****· " + employee.address.split(",").pop()?.trim() : employee.address) : "-"],
                     ["SĐT", mask(employee.phone)],
-                    ["Tài khoản NH", mask(employee.bank, 4)],
+                    ["Ngân hàng", employee.bank ?? "-"],
                     ["Mã số thuế", mask(employee.tax_code)],
                     ["Mã BHXH", insurance?.ins_code ? mask(insurance.ins_code) : "-"],
                     ["Hồ sơ BHYT", insurance?.bhyt_code ? mask(insurance.bhyt_code) : "-"],
@@ -343,7 +343,7 @@ function PrintPreviewModal({
                 <tbody>
                   {[
                     ["Lương cơ bản", compensation ? formatMoney(compensation.base_salary) : "-"],
-                    ["Phụ cấp cố định", compensation ? formatMoney(compensation.allowance) : "-"],
+                    ["PC công việc", compensation ? formatMoney(compensation.allowance) : "-"],
                     ["Người phụ thuộc", compensation?.dependents ?? 0],
                   ].map(([l, v], i) => (
                     <tr key={i}><td style={cellLabel}>{l}</td><td style={cellVal}>{String(v)}</td></tr>
@@ -1160,8 +1160,8 @@ export function EmployeeDetailScreen({
             <>
               <div className="grid grid-cols-2 gap-5 md:grid-cols-3">
                 <Field label="Lương cơ bản hiện tại" value={compensation?.base_salary ? formatMoney(compensation.base_salary) : "-"} editing={editing} field="base_salary" form={form!} onChange={handleFieldChange} />
-                <Field label="Phụ cấp" value={compensation?.allowance ? formatMoney(compensation.allowance) : "-"} editing={editing} field="allowance" form={form!} onChange={handleFieldChange} />
-                <Field label="Tài khoản ngân hàng" value={employee.bank} editing={editing} field="bank" form={form!} onChange={handleFieldChange} />
+                <Field label="PC công việc" value={compensation?.allowance ? formatMoney(compensation.allowance) : "-"} editing={editing} field="allowance" form={form!} onChange={handleFieldChange} />
+                <Field label="Ngân hàng" value={employee.bank} editing={editing} field="bank" form={form!} onChange={handleFieldChange} />
                 {employee.bank_account && <ReadOnlyField label="Số tài khoản" value={employee.bank_account} />}
                 {employee.bank_branch && <ReadOnlyField label="Chi nhánh ngân hàng" value={employee.bank_branch} />}
               </div>
