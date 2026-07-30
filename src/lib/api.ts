@@ -237,6 +237,9 @@ export interface ApiCompensation {
   employee_id: number;
   base_salary: number;
   allowance: number;
+  responsibility_salary: number | null;
+  gas_allowance: number | null;
+  attendance_bonus: number | null;
   dependents: number;
   effective_from: string | null;
 }

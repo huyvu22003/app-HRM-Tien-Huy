@@ -78,6 +78,9 @@ interface CompensationBody {
   baseSalary?: number;
   allowance?: number;
   dependents?: number;
+  responsibilitySalary?: number;
+  gasAllowance?: number;
+  attendanceBonus?: number;
 }
 
 interface InsuranceBody {
@@ -106,6 +109,7 @@ interface EmployeeBody {
   contractType?: string;
   contractEnd?: string;
   resignDate?: string | null;
+  bhxhNo?: string | null;
   joinDate?: string;
   status?: string;
   manager?: string;
@@ -340,6 +344,7 @@ export async function updateEmployee(request: Request, env: Env, id: string): Pr
     contract_type: body.contractType,
     contract_end: body.contractEnd,
     resign_date: body.resignDate,
+    bhxh_no: body.bhxhNo,
     join_date: body.joinDate,
     status: body.status,
     manager: body.manager,
@@ -368,14 +373,17 @@ export async function updateEmployee(request: Request, env: Env, id: string): Pr
   if (body.compensation) {
     const c = body.compensation;
     await env.DB.prepare(
-      `INSERT INTO compensation (employee_id, base_salary, allowance, dependents)
-       VALUES (?, ?, ?, ?)
+      `INSERT INTO compensation (employee_id, base_salary, allowance, dependents, responsibility_salary, gas_allowance, attendance_bonus)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(employee_id) DO UPDATE SET
          base_salary = excluded.base_salary,
          allowance = excluded.allowance,
-         dependents = excluded.dependents`
+         dependents = excluded.dependents,
+         responsibility_salary = excluded.responsibility_salary,
+         gas_allowance = excluded.gas_allowance,
+         attendance_bonus = excluded.attendance_bonus`
     )
-      .bind(id, c.baseSalary ?? 0, c.allowance ?? 0, c.dependents ?? 0)
+      .bind(id, c.baseSalary ?? 0, c.allowance ?? 0, c.dependents ?? 0, c.responsibilitySalary ?? 0, c.gasAllowance ?? 0, c.attendanceBonus ?? 0)
       .run();
   }
 

@@ -60,7 +60,11 @@ type EditableFields = {
   ins_salary_base: string;
   base_salary: string;
   allowance: string;
+  responsibility_salary: string;
+  gas_allowance: string;
+  attendance_bonus: string;
   dependents: string;
+  bhxh_no: string;
 };
 
 function Field({
@@ -750,7 +754,7 @@ export function EmployeeDetailScreen({
       code: employee.code ?? "",
       name: employee.name ?? "",
       gender: employee.gender ?? "",
-      dob: employee.dob ?? "",
+      dob: employee.dob || employee.birth_year || "",
       phone: employee.phone ?? "",
       cccd: employee.cccd ?? "",
       address: employee.address ?? "",
@@ -776,7 +780,11 @@ export function EmployeeDetailScreen({
       ins_salary_base: insurance?.salary_base ? String(insurance.salary_base) : "",
       base_salary: compensation?.base_salary ? String(compensation.base_salary) : "",
       allowance: compensation?.allowance ? String(compensation.allowance) : "",
+      responsibility_salary: compensation?.responsibility_salary ? String(compensation.responsibility_salary) : "",
+      gas_allowance: compensation?.gas_allowance ? String(compensation.gas_allowance) : "",
+      attendance_bonus: compensation?.attendance_bonus ? String(compensation.attendance_bonus) : "",
       dependents: compensation?.dependents != null ? String(compensation.dependents) : "0",
+      bhxh_no: employee.bhxh_no ?? "",
     });
     setEditing(true);
     setSaveSuccess(false);
@@ -815,9 +823,13 @@ export function EmployeeDetailScreen({
       level: form.level,
       bank: form.bank,
       taxCode: form.tax_code,
+      bhxhNo: form.bhxh_no,
       compensation: {
         baseSalary: toNumber(form.base_salary),
         allowance: toNumber(form.allowance),
+        responsibilitySalary: toNumber(form.responsibility_salary),
+        gasAllowance: toNumber(form.gas_allowance),
+        attendanceBonus: toNumber(form.attendance_bonus),
         dependents: toNumber(form.dependents),
       },
       insurance: {
@@ -1133,8 +1145,7 @@ export function EmployeeDetailScreen({
 
           {tab === 2 && (
             <div className="grid grid-cols-2 gap-5 md:grid-cols-3">
-              <Field label="Ngày sinh" value={formatDate(employee.dob)} editing={editing} field="dob" form={form!} onChange={handleFieldChange} type="date" />
-              {employee.birth_year && <ReadOnlyField label="Năm sinh" value={employee.birth_year} />}
+              <Field label="Ngày sinh" value={formatDate(employee.dob || employee.birth_year)} editing={editing} field="dob" form={form!} onChange={handleFieldChange} type="date" />
               <Field label="Giới tính" value={employee.gender} editing={editing} field="gender" form={form!} onChange={handleFieldChange} type="select" options={["Nam", "Nữ"]} />
               <Field label="CCCD" value={employee.cccd} editing={editing} field="cccd" form={form!} onChange={handleFieldChange} />
               {employee.cccd_issue_date && <ReadOnlyField label="Ngày cấp CCCD" value={employee.cccd_issue_date} />}
@@ -1161,6 +1172,9 @@ export function EmployeeDetailScreen({
               <div className="grid grid-cols-2 gap-5 md:grid-cols-3">
                 <Field label="Lương cơ bản hiện tại" value={compensation?.base_salary ? formatMoney(compensation.base_salary) : "-"} editing={editing} field="base_salary" form={form!} onChange={handleFieldChange} />
                 <Field label="PC công việc" value={compensation?.allowance ? formatMoney(compensation.allowance) : "-"} editing={editing} field="allowance" form={form!} onChange={handleFieldChange} />
+                <Field label="Trách nhiệm" value={compensation?.responsibility_salary ? formatMoney(compensation.responsibility_salary) : "-"} editing={editing} field="responsibility_salary" form={form!} onChange={handleFieldChange} />
+                <Field label="PC xăng xe" value={compensation?.gas_allowance ? formatMoney(compensation.gas_allowance) : "-"} editing={editing} field="gas_allowance" form={form!} onChange={handleFieldChange} />
+                <Field label="Chuyên cần" value={compensation?.attendance_bonus ? formatMoney(compensation.attendance_bonus) : "-"} editing={editing} field="attendance_bonus" form={form!} onChange={handleFieldChange} />
                 <Field label="Ngân hàng" value={employee.bank} editing={editing} field="bank" form={form!} onChange={handleFieldChange} />
                 {employee.bank_account && <ReadOnlyField label="Số tài khoản" value={employee.bank_account} />}
                 {employee.bank_branch && <ReadOnlyField label="Chi nhánh ngân hàng" value={employee.bank_branch} />}
@@ -1180,12 +1194,11 @@ export function EmployeeDetailScreen({
             <div className="grid grid-cols-2 gap-5 md:grid-cols-3">
               <Field label="Tình trạng BHXH" value={insurance?.status ?? "Chưa tham gia"} editing={editing} field="ins_status" form={form!} onChange={handleFieldChange} type="select" options={["Đã tham gia", "Chưa tham gia", "Tạm dừng"]} />
               <Field label="Mã BHXH" value={insurance?.ins_code} editing={editing} field="ins_code" form={form!} onChange={handleFieldChange} />
-              <Field label="Sổ BHXH" value={insurance?.bhxh_book} editing={editing} field="bhxh_book" form={form!} onChange={handleFieldChange} />
+              <Field label="Số sổ BHXH" value={employee.bhxh_no} editing={editing} field="bhxh_no" form={form!} onChange={handleFieldChange} />
               <Field label="Mã thẻ BHYT" value={insurance?.bhyt_code} editing={editing} field="bhyt_code" form={form!} onChange={handleFieldChange} />
               <Field label="Nơi khám BHYT" value={insurance?.bhyt_clinic} editing={editing} field="bhyt_clinic" form={form!} onChange={handleFieldChange} />
               <Field label="Ngày bắt đầu đóng" value={insurance?.start_date ? formatDate(insurance.start_date) : "-"} editing={editing} field="ins_start_date" form={form!} onChange={handleFieldChange} type="date" />
               <Field label="Mức lương đóng BH" value={insurance?.salary_base ? formatMoney(insurance.salary_base) : "-"} editing={editing} field="ins_salary_base" form={form!} onChange={handleFieldChange} />
-              {employee.bhxh_no && <ReadOnlyField label="Mã số sổ BHXH" value={employee.bhxh_no} />}
               {employee.bhxh_increase_date && <ReadOnlyField label="Báo tăng BHXH" value={employee.bhxh_increase_date} />}
               {employee.bhxh_decrease_date && <ReadOnlyField label="Báo giảm BHXH" value={employee.bhxh_decrease_date} />}
             </div>
