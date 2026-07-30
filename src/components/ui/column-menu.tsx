@@ -63,7 +63,7 @@ export function ColumnMenu<Row>({
             </button>
           </div>
           <div className="max-h-[300px] overflow-y-auto">
-            {columns.map((c) => {
+            {[...columns].sort((a, b) => (a.label || a.id).localeCompare(b.label || b.id, "vi")).map((c) => {
               const visible = !hidden.has(c.id);
               const deletable = !!onDeleteColumn && !!isDeletable?.(c) && !c.locked;
               return (

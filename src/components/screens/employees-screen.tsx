@@ -1033,6 +1033,36 @@ const isResigned = (e: ApiEmployee) => (e.status ?? "").trim().toLowerCase() ===
 /** 4 trạng thái làm việc — dùng cho chọn nhanh trong ô Trạng thái. */
 const STATUS_OPTIONS = ["Đang làm việc", "Nghỉ việc", "Nghỉ thai sản", "Thử việc"];
 
+/** Thứ tự ưu tiên bộ phận: BGĐ → Kế toán → Văn phòng → còn lại (SX). */
+function deptRank(name: string | null): number {
+  const v = (name ?? "").toLocaleLowerCase("vi");
+  if (!v) return 99;
+  if (/giám đốc|bgđ|ban giám/.test(v)) return 0;
+  if (/kế toán/.test(v)) return 1;
+  if (/văn phòng|hành chính|nhân sự/.test(v)) return 2;
+  return 10;
+}
+/** Xếp hạng chức vụ trong bộ phận: cao → thấp. */
+function posRank(position: string | null, level: string | null): number {
+  const v = `${position ?? ""} ${level ?? ""}`.toLocaleLowerCase("vi");
+  if (v.includes("giám đốc")) return 0;
+  if (v.includes("trưởng phòng")) return 1;
+  if (v.includes("phó phòng")) return 2;
+  if (v.includes("quản lý") || v.includes("xưởng trưởng")) return 3;
+  if (v.includes("tổ trưởng") || v.includes("trưởng nhóm")) return 4;
+  if (v.includes("tổ phó")) return 5;
+  return 10;
+}
+/** So sánh mặc định: gom theo bộ phận (ưu tiên) → chức vụ cao trên → tên. */
+function defaultEmployeeCompare(a: ApiEmployee, b: ApiEmployee): number {
+  return (
+    deptRank(a.department_name) - deptRank(b.department_name) ||
+    (a.department_name ?? "").localeCompare(b.department_name ?? "", "vi") ||
+    posRank(a.position, a.level) - posRank(b.position, b.level) ||
+    a.name.localeCompare(b.name, "vi")
+  );
+}
+
 export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, id?: string) => void }) {
   const { role } = useAuth();
   const canEdit = role === "super" || role === "hr";
@@ -1513,6 +1543,9 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
           return String(va).localeCompare(String(vb), "vi") * dir;
         });
       }
+    } else {
+      // Mặc định: gom theo bộ phận (BGĐ → Kế toán → Văn phòng → SX), chức cao ở trên.
+      list = [...list].sort(defaultEmployeeCompare);
     }
     return list;
   }, [allItems, view, search, dept, colFilters, displayColumns, sortState]);
