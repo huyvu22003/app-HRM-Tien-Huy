@@ -1029,6 +1029,15 @@ const PAGE_SIZE = 15;
 
 /** Nhân viên đã nghỉ việc (tách khỏi danh sách tổng). */
 const isResigned = (e: ApiEmployee) => (e.status ?? "").trim().toLowerCase() === "nghỉ việc";
+const isMaternity = (e: ApiEmployee) => (e.status ?? "").trim().toLowerCase().includes("thai sản");
+const isProbation = (e: ApiEmployee) => (e.status ?? "").trim().toLowerCase().includes("thử việc");
+type EmpView = "active" | "resigned" | "maternity" | "probation";
+/** active = không thuộc 3 nhóm còn lại (gồm cả "Đang làm việc" và trạng thái trống). */
+const matchesView = (e: ApiEmployee, view: EmpView) =>
+  view === "resigned" ? isResigned(e)
+  : view === "maternity" ? isMaternity(e)
+  : view === "probation" ? isProbation(e)
+  : !isResigned(e) && !isMaternity(e) && !isProbation(e);
 
 /** 4 trạng thái làm việc — dùng cho chọn nhanh trong ô Trạng thái. */
 const STATUS_OPTIONS = ["Đang làm việc", "Nghỉ việc", "Nghỉ thai sản", "Thử việc"];
@@ -1071,7 +1080,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
   const [search, setSearch] = useState("");
   const [dept, setDept] = useState("all");
   const [page, setPage] = useState(1);
-  const [view, setView] = useState<"active" | "resigned">("active");
+  const [view, setView] = useState<EmpView>("active");
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
   const [hoveredEmployee, setHoveredEmployee] = useState<ApiEmployee | null>(null);
   const [hoverRect, setHoverRect] = useState<DOMRect | null>(null);
@@ -1513,7 +1522,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
   // Apply search + department + per-column filters + sort, then paginate — all client-side.
   const filtered = useMemo(() => {
     // Tách danh sách đang làm việc / đã nghỉ việc theo tab.
-    let list: ApiEmployee[] = view === "resigned" ? allItems.filter(isResigned) : allItems.filter((e) => !isResigned(e));
+    let list: ApiEmployee[] = allItems.filter((e) => matchesView(e, view));
     if (search) {
       const q = search.toLowerCase();
       list = list.filter(
@@ -1550,8 +1559,10 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
     return list;
   }, [allItems, view, search, dept, colFilters, displayColumns, sortState]);
 
-  const activeCount = useMemo(() => allItems.filter((e) => !isResigned(e)).length, [allItems]);
+  const activeCount = useMemo(() => allItems.filter((e) => matchesView(e, "active")).length, [allItems]);
   const resignedCount = useMemo(() => allItems.filter(isResigned).length, [allItems]);
+  const maternityCount = useMemo(() => allItems.filter(isMaternity).length, [allItems]);
+  const probationCount = useMemo(() => allItems.filter(isProbation).length, [allItems]);
 
   // Cột "xoá dòng" (cố định ngoài cùng trái) chỉ hiện khi đang ở chế độ chỉnh cột
   // (bấm nút Khoá cột để mở khoá) — để HR thao tác xoá trực tiếp khi cần.
@@ -1750,7 +1761,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
       )}
 
       <div className="flex items-center gap-1.5">
-        {([["active", "Đang làm việc", activeCount], ["resigned", "Đã nghỉ việc", resignedCount]] as [typeof view, string, number][]).map(([key, label, count]) => (
+        {([["active", "Đang làm việc", activeCount], ["resigned", "Đã nghỉ việc", resignedCount], ["maternity", "Thai sản", maternityCount], ["probation", "Thử việc", probationCount]] as [EmpView, string, number][]).map(([key, label, count]) => (
           <button
             key={key}
             onClick={() => { setView(key); setPage(1); }}
