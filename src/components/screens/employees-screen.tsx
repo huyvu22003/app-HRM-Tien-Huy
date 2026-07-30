@@ -1289,7 +1289,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
     },
     {
       id: "bank",
-      label: "Tài khoản ngân hàng",
+      label: "Ngân hàng",
       defaultHidden: true,
       cellClass: "text-[var(--color-text-muted)]",
       cell: (e) => e.bank ?? "-",
