@@ -274,7 +274,7 @@ function parseRawWorkbook(
       otWeekdayHours: a.otWeekday,
       otSundayHours: a.otSunday,
       otHolidayHours: a.otHoliday,
-      overtimeHours: +(a.otWeekday + a.otSunday).toFixed(2),
+      overtimeHours: +(a.otWeekday + a.otSunday + a.otHoliday).toFixed(2),
       gasDays: +(a.gasWeekdayDays + gasSundayDays).toFixed(2),
       mealAllowance: a.meal,
     };

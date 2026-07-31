@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { Pencil, Check, X, RotateCcw, Lock, Loader2, Download, Upload } from "lucide-react";
+import { Pencil, X, RotateCcw, Lock, Loader2, Download, Upload } from "lucide-react";
+import { AttendanceEditModal } from "@/components/screens/attendance-edit-modal";
 import { cn } from "@/lib/utils";
 import {
   fetchAttendance,
@@ -30,9 +31,7 @@ const money = (v: number | undefined | null) => (v ? Math.round(v).toLocaleStrin
 export function AttendanceScreen() {
   const [userPeriod, setUserPeriod] = useState<string | null>(null);
   const [flag, setFlag] = useState<Flag>("all");
-  const [editingRow, setEditingRow] = useState<number | null>(null);
-  const [draft, setDraft] = useState<{ actual: number; ot: number }>({ actual: 0, ot: 0 });
-  const [saving, setSaving] = useState(false);
+  const [editRow, setEditRow] = useState<ApiAttendance | null>(null);
 
   // Kỳ mặc định = tháng gần nhất có dữ liệu (nếu chưa có → tháng hiện tại).
   // Dẫn xuất (không dùng effect): khi user chưa chọn thì lấy kỳ mới nhất từ API.
@@ -65,19 +64,10 @@ export function AttendanceScreen() {
     [rows, flag],
   );
 
-  function startEdit(row: ApiAttendance) {
-    setEditingRow(row.id);
-    setDraft({ actual: row.actual_days, ot: row.overtime_hours });
-  }
-  async function saveEdit(id: number) {
-    setSaving(true);
-    try {
-      await updateAttendance(id, { actualDays: draft.actual, overtimeHours: draft.ot });
-      refetch();
-    } finally {
-      setSaving(false);
-      setEditingRow(null);
-    }
+  async function saveEdit(id: number, payload: Record<string, number>) {
+    await updateAttendance(id, payload);
+    setEditRow(null);
+    refetch();
   }
 
   // ---- Import Excel ----
@@ -127,18 +117,7 @@ export function AttendanceScreen() {
       { id: "code", label: "Mã thẻ", cell: (d) => <span className="font-[family-name:var(--font-mono)] text-[var(--color-text-muted)]">{d.row.employee_code}</span>, exportValue: (d) => d.row.employee_code },
       { id: "name", label: "Họ và tên", locked: true, cell: (d) => <span className="font-medium text-[var(--color-text-primary)]">{d.row.employee_name}</span>, exportValue: (d) => d.row.employee_name },
       { id: "std_days", label: "Công chuẩn", align: "right", cell: (d) => mono(d.row.std_days), exportValue: (d) => d.row.std_days, exportFormat: "int" },
-      {
-        id: "actual_days",
-        label: "Tổng N.C",
-        align: "right",
-        cell: (d) =>
-          editingRow === d.row.id ? (
-            <input type="number" step="0.5" value={draft.actual} onClick={(e) => e.stopPropagation()} onChange={(e) => setDraft((s) => ({ ...s, actual: Number(e.target.value) }))} className="w-16 rounded-[6px] border border-[var(--color-border)] px-1 py-0.5 text-right" />
-          ) : (
-            mono(d.row.actual_days)
-          ),
-        exportValue: (d) => d.row.actual_days,
-      },
+      { id: "actual_days", label: "Tổng N.C", align: "right", cell: (d) => mono(d.row.actual_days), exportValue: (d) => d.row.actual_days },
       { id: "pn", label: "PN", align: "right", cell: (d) => mono(n0(d.row.pn)), exportValue: (d) => d.row.pn },
       { id: "pb", label: "PB", align: "right", cell: (d) => mono(n0(d.row.pb)), exportValue: (d) => d.row.pb },
       { id: "vr", label: "VR", align: "right", cell: (d) => mono(n0(d.row.vr)), exportValue: (d) => d.row.vr },
@@ -147,56 +126,33 @@ export function AttendanceScreen() {
       { id: "ot_weekday_hours", label: "OT NT (h)", align: "right", cell: (d) => mono(n0(d.row.ot_weekday_hours)), exportValue: (d) => d.row.ot_weekday_hours ?? 0 },
       { id: "ot_sunday_hours", label: "OT CN (h)", align: "right", cell: (d) => mono(n0(d.row.ot_sunday_hours)), exportValue: (d) => d.row.ot_sunday_hours ?? 0 },
       { id: "ot_holiday_hours", label: "OT Lễ (h)", align: "right", cell: (d) => mono(n0(d.row.ot_holiday_hours)), exportValue: (d) => d.row.ot_holiday_hours ?? 0 },
-      {
-        id: "overtime_hours",
-        label: "Tổng OT (h)",
-        align: "right",
-        cell: (d) =>
-          editingRow === d.row.id ? (
-            <input type="number" step="0.5" value={draft.ot} onClick={(e) => e.stopPropagation()} onChange={(e) => setDraft((s) => ({ ...s, ot: Number(e.target.value) }))} className="w-16 rounded-[6px] border border-[var(--color-border)] px-1 py-0.5 text-right" />
-          ) : (
-            mono(d.row.overtime_hours)
-          ),
-        exportValue: (d) => d.row.overtime_hours,
-      },
+      { id: "overtime_hours", label: "Tổng OT (h)", align: "right", cell: (d) => mono(d.row.overtime_hours), exportValue: (d) => d.row.overtime_hours },
       { id: "meal_allowance", label: "Tiền cơm TC", align: "right", cell: (d) => mono(money(d.row.meal_allowance)), exportValue: (d) => d.row.meal_allowance ?? 0, exportFormat: "money" },
       {
         id: "actions",
         label: "",
         align: "right",
         noReorder: true,
-        cell: (d) => {
-          const editing = editingRow === d.row.id;
-          return (
-            <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-              {editing ? (
-                <>
-                  <button onClick={() => saveEdit(d.row.id)} disabled={saving} className="flex h-6 w-6 items-center justify-center rounded-[6px] bg-[var(--color-success)] text-white">
-                    {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-                  </button>
-                  <button onClick={() => setEditingRow(null)} className="flex h-6 w-6 items-center justify-center rounded-[6px] border border-[var(--color-border)]">
-                    <X size={12} />
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button onClick={() => startEdit(d.row)} className="flex h-6 w-6 items-center justify-center rounded-[6px] border border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-page-bg)]">
-                    <Pencil size={12} />
-                  </button>
-                  {d.row.is_edited === 1 && (
-                    <button onClick={() => refetch()} className="flex h-6 w-6 items-center justify-center rounded-[6px] border border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-page-bg)]">
-                      <RotateCcw size={12} />
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-          );
-        },
+        cell: (d) => (
+          <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setEditRow(d.row)}
+              disabled={d.row.locked === 1}
+              title={d.row.locked === 1 ? "Kỳ đã chốt — không sửa được" : "Điều chỉnh chấm công"}
+              className="flex h-6 w-6 items-center justify-center rounded-[6px] border border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-page-bg)] disabled:opacity-40"
+            >
+              <Pencil size={12} />
+            </button>
+            {d.row.is_edited === 1 && (
+              <span title="Đã điều chỉnh thủ công" className="flex h-6 w-6 items-center justify-center rounded-[6px] text-[var(--color-accent)]">
+                <RotateCcw size={12} />
+              </span>
+            )}
+          </div>
+        ),
       },
     ];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editingRow, draft, saving]);
+  }, []);
 
   // Cột tùy chỉnh dùng chung (đồng bộ theo nhân viên) — chèn trước cột thao tác.
   const { customColumns, addColumn, deleteColumn, isCustomColumn } = useCustomColumns<AttRow>((d) => d.row.employee_id);
@@ -262,7 +218,7 @@ export function AttendanceScreen() {
           getRowKey={(d) => d.row.id}
           minWidth={1400}
           pageSize={15}
-          rowClassName={(d) => (d.mismatch && editingRow !== d.row.id ? "bg-[var(--color-warning-bg)]" : "")}
+          rowClassName={(d) => (d.mismatch ? "bg-[var(--color-warning-bg)]" : "")}
           emptyText={`Chưa có dữ liệu chấm công kỳ ${periodDisplay}. Bấm “Nhập Excel” để tải bảng chấm công lên.`}
           toolbarLeft={flagButtons}
           toolbarActions={({ rows: fr, columns: fc }) => (
@@ -270,6 +226,14 @@ export function AttendanceScreen() {
               <Download size={14} /> Xuất Excel
             </button>
           )}
+        />
+      )}
+
+      {editRow && (
+        <AttendanceEditModal
+          row={editRow}
+          onSave={saveEdit}
+          onClose={() => setEditRow(null)}
         />
       )}
 

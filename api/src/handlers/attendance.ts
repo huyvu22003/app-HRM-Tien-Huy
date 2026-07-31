@@ -26,44 +26,79 @@ interface AttendanceUpdateBody {
   pn?: number;
   pb?: number;
   vr?: number;
-  kp?: number;
-  overtimeHours?: number;
+  otWeekdayHours?: number;
+  otSundayHours?: number;
+  otHolidayHours?: number;
+  gasDays?: number;
+  mealAllowance?: number;
   locked?: boolean;
 }
 
+interface AttendanceRow {
+  locked: number;
+  std_days: number;
+  actual_days: number;
+  pn: number;
+  pb: number;
+  vr: number;
+  ot_weekday_hours: number | null;
+  ot_sunday_hours: number | null;
+  ot_holiday_hours: number | null;
+  gas_days: number | null;
+  meal_allowance: number | null;
+}
+
+/**
+ * Điều chỉnh chấm công 1 dòng. Cho phép sửa mọi số liệu (công, nghỉ phép, tăng ca,
+ * phụ cấp) để HR bổ sung khi NV quên chấm OT, chấm trễ, hoặc thiếu giờ ra.
+ * KP và Tổng OT được TỰ TÍNH LẠI từ các thành phần để luôn khớp bảng lương:
+ *   - KP      = max(0, Công chuẩn − N.C − PN − PB − VR)
+ *   - Tổng OT = OT ngày thường + OT chủ nhật + OT lễ
+ */
 export async function updateAttendance(request: Request, env: Env, id: string): Promise<Response> {
-  const existing = await env.DB.prepare("SELECT * FROM attendance WHERE id = ?").bind(id).first<{ locked: number }>();
+  const existing = await env.DB.prepare("SELECT * FROM attendance WHERE id = ?")
+    .bind(id)
+    .first<AttendanceRow>();
   if (!existing) return error("Không tìm thấy bản ghi chấm công", 404);
-  if (existing.locked) return error("Kỳ chấm công đã bị khóa", 423);
 
   const body = await readJson<AttendanceUpdateBody>(request);
-  const fields: string[] = [];
-  const args: unknown[] = [];
-  const map: Record<string, unknown> = {
-    std_days: body.stdDays,
-    actual_days: body.actualDays,
-    pn: body.pn,
-    pb: body.pb,
-    vr: body.vr,
-    kp: body.kp,
-    overtime_hours: body.overtimeHours,
-    locked: body.locked === undefined ? undefined : body.locked ? 1 : 0,
-  };
 
-  for (const [key, value] of Object.entries(map)) {
-    if (value !== undefined) {
-      fields.push(`${key} = ?`);
-      args.push(value);
-    }
+  // Thao tác khoá/mở khoá kỳ: chỉ đổi trạng thái, không đụng số liệu.
+  if (body.locked !== undefined && Object.keys(body).length === 1) {
+    await env.DB.prepare("UPDATE attendance SET locked = ? WHERE id = ?")
+      .bind(body.locked ? 1 : 0, id)
+      .run();
+    return json({ success: true });
   }
 
-  if (fields.length === 0) return json({ success: true, unchanged: true });
+  if (existing.locked) return error("Kỳ chấm công đã bị khóa", 423);
 
-  fields.push("is_edited = 1");
-  args.push(id);
+  // Trường nào không gửi thì giữ nguyên giá trị hiện có.
+  const keep = (v: number | undefined, cur: number | null | undefined): number =>
+    v === undefined || v === null || Number.isNaN(Number(v)) ? Number(cur ?? 0) : Number(v);
 
-  await env.DB.prepare(`UPDATE attendance SET ${fields.join(", ")} WHERE id = ?`)
-    .bind(...args)
+  const std = keep(body.stdDays, existing.std_days);
+  const nc = keep(body.actualDays, existing.actual_days);
+  const pn = keep(body.pn, existing.pn);
+  const pb = keep(body.pb, existing.pb);
+  const vr = keep(body.vr, existing.vr);
+  const otW = keep(body.otWeekdayHours, existing.ot_weekday_hours);
+  const otS = keep(body.otSundayHours, existing.ot_sunday_hours);
+  const otH = keep(body.otHolidayHours, existing.ot_holiday_hours);
+  const gas = keep(body.gasDays, existing.gas_days);
+  const meal = keep(body.mealAllowance, existing.meal_allowance);
+
+  const kp = Math.max(0, +(std - nc - pn - pb - vr).toFixed(2));
+  const otTotal = +(otW + otS + otH).toFixed(2);
+
+  await env.DB.prepare(
+    `UPDATE attendance SET
+       std_days = ?, actual_days = ?, pn = ?, pb = ?, vr = ?, kp = ?,
+       ot_weekday_hours = ?, ot_sunday_hours = ?, ot_holiday_hours = ?, overtime_hours = ?,
+       gas_days = ?, meal_allowance = ?, is_edited = 1
+     WHERE id = ?`,
+  )
+    .bind(std, nc, pn, pb, vr, kp, otW, otS, otH, otTotal, gas, meal, id)
     .run();
 
   return json({ success: true });
@@ -144,7 +179,7 @@ export async function importAttendance(request: Request, env: Env): Promise<Resp
     const otW = r.otWeekdayHours ?? 0;
     const otS = r.otSundayHours ?? 0;
     const otH = r.otHolidayHours ?? 0;
-    const otTotal = r.overtimeHours ?? otW + otS;
+    const otTotal = r.overtimeHours ?? otW + otS + otH;
 
     await env.DB.prepare(
       `INSERT INTO attendance
