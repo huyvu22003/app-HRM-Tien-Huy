@@ -876,6 +876,26 @@ const MOCK_ROUTES: MockRoute[] = [
     },
   },
   {
+    match: /^\/overtime$/,
+    method: "GET",
+    handler: (_path, params) => ({
+      data: [],
+      employeeId: Number(params.get("employeeId")) || 0,
+      period: params.get("period") || "",
+    }),
+  },
+  {
+    match: /^\/overtime$/,
+    method: "PUT",
+    handler: (_path, _params, body) => {
+      const b = parseBody(body);
+      const days = Array.isArray(b.days) ? (b.days as { hours: number }[]) : [];
+      const hol = Number(b.holidayHours) || 0;
+      const total = days.reduce((s, d) => s + (Number(d.hours) || 0), 0) + hol;
+      return { success: true, totals: { otWeekdayHours: 0, otSundayHours: 0, otHolidayHours: hol, overtimeHours: total, mealAllowance: 0 } };
+    },
+  },
+  {
     match: /^\/salary$/,
     handler: (_path, params) => {
       const period = params.get("period") || "2026-06";

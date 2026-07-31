@@ -12,6 +12,7 @@ import {
   deleteDepartment,
 } from "./handlers/departments";
 import { listAttendance, updateAttendance, importAttendance, listAttendancePeriods } from "./handlers/attendance";
+import { listOvertimeDaily, saveOvertimeDaily } from "./handlers/overtime";
 import {
   listLeaveRequests,
   createLeaveRequest,
@@ -158,6 +159,10 @@ export default {
         if (!id) return withCors(error("Thiếu id chấm công", 400));
         return withCors(await updateAttendance(request, env, id));
       }
+
+      // --- Overtime (chi tiết tăng ca theo ngày) ---
+      if (method === "GET" && pathname === "/api/overtime") return withCors(await listOvertimeDaily(request, env));
+      if (method === "PUT" && pathname === "/api/overtime") return withCors(await saveOvertimeDaily(request, env));
 
       // --- Leave ---
       if (method === "GET" && pathname === "/api/leave/requests") return withCors(await listLeaveRequests(request, env));

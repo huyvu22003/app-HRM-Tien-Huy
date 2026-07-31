@@ -1,5 +1,6 @@
 import type { Env } from "../middleware/auth";
 import { json, error, readJson, getParams } from "../utils";
+import { replaceOvertimeDaily, type OtDay } from "./overtime";
 
 export async function listAttendance(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
@@ -126,6 +127,7 @@ interface ImportRow {
   otHolidayHours?: number;
   gasDays?: number;
   mealAllowance?: number;
+  otDaily?: OtDay[];
 }
 
 /**
@@ -201,6 +203,10 @@ export async function importAttendance(request: Request, env: Env): Promise<Resp
     )
       .bind(empId, period, std, nc, pn, pb, vr, kp, otTotal, otW, otS, otH, r.gasDays ?? 0, r.mealAllowance ?? 0)
       .run();
+
+    // Chi tiết tăng ca theo ngày (file gốc có sẵn) — ghi đè để mở lưới ngày là
+    // thấy sẵn số liệu; nhập lại cùng kỳ sẽ reset chi tiết cũ.
+    await replaceOvertimeDaily(env, empId, period, Array.isArray(r.otDaily) ? r.otDaily : []);
     imported++;
   }
 

@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { Pencil, X, RotateCcw, Lock, Loader2, Download, Upload } from "lucide-react";
+import { Pencil, X, RotateCcw, Lock, Loader2, Download, Upload, CalendarClock } from "lucide-react";
 import { AttendanceEditModal } from "@/components/screens/attendance-edit-modal";
+import { OvertimeDayGridModal } from "@/components/screens/overtime-day-grid-modal";
 import { cn } from "@/lib/utils";
 import {
   fetchAttendance,
@@ -32,6 +33,7 @@ export function AttendanceScreen() {
   const [userPeriod, setUserPeriod] = useState<string | null>(null);
   const [flag, setFlag] = useState<Flag>("all");
   const [editRow, setEditRow] = useState<ApiAttendance | null>(null);
+  const [otRow, setOtRow] = useState<ApiAttendance | null>(null);
 
   // Kỳ mặc định = tháng gần nhất có dữ liệu (nếu chưa có → tháng hiện tại).
   // Dẫn xuất (không dùng effect): khi user chưa chọn thì lấy kỳ mới nhất từ API.
@@ -136,6 +138,13 @@ export function AttendanceScreen() {
         cell: (d) => (
           <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
             <button
+              onClick={() => setOtRow(d.row)}
+              title="Tăng ca theo ngày"
+              className="flex h-6 w-6 items-center justify-center rounded-[6px] border border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-page-bg)]"
+            >
+              <CalendarClock size={12} />
+            </button>
+            <button
               onClick={() => setEditRow(d.row)}
               disabled={d.row.locked === 1}
               title={d.row.locked === 1 ? "Kỳ đã chốt — không sửa được" : "Điều chỉnh chấm công"}
@@ -234,6 +243,17 @@ export function AttendanceScreen() {
           row={editRow}
           onSave={saveEdit}
           onClose={() => setEditRow(null)}
+        />
+      )}
+
+      {otRow && (
+        <OvertimeDayGridModal
+          row={otRow}
+          onSaved={() => {
+            setOtRow(null);
+            refetch();
+          }}
+          onClose={() => setOtRow(null)}
         />
       )}
 
