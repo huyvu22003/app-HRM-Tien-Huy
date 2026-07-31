@@ -185,6 +185,7 @@ function parseRawWorkbook(
     otSunday: number;
     otHoliday: number;
     meal: number;
+    otDaily: { day: number; hours: number }[];
   };
   const map = new Map<string, Agg>();
   const keyOf = (n: string) => n.trim().toLowerCase();
@@ -192,7 +193,7 @@ function parseRawWorkbook(
     const k = keyOf(name);
     let a = map.get(k);
     if (!a) {
-      a = { name: name.trim(), actualDays: 0, gasWeekdayDays: 0, otWeekday: 0, otSunday: 0, otHoliday: 0, meal: 0 };
+      a = { name: name.trim(), actualDays: 0, gasWeekdayDays: 0, otWeekday: 0, otSunday: 0, otHoliday: 0, meal: 0, otDaily: [] };
       map.set(k, a);
     }
     return a;
@@ -238,6 +239,12 @@ function parseRawWorkbook(
         if (/lể|lễ/i.test(toStr(tcWs.getRow(r).getCell(c).value))) holidayCol = c;
       }
     }
+    // Cột ngày → số ngày trong tháng (để lưu chi tiết OT theo ngày).
+    const colDay = new Map<number, number>();
+    for (const c of tc.dayCols) {
+      const d = toDate(tcWs.getRow(tc.headerRow).getCell(c).value);
+      if (d) colDay.set(c, d.getDate());
+    }
     for (let r = tc.headerRow + 2; r <= (tcWs.rowCount || tc.headerRow + 2); r++) {
       const name = toStr(tcWs.getRow(r).getCell(tc.nameCol).value);
       if (!name) continue;
@@ -252,6 +259,8 @@ function parseRawWorkbook(
         if (n == null) continue;
         total += n;
         if (sundayCols.has(c)) sun += n;
+        const day = colDay.get(c);
+        if (day) a.otDaily.push({ day, hours: n });
         const t = Math.round(n * 2) / 2;
         if (t === 1 || t === 1.5) meal10 += 1;
         else if (t >= 2 && t <= 5) meal25 += 1;
@@ -277,6 +286,7 @@ function parseRawWorkbook(
       overtimeHours: +(a.otWeekday + a.otSunday + a.otHoliday).toFixed(2),
       gasDays: +(a.gasWeekdayDays + gasSundayDays).toFixed(2),
       mealAllowance: a.meal,
+      otDaily: a.otDaily,
     };
   });
 

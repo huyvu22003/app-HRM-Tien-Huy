@@ -483,6 +483,40 @@ export interface AttendanceImportRow {
   otHolidayHours?: number;
   gasDays?: number;
   mealAllowance?: number;
+  otDaily?: { day: number; hours: number }[];
+}
+
+// --- Overtime (chi tiết tăng ca theo ngày) ---
+
+export interface ApiOvertimeDay {
+  day: number;
+  hours: number;
+  note: string | null;
+}
+
+export interface OvertimeTotals {
+  otWeekdayHours: number;
+  otSundayHours: number;
+  otHolidayHours: number;
+  overtimeHours: number;
+  mealAllowance: number;
+}
+
+/** Lấy chi tiết OT theo ngày của 1 nhân viên trong 1 kỳ. */
+export function fetchOvertimeDaily(employeeId: number, period: string) {
+  return api.get<{ data: ApiOvertimeDay[]; employeeId: number; period: string }>(
+    `/overtime?employeeId=${employeeId}&period=${period}`,
+  );
+}
+
+/** Lưu lưới OT theo ngày; server tính lại tổng NT/CN + tiền cơm về bảng chấm công. */
+export function saveOvertimeDaily(payload: {
+  employeeId: number;
+  period: string;
+  days: { day: number; hours: number; note?: string | null }[];
+  holidayHours: number;
+}) {
+  return api.put<{ success: boolean; totals: OvertimeTotals }>("/overtime", payload);
 }
 
 /** Nhập chấm công hàng loạt cho 1 kỳ (bulk upsert). */
