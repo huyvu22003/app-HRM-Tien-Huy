@@ -72,6 +72,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // Chốt an toàn: dù mạng chậm/không phản hồi, không để splash treo quá 6s.
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      setIsLoading(false);
+    };
+    const safety = setTimeout(finish, 6000);
+
     apiMe()
       .then((res) => {
         setUser(apiUserToAuthUser(res.user));
@@ -87,7 +96,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // ignore
         }
       })
-      .finally(() => setIsLoading(false));
+      .finally(() => {
+        clearTimeout(safety);
+        finish();
+      });
+
+    return () => clearTimeout(safety);
   }, []);
 
   const login = useCallback(async (phone: string, password: string) => {

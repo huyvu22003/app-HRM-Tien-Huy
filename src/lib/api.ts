@@ -65,10 +65,14 @@ async function request<T>(
     headers["Content-Type"] = "application/json";
   }
 
+  // Timeout để request không treo vô hạn (mạng di động chập chờn) → rơi về mock/lỗi.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
   try {
     const res = await fetch(`${API_BASE}${path}`, {
       ...options,
       headers,
+      signal: options.signal ?? controller.signal,
     });
 
     if (!res.ok) {
@@ -82,7 +86,7 @@ async function request<T>(
       throw new ApiError(res.status, msg);
     }
 
-    return res.json();
+    return await res.json();
   } catch (err) {
     const mock = mockResolve(path, options.method || "GET", options.body);
     if (mock !== null) {
@@ -90,6 +94,8 @@ async function request<T>(
       return mock as T;
     }
     throw err;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
