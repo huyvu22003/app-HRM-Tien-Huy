@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { AppShell } from "@/components/app-shell";
 import { CyberLoader } from "@/components/ui/cyber-loader";
@@ -29,12 +29,19 @@ export default function Home() {
   const [screen, setScreen] = useState("framework");
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | undefined>(undefined);
 
+  // Giữ splash cyberpunk tối thiểu ~1.4s mỗi lần tải/reload trang để thấy rõ hiệu ứng.
+  const [minBoot, setMinBoot] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setMinBoot(false), 1400);
+    return () => clearTimeout(t);
+  }, []);
+
   function navigate(next: string, id?: string) {
     setScreen(next);
     if (id) setSelectedEmployeeId(id);
   }
 
-  if (isLoading) {
+  if (isLoading || minBoot) {
     return <CyberLoader />;
   }
 
