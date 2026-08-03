@@ -48,7 +48,7 @@ function toApiEmployee(e: (typeof EMPLOYEES)[number], idx: number) {
     ins_status: e.insStatus || null,
     ins_salary_base: e.insSalaryBase ?? null,
     resign_reason: null, contract_date_1: null, contract_date_2: null, contract_date_3: null,
-    birth_year: null, birth_place: null, education: null, temp_address: null,
+    birth_year: null, birth_place: null, education: null, specialization: null, temp_address: null,
     cccd_issue_date: null, cccd_issue_place: null, nationality: null, religion: null, ethnicity: null,
     bank_account: null, bank_branch: null, bhxh_no: null, bhxh_increase_date: null,
     bhxh_decrease_date: null, relative_name: null, relative_relation: null, relative_phone: null,
@@ -98,6 +98,7 @@ type ApiEmp = {
   birth_year: string | null;
   birth_place: string | null;
   education: string | null;
+  specialization: string | null;
   temp_address: string | null;
   cccd_issue_date: string | null;
   cccd_issue_place: string | null;
@@ -231,6 +232,7 @@ function makeImportedEmployee(input: Record<string, unknown>, id: number): ApiEm
     birth_year: (input.birth_year as string) || null,
     birth_place: (input.birth_place as string) || null,
     education: (input.education as string) || null,
+    specialization: (input.specialization as string) || null,
     temp_address: (input.temp_address as string) || null,
     cccd_issue_date: (input.cccd_issue_date as string) || null,
     cccd_issue_place: (input.cccd_issue_place as string) || null,
