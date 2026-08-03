@@ -5,6 +5,7 @@ import { Lock, Phone, AlertCircle, Users2, Building2, Layers } from "lucide-reac
 import { useAuth } from "@/lib/auth-context";
 import { ROLE_META } from "@/lib/data/config";
 import { getInitials, cn } from "@/lib/utils";
+import { CyberLoader } from "@/components/ui/cyber-loader";
 
 const ROLE_BADGE_STYLE: Record<string, string> = {
   super: "bg-[#e6e9fb] text-[#4a4fc4]",
@@ -39,17 +40,26 @@ export function LoginScreen() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const res = await login(phone, password);
+    // Hiện splash tối thiểu ~1.2s để thấy rõ hiệu ứng, chạy song song với đăng nhập.
+    const [res] = await Promise.all([
+      login(phone, password),
+      new Promise((r) => setTimeout(r, 1200)),
+    ]);
     if (!res.success) {
       setError(res.message ?? "Đăng nhập thất bại. Vui lòng thử lại.");
+      setLoading(false);
     }
-    setLoading(false);
+    // Đăng nhập thành công: giữ splash (loading=true) tới khi app chuyển màn.
   }
 
   function fillDemo(acc: DemoAccount) {
     setPhone(acc.phone);
     setPassword(acc.password);
     setError("");
+  }
+
+  if (loading) {
+    return <CyberLoader label="ĐANG ĐĂNG NHẬP HỆ THỐNG" />;
   }
 
   return (
