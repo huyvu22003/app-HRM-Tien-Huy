@@ -116,9 +116,23 @@ interface EmployeeBody {
   level?: string;
   bank?: string;
   taxCode?: string;
+  specialization?: string | null;
   photoUrl?: string | null;
   compensation?: CompensationBody;
   insurance?: InsuranceBody;
+}
+
+// CI không tự chạy migration nên đảm bảo cột mở rộng tồn tại theo kiểu "thêm nếu
+// chưa có" (SQLite không hỗ trợ ADD COLUMN IF NOT EXISTS → kiểm tra qua PRAGMA).
+let employeeColsEnsured = false;
+async function ensureEmployeeColumns(env: Env): Promise<void> {
+  if (employeeColsEnsured) return;
+  const info = await env.DB.prepare("PRAGMA table_info(employees)").all<{ name: string }>();
+  const names = new Set(info.results.map((c) => c.name));
+  if (!names.has("specialization")) {
+    await env.DB.exec("ALTER TABLE employees ADD COLUMN specialization TEXT");
+  }
+  employeeColsEnsured = true;
 }
 
 export async function createEmployee(request: Request, env: Env): Promise<Response> {
@@ -162,6 +176,7 @@ export async function createEmployee(request: Request, env: Env): Promise<Respon
 export async function importEmployees(request: Request, env: Env): Promise<Response> {
   const body = await readJson<{ employees?: Array<Record<string, unknown>>; mode?: string }>(request);
   const rows = Array.isArray(body.employees) ? body.employees : [];
+  await ensureEmployeeColumns(env);
   // "replace" = đồng bộ sạch theo file: xoá trắng ô trống + xoá NV không có trong file.
   const isReplace = body.mode === "replace";
   const fileCodes = new Set<string>();
@@ -198,7 +213,7 @@ export async function importEmployees(request: Request, env: Env): Promise<Respo
                      "manager", "level", "bank", "tax_code",
                      // Phase 2: các trường hồ sơ mở rộng
                      "resign_reason", "contract_date_1", "contract_date_2", "contract_date_3",
-                     "birth_year", "birth_place", "education", "temp_address",
+                     "birth_year", "birth_place", "education", "specialization", "temp_address",
                      "cccd_issue_date", "cccd_issue_place", "nationality", "religion", "ethnicity",
                      "bank_account", "bank_branch", "bhxh_no", "bhxh_increase_date",
                      "bhxh_decrease_date", "relative_name", "relative_relation", "relative_phone"]) {
@@ -311,6 +326,7 @@ export async function deleteEmployee(_request: Request, env: Env, id: string): P
 export async function updateEmployee(request: Request, env: Env, id: string): Promise<Response> {
   const body = await readJson<EmployeeBody>(request);
 
+  await ensureEmployeeColumns(env);
   const existing = await env.DB.prepare("SELECT * FROM employees WHERE id = ?").bind(id).first();
   if (!existing) return error("Không tìm thấy nhân viên", 404);
 
@@ -351,6 +367,7 @@ export async function updateEmployee(request: Request, env: Env, id: string): Pr
     level: body.level,
     bank: body.bank,
     tax_code: body.taxCode,
+    specialization: body.specialization,
     photo_url: body.photoUrl,
   };
 

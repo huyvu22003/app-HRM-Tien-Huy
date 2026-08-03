@@ -1157,6 +1157,7 @@ export function EmployeeDetailScreen({
               {employee.temp_address && <ReadOnlyField label="Địa chỉ tạm trú" value={employee.temp_address} />}
               {employee.birth_place && <ReadOnlyField label="Nơi sinh" value={employee.birth_place} />}
               {employee.education && <ReadOnlyField label="Học lực" value={employee.education} />}
+              {employee.specialization && <ReadOnlyField label="Chuyên môn" value={employee.specialization} />}
               {employee.nationality && <ReadOnlyField label="Quốc tịch" value={employee.nationality} />}
               {employee.religion && <ReadOnlyField label="Tôn giáo" value={employee.religion} />}
               {employee.ethnicity && <ReadOnlyField label="Dân tộc" value={employee.ethnicity} />}
@@ -1177,6 +1178,7 @@ export function EmployeeDetailScreen({
                 <Field label="Chuyên cần" value={compensation?.attendance_bonus ? formatMoney(compensation.attendance_bonus) : "-"} editing={editing} field="attendance_bonus" form={form!} onChange={handleFieldChange} />
                 <Field label="Ngân hàng" value={employee.bank} editing={editing} field="bank" form={form!} onChange={handleFieldChange} />
                 {employee.bank_account && <ReadOnlyField label="Số tài khoản" value={employee.bank_account} />}
+                {employee.bank_branch && <ReadOnlyField label="Chi nhánh ngân hàng" value={employee.bank_branch} />}
               </div>
               {!editing && (
                 <SalaryHistorySection

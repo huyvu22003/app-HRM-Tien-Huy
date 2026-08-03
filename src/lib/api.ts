@@ -216,6 +216,7 @@ export interface ApiEmployee {
   birth_year: string | null;
   birth_place: string | null;
   education: string | null;
+  specialization: string | null;
   temp_address: string | null;
   cccd_issue_date: string | null;
   cccd_issue_place: string | null;
