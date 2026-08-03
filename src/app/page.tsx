@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { AppShell } from "@/components/app-shell";
+import { CyberLoader } from "@/components/ui/cyber-loader";
 import { LoginScreen } from "@/components/screens/login-screen";
 import { FrameworkScreen } from "@/components/screens/framework-screen";
 import { DashboardScreen } from "@/components/screens/dashboard-screen";
@@ -34,14 +35,7 @@ export default function Home() {
   }
 
   if (isLoading) {
-    return (
-      <div className="flex min-h-screen flex-1 items-center justify-center bg-[var(--color-page-bg)]">
-        <div className="flex flex-col items-center gap-3 text-[var(--color-text-muted)]">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-accent)]" />
-          <p className="text-sm">Đang tải HRM Tiến Huy...</p>
-        </div>
-      </div>
-    );
+    return <CyberLoader />;
   }
 
   if (!isAuthenticated) {
