@@ -53,6 +53,37 @@ function isPublicRoute(method: string, pathname: string): boolean {
   return PUBLIC_ROUTES.some((r) => r.method === method && r.pathname === pathname);
 }
 
+// --- Phân quyền theo vai trò (chặn ở API, không chỉ ẩn ở giao diện) ---
+const R_SUPER = ["super"] as const;
+const R_HR = ["super", "hr"] as const;
+const R_MANAGER = ["super", "hr", "lead"] as const;
+const R_ALL = ["super", "hr", "lead", "staff"] as const;
+
+// Quy tắc cho các thao tác THAY ĐỔI dữ liệu. Không khớp quy tắc nào → mặc định
+// chỉ super/hr (an toàn mặc định cho mọi route ghi mới thêm sau này).
+const AUTHZ: { m: string; re: RegExp; roles: readonly string[] }[] = [
+  { m: "POST", re: /^\/api\/auth\/logout$/, roles: R_ALL },
+  { m: "POST", re: /^\/api\/leave\/requests$/, roles: R_ALL }, // nộp đơn nghỉ: tự phục vụ
+  { m: "PUT", re: /^\/api\/leave\/requests\/\d+$/, roles: R_MANAGER }, // duyệt/từ chối
+  { m: "POST", re: /^\/api\/kpi\/\d+\/sign$/, roles: R_MANAGER },
+  { m: "POST", re: /^\/api\/kpi$/, roles: R_MANAGER },
+  { m: "PUT", re: /^\/api\/kpi\/\d+$/, roles: R_MANAGER },
+  { m: "POST", re: /^\/api\/rewards$/, roles: R_MANAGER },
+  { m: "PUT", re: /^\/api\/rewards\/\d+$/, roles: R_MANAGER },
+  { m: "POST", re: /^\/api\/improvement-plans$/, roles: R_MANAGER },
+  { m: "PUT", re: /^\/api\/config$/, roles: R_SUPER },
+  { m: "PUT", re: /^\/api\/permissions$/, roles: R_SUPER },
+];
+
+/** 403 nếu vai trò không đủ; null nếu được phép. Chỉ gác request thay đổi dữ liệu. */
+function authorize(method: string, pathname: string, role: string): Response | null {
+  if (method === "GET" || !pathname.startsWith("/api/")) return null;
+  const rule = AUTHZ.find((r) => r.m === method && r.re.test(pathname));
+  const allowed = rule ? rule.roles : R_HR;
+  if (allowed.includes(role)) return null;
+  return error("Bạn không có quyền thực hiện thao tác này.", 403);
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const origin = env.CORS_ORIGIN || "*";
@@ -82,6 +113,8 @@ export default {
           if (!auth) return withCors(error("Unauthorized", 401));
           userId = auth.userId;
           userRole = auth.role;
+          const denied = authorize(method, pathname, userRole);
+          if (denied) return withCors(denied);
         }
       }
 
