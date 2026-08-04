@@ -1469,11 +1469,38 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
 
   // Chỉnh nhanh trạng thái ngay trong bảng (khi ở chế độ chỉnh cột).
   const [savingStatus, setSavingStatus] = useState<number | null>(null);
+  // Khi chuyển sang "Nghỉ việc": hỏi/gợi ý Ngày nghỉ việc trước khi lưu.
+  const [resignPrompt, setResignPrompt] = useState<{ emp: ApiEmployee; date: string } | null>(null);
+
+  const todayISO = () => new Date().toISOString().slice(0, 10);
+  const asISODate = (v: string | null | undefined) =>
+    v && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : "";
+
   async function handleStatusChange(emp: ApiEmployee, status: string) {
     if (status === emp.status) return;
+    // Nghỉ việc → gợi ý ngày (điền sẵn ngày cũ nếu có, không thì hôm nay) để HR sửa/xác nhận.
+    if (status === "Nghỉ việc") {
+      setResignPrompt({ emp, date: asISODate(emp.resign_date) || todayISO() });
+      return;
+    }
     setSavingStatus(emp.id);
     try {
-      await updateEmployee(emp.id, { status });
+      // Quay lại "Đang làm việc" → xoá Ngày nghỉ việc (đã đi làm lại).
+      const payload = status === "Đang làm việc" ? { status, resignDate: null } : { status };
+      await updateEmployee(emp.id, payload);
+      refetch();
+    } finally {
+      setSavingStatus(null);
+    }
+  }
+
+  async function confirmResign() {
+    if (!resignPrompt) return;
+    const { emp, date } = resignPrompt;
+    setSavingStatus(emp.id);
+    try {
+      await updateEmployee(emp.id, { status: "Nghỉ việc", resignDate: date || null });
+      setResignPrompt(null);
       refetch();
     } finally {
       setSavingStatus(null);
@@ -2018,6 +2045,35 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
 
       {hoveredEmployee && hoverRect && (
         <EmployeeHoverCard employee={hoveredEmployee} anchorRect={hoverRect} />
+      )}
+
+      {resignPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setResignPrompt(null)}>
+          <div className="w-full max-w-[380px] rounded-[14px] bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="text-[15px] font-semibold text-[var(--color-text-primary)]">Chuyển sang “Nghỉ việc”</div>
+            <div className="mt-1 text-[12.5px] text-[var(--color-text-muted)]">
+              {resignPrompt.emp.name} · {resignPrompt.emp.code}
+            </div>
+            <label className="mt-4 block text-[12px] font-medium text-[var(--color-text-secondary)]">Ngày nghỉ việc</label>
+            <input
+              type="date"
+              value={resignPrompt.date}
+              onChange={(e) => setResignPrompt((s) => (s ? { ...s, date: e.target.value } : s))}
+              className="mt-1.5 h-10 w-full rounded-[10px] border border-[var(--color-border)] px-3 text-[13px] outline-none focus:border-[var(--color-accent)]"
+            />
+            <div className="mt-1.5 text-[11px] text-[var(--color-text-lighter)]">Điền sẵn hôm nay — sửa lại nếu nghỉ vào ngày khác.</div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setResignPrompt(null)} className="rounded-[8px] border border-[var(--color-border)] px-4 py-1.5 text-[12.5px] text-[var(--color-text-secondary)]">Huỷ</button>
+              <button
+                onClick={confirmResign}
+                disabled={savingStatus === resignPrompt.emp.id}
+                className="flex items-center gap-1.5 rounded-[8px] bg-[var(--color-danger)] px-4 py-1.5 text-[12.5px] font-medium text-white disabled:opacity-60"
+              >
+                {savingStatus === resignPrompt.emp.id && <Loader2 size={14} className="animate-spin" />} Xác nhận nghỉ việc
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <div className="flex items-center justify-between text-[12.5px] text-[var(--color-text-muted)]">
