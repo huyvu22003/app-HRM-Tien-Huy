@@ -2,6 +2,7 @@ import type { Env } from "./middleware/auth";
 import { authMiddleware } from "./middleware/auth";
 import { corsHeaders, handlePreflight } from "./middleware/cors";
 import { error, parseIdFromPath } from "./utils";
+import { ensureSchema } from "./migrate";
 
 import { login, logout, me } from "./handlers/auth";
 import { listEmployees, getEmployee, createEmployee, updateEmployee, deleteEmployee, importEmployees } from "./handlers/employees";
@@ -70,6 +71,9 @@ export default {
     };
 
     try {
+      // Tự động áp migration còn thiếu (một lần cho mỗi isolate, sau mỗi deploy).
+      if (pathname.startsWith("/api/")) await ensureSchema(env);
+
       let userId = 0;
       let userRole = "";
       if (!isPublicRoute(method, pathname)) {
