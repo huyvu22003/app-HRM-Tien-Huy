@@ -855,7 +855,20 @@ export function EmployeeDetailScreen({
   }
 
   function handleFieldChange(field: keyof EditableFields, value: string) {
-    setForm((prev) => (prev ? { ...prev, [field]: value } : prev));
+    setForm((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, [field]: value };
+      // Đổi trạng thái → tự xử lý Ngày nghỉ việc: sang "Nghỉ việc" điền sẵn hôm nay
+      // (nếu chưa có); quay lại "Đang làm việc" thì xoá.
+      if (field === "status") {
+        if (value === "Nghỉ việc" && !prev.resign_date) {
+          next.resign_date = new Date().toISOString().slice(0, 10);
+        } else if (value === "Đang làm việc") {
+          next.resign_date = "";
+        }
+      }
+      return next;
+    });
   }
 
   async function savePhoto() {
