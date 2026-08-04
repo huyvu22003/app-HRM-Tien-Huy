@@ -128,7 +128,6 @@ export function AttendanceScreen() {
       { id: "ot_weekday_hours", label: "OT NT (h)", align: "right", cell: (d) => mono(n0(d.row.ot_weekday_hours)), exportValue: (d) => d.row.ot_weekday_hours ?? 0 },
       { id: "ot_sunday_hours", label: "OT CN (h)", align: "right", cell: (d) => mono(n0(d.row.ot_sunday_hours)), exportValue: (d) => d.row.ot_sunday_hours ?? 0 },
       { id: "ot_holiday_hours", label: "OT Lễ (h)", align: "right", cell: (d) => mono(n0(d.row.ot_holiday_hours)), exportValue: (d) => d.row.ot_holiday_hours ?? 0 },
-      { id: "overtime_hours", label: "Tổng OT (h)", align: "right", cell: (d) => mono(d.row.overtime_hours), exportValue: (d) => d.row.overtime_hours },
       { id: "meal_allowance", label: "Tiền cơm TC", align: "right", cell: (d) => mono(money(d.row.meal_allowance)), exportValue: (d) => d.row.meal_allowance ?? 0, exportFormat: "money" },
       {
         id: "actions",

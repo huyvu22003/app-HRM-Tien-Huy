@@ -1253,6 +1253,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
     textCol("bhxh_no", "Mã số sổ BHXH"),
     textCol("bhxh_increase_date", "Báo tăng BHXH"),
     textCol("bhxh_decrease_date", "Báo giảm BHXH"),
+    moneyCol("ins_salary_base", "Mức đóng BHXH"),
     {
       id: "dependents",
       label: "NPT",
@@ -1454,6 +1455,18 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
   // (bấm nút Khoá cột để mở khoá) — để HR thao tác xoá trực tiếp khi cần.
   const showDeleteCol = !reorderLocked;
 
+  // Tự hiện thêm cột phù hợp theo tab trạng thái (dù đang ẩn) để HR thấy đúng thông tin.
+  const VIEW_EXTRA_COLS: Record<EmpView, string[]> = {
+    active: [],
+    resigned: ["resign_date", "resign_reason"],
+    maternity: [],
+    probation: ["join_date"],
+  };
+  const forcedColIds = new Set(VIEW_EXTRA_COLS[view]);
+  const shownColumns = forcedColIds.size
+    ? orderedColumns.filter((c) => !hidden.has(c.id) || forcedColIds.has(c.id))
+    : visibleColumns;
+
   // Cố định (đóng băng) khi cuộn ngang: STT + Mã thẻ + Họ và tên luôn ở bên trái.
   // Tính offset trái tích luỹ theo thứ tự cột hiện tại + độ rộng từng cột.
   const FROZEN_IDS = new Set(["code", "name"]);
@@ -1461,7 +1474,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
   const frozenLeft: Record<string, number> = {};
   {
     let acc = sttLeft + 52; // sau cột Xoá (nếu có) + cột STT
-    for (const c of visibleColumns) {
+    for (const c of shownColumns) {
       if (FROZEN_IDS.has(c.id)) frozenLeft[c.id] = acc;
       acc += colWidth(c);
     }
@@ -1568,7 +1581,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
   }
 
   async function handleExport() {
-    const cols = visibleColumns.filter((c) => c.exportValue && c.id !== "actions");
+    const cols = shownColumns.filter((c) => c.exportValue && c.id !== "actions");
     const sorted = getExportRows();
     if (!sorted) return;
     setExporting(true);
@@ -1804,7 +1817,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
             <colgroup>
               {showDeleteCol && <col style={{ width: 44 }} />}
               <col style={{ width: 52 }} />
-              {visibleColumns.map((c) => (
+              {shownColumns.map((c) => (
                 <col key={c.id} style={{ width: colWidth(c) }} />
               ))}
             </colgroup>
@@ -1814,7 +1827,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
                 {showDeleteCol && <th style={{ left: 0 }} className="sticky top-0 left-0 z-30 bg-white px-2 py-3 text-center font-medium text-[var(--color-danger)]">Xoá</th>}
                 {/* Fixed STT column — always first, never reordered */}
                 <th style={{ left: sttLeft }} className="sticky top-0 z-30 bg-white px-4 py-3 text-center font-medium">STT</th>
-                {visibleColumns.map((c) => {
+                {shownColumns.map((c) => {
                   const canDrag = !reorderLocked && !c.noReorder;
                   const canMenu = !!c.exportValue && !c.noReorder;
                   const canResize = !reorderLocked && !c.noReorder;
@@ -1903,7 +1916,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
             <tbody>
               {adding && (
                 <tr className="border-t border-[var(--color-accent)] bg-[var(--color-page-bg)]">
-                  <td colSpan={visibleColumns.length + 1 + (showDeleteCol ? 1 : 0)} className="px-4 py-3">
+                  <td colSpan={shownColumns.length + 1 + (showDeleteCol ? 1 : 0)} className="px-4 py-3">
                     <div className="flex flex-wrap items-end gap-2">
                       <input
                         autoFocus
@@ -1990,7 +2003,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
                   <td style={{ left: sttLeft }} className="sticky z-10 bg-white px-4 py-2.5 text-center font-[family-name:var(--font-mono)] text-[var(--color-text-lighter)] group-hover:bg-[var(--color-page-bg)]">
                     {(page - 1) * PAGE_SIZE + i + 1}
                   </td>
-                  {visibleColumns.map((c) => (
+                  {shownColumns.map((c) => (
                     <td
                       key={c.id}
                       data-col={c.id}
@@ -2033,7 +2046,7 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
               ))}
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={visibleColumns.length + 1 + (showDeleteCol ? 1 : 0)} className="px-4 py-12 text-center text-[var(--color-text-muted)]">
+                  <td colSpan={shownColumns.length + 1 + (showDeleteCol ? 1 : 0)} className="px-4 py-12 text-center text-[var(--color-text-muted)]">
                     Không tìm thấy nhân viên nào.
                   </td>
                 </tr>
