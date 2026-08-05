@@ -14,7 +14,7 @@ const MEAL_SHORT = 10000; // buổi OT 1–1.5h
  */
 export async function ensureOvertimeSchema(env: Env): Promise<void> {
   await env.DB.exec(
-    "CREATE TABLE IF NOT EXISTS overtime_daily (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_id INTEGER NOT NULL, period TEXT NOT NULL, day INTEGER NOT NULL, hours REAL NOT NULL DEFAULT 0, note TEXT, UNIQUE(employee_id, period, day))",
+    "CREATE TABLE IF NOT EXISTS overtime_daily (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_id INTEGER NOT NULL, period TEXT NOT NULL, day INTEGER NOT NULL, hours REAL NOT NULL DEFAULT 0, no_meal INTEGER NOT NULL DEFAULT 0, note TEXT, UNIQUE(employee_id, period, day))",
   );
   await env.DB.exec(
     "CREATE INDEX IF NOT EXISTS idx_ot_daily_emp_period ON overtime_daily(employee_id, period)",
@@ -24,6 +24,8 @@ export async function ensureOvertimeSchema(env: Env): Promise<void> {
 export interface OtDay {
   day: number;
   hours: number;
+  /** Buổi OT không tính tiền cơm (VD: TC trưa, TC trước giờ làm). */
+  noMeal?: boolean;
   note?: string | null;
 }
 
@@ -54,7 +56,7 @@ export function summarizeDays(
     if (h <= 0) continue;
     if (isSunday(period, d.day)) sunday += h;
     else weekday += h;
-    meal += mealForHours(h);
+    if (!d.noMeal) meal += mealForHours(h); // TC trưa / trước giờ làm → không tính cơm
   }
   return { weekday: +weekday.toFixed(2), sunday: +sunday.toFixed(2), meal };
 }
@@ -76,9 +78,9 @@ export async function replaceOvertimeDaily(
   const valid = days.filter((d) => Number(d.hours) > 0 && d.day >= 1 && d.day <= 31);
   for (const d of valid) {
     await env.DB.prepare(
-      "INSERT INTO overtime_daily (employee_id, period, day, hours, note) VALUES (?, ?, ?, ?, ?)",
+      "INSERT INTO overtime_daily (employee_id, period, day, hours, no_meal, note) VALUES (?, ?, ?, ?, ?, ?)",
     )
-      .bind(employeeId, period, d.day, Number(d.hours), d.note ?? null)
+      .bind(employeeId, period, d.day, Number(d.hours), d.noMeal ? 1 : 0, d.note ?? null)
       .run();
   }
 }
@@ -119,7 +121,7 @@ export async function listOvertimeDaily(request: Request, env: Env): Promise<Res
     return error("Thiếu employeeId hoặc period (YYYY-MM)", 400);
   }
   const { results } = await env.DB.prepare(
-    "SELECT day, hours, note FROM overtime_daily WHERE employee_id = ? AND period = ? ORDER BY day",
+    "SELECT day, hours, no_meal, note FROM overtime_daily WHERE employee_id = ? AND period = ? ORDER BY day",
   )
     .bind(employeeId, period)
     .all();
