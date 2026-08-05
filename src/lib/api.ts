@@ -451,6 +451,10 @@ export interface ApiAttendance {
   pb: number;
   vr: number;
   kp: number;
+  pc?: number;
+  pts?: number;
+  pt?: number;
+  tnld?: number;
   overtime_hours: number;
   ot_weekday_hours?: number;
   ot_sunday_hours?: number;

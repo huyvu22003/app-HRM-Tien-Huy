@@ -27,6 +27,10 @@ interface AttendanceUpdateBody {
   pn?: number;
   pb?: number;
   vr?: number;
+  pc?: number;
+  pts?: number;
+  pt?: number;
+  tnld?: number;
   otWeekdayHours?: number;
   otSundayHours?: number;
   otHolidayHours?: number;
@@ -42,6 +46,10 @@ interface AttendanceRow {
   pn: number;
   pb: number;
   vr: number;
+  pc: number | null;
+  pts: number | null;
+  pt: number | null;
+  tnld: number | null;
   ot_weekday_hours: number | null;
   ot_sunday_hours: number | null;
   ot_holiday_hours: number | null;
@@ -83,23 +91,32 @@ export async function updateAttendance(request: Request, env: Env, id: string): 
   const pn = keep(body.pn, existing.pn);
   const pb = keep(body.pb, existing.pb);
   const vr = keep(body.vr, existing.vr);
+  const pc = keep(body.pc, existing.pc);
+  const pts = keep(body.pts, existing.pts);
+  const pt = keep(body.pt, existing.pt);
+  const tnld = keep(body.tnld, existing.tnld);
   const otW = keep(body.otWeekdayHours, existing.ot_weekday_hours);
   const otS = keep(body.otSundayHours, existing.ot_sunday_hours);
   const otH = keep(body.otHolidayHours, existing.ot_holiday_hours);
   const gas = keep(body.gasDays, existing.gas_days);
   const meal = keep(body.mealAllowance, existing.meal_allowance);
 
-  const kp = Math.max(0, +(std - nc - pn - pb - vr).toFixed(2));
+  // KP = phần vắng không phép còn lại sau khi trừ mọi loại phép có lý do.
+  const kp = Math.max(0, +(std - nc - pn - pb - vr - pc - pts - pt - tnld).toFixed(2));
   const otTotal = +(otW + otS + otH).toFixed(2);
+  // Ngày phép hưởng 100% lương (bảng lương trả theo leave_days): PC + PT + TNLĐ.
+  // PTS (thai sản) không hưởng lương → không tính vào leave_days.
+  const leaveDays = +(pc + pt + tnld).toFixed(2);
 
   await env.DB.prepare(
     `UPDATE attendance SET
-       std_days = ?, actual_days = ?, pn = ?, pb = ?, vr = ?, kp = ?,
+       std_days = ?, actual_days = ?, pn = ?, pb = ?, vr = ?,
+       pc = ?, pts = ?, pt = ?, tnld = ?, kp = ?, leave_days = ?,
        ot_weekday_hours = ?, ot_sunday_hours = ?, ot_holiday_hours = ?, overtime_hours = ?,
        gas_days = ?, meal_allowance = ?, is_edited = 1
      WHERE id = ?`,
   )
-    .bind(std, nc, pn, pb, vr, kp, otW, otS, otH, otTotal, gas, meal, id)
+    .bind(std, nc, pn, pb, vr, pc, pts, pt, tnld, kp, leaveDays, otW, otS, otH, otTotal, gas, meal, id)
     .run();
 
   return json({ success: true });
@@ -165,19 +182,23 @@ export async function importAttendance(request: Request, env: Env): Promise<Resp
       continue;
     }
 
-    // Giữ PN/PB/VR hiện có (do HR/nghỉ phép nhập); import không mang các giá trị này.
+    // Giữ các loại phép hiện có (do HR/nghỉ phép nhập); import không mang giá trị này.
     const ex = await env.DB.prepare(
-      "SELECT pn, pb, vr FROM attendance WHERE employee_id = ? AND period = ?",
+      "SELECT pn, pb, vr, pc, pts, pt, tnld FROM attendance WHERE employee_id = ? AND period = ?",
     )
       .bind(empId, period)
-      .first<{ pn: number; pb: number; vr: number }>();
+      .first<{ pn: number; pb: number; vr: number; pc: number; pts: number; pt: number; tnld: number }>();
     const pn = ex?.pn ?? 0;
     const pb = ex?.pb ?? 0;
     const vr = ex?.vr ?? 0;
+    const pc = ex?.pc ?? 0;
+    const pts = ex?.pts ?? 0;
+    const pt = ex?.pt ?? 0;
+    const tnld = ex?.tnld ?? 0;
 
     const std = r.stdDays ?? 26;
     const nc = r.actualDays ?? 0;
-    const kp = Math.max(0, +(std - nc - pn - pb - vr).toFixed(2));
+    const kp = Math.max(0, +(std - nc - pn - pb - vr - pc - pts - pt - tnld).toFixed(2));
     const otW = r.otWeekdayHours ?? 0;
     const otS = r.otSundayHours ?? 0;
     const otH = r.otHolidayHours ?? 0;

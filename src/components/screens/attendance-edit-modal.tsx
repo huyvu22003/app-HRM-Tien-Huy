@@ -16,6 +16,10 @@ type FieldKey =
   | "pn"
   | "pb"
   | "vr"
+  | "pc"
+  | "pts"
+  | "pt"
+  | "tnld"
   | "ot_weekday_hours"
   | "ot_sunday_hours"
   | "ot_holiday_hours"
@@ -39,6 +43,10 @@ export function AttendanceEditModal({
     pn: String(num(row.pn)),
     pb: String(num(row.pb)),
     vr: String(num(row.vr)),
+    pc: String(num(row.pc)),
+    pts: String(num(row.pts)),
+    pt: String(num(row.pt)),
+    tnld: String(num(row.tnld)),
     ot_weekday_hours: String(num(row.ot_weekday_hours)),
     ot_sunday_hours: String(num(row.ot_sunday_hours)),
     ot_holiday_hours: String(num(row.ot_holiday_hours)),
@@ -56,7 +64,13 @@ export function AttendanceEditModal({
 
   // Giá trị dẫn xuất (khớp công thức server).
   const kp = useMemo(
-    () => Math.max(0, +(v("std_days") - v("actual_days") - v("pn") - v("pb") - v("vr")).toFixed(2)),
+    () =>
+      Math.max(
+        0,
+        +(
+          v("std_days") - v("actual_days") - v("pn") - v("pb") - v("vr") - v("pc") - v("pts") - v("pt") - v("tnld")
+        ).toFixed(2),
+      ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [form],
   );
@@ -76,6 +90,10 @@ export function AttendanceEditModal({
         pn: v("pn"),
         pb: v("pb"),
         vr: v("vr"),
+        pc: v("pc"),
+        pts: v("pts"),
+        pt: v("pt"),
+        tnld: v("tnld"),
         otWeekdayHours: v("ot_weekday_hours"),
         otSundayHours: v("ot_sunday_hours"),
         otHolidayHours: v("ot_holiday_hours"),
@@ -116,7 +134,11 @@ export function AttendanceEditModal({
             <NumField label="PN (phép năm)" value={form.pn} onChange={(x) => set("pn", x)} />
             <NumField label="PB (phép bệnh)" value={form.pb} onChange={(x) => set("pb", x)} />
             <NumField label="VR (việc riêng)" value={form.vr} onChange={(x) => set("vr", x)} />
-            <Derived label="KP (không phép)" value={kp} hint="= Công chuẩn − N.C − PN − PB − VR" />
+            <NumField label="PC (phép cưới)" value={form.pc} onChange={(x) => set("pc", x)} />
+            <NumField label="PT (phép tang)" value={form.pt} onChange={(x) => set("pt", x)} />
+            <NumField label="TNLĐ (tai nạn LĐ)" value={form.tnld} onChange={(x) => set("tnld", x)} />
+            <NumField label="PTS (thai sản)" value={form.pts} onChange={(x) => set("pts", x)} />
+            <Derived label="KP (không phép)" value={kp} hint="= Chuẩn − N.C − PN − PB − VR − PC − PT − TNLĐ − PTS" />
           </Section>
 
           <Section title="Tăng ca (giờ)">

@@ -46,6 +46,15 @@ const STEPS: { id: string; run: (env: Env) => Promise<void> }[] = [
       await addColumn(env, "employees", "specialization", "TEXT");
     },
   },
+  {
+    id: "011_attendance_leave_types",
+    run: async (env) => {
+      await addColumn(env, "attendance", "pc", "REAL DEFAULT 0"); // phép cưới
+      await addColumn(env, "attendance", "pts", "REAL DEFAULT 0"); // phép thai sản
+      await addColumn(env, "attendance", "pt", "REAL DEFAULT 0"); // phép tang
+      await addColumn(env, "attendance", "tnld", "REAL DEFAULT 0"); // tai nạn lao động
+    },
+  },
 ];
 
 /** Áp các bước migrate còn thiếu (một lần cho mỗi isolate). */
