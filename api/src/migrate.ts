@@ -55,6 +55,12 @@ const STEPS: { id: string; run: (env: Env) => Promise<void> }[] = [
       await addColumn(env, "attendance", "tnld", "REAL DEFAULT 0"); // tai nạn lao động
     },
   },
+  {
+    id: "012_overtime_no_meal",
+    run: async (env) => {
+      await addColumn(env, "overtime_daily", "no_meal", "INTEGER DEFAULT 0"); // buổi OT không tính cơm
+    },
+  },
 ];
 
 /** Áp các bước migrate còn thiếu (một lần cho mỗi isolate). */

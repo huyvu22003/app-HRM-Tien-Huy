@@ -43,6 +43,7 @@ export function OvertimeDayGridModal({
 
   // Khởi tạo giờ theo ngày từ dữ liệu server (chỉ set 1 lần khi data về).
   const [hours, setHours] = useState<Record<number, string> | null>(null);
+  const [noMeal, setNoMeal] = useState<Record<number, boolean> | null>(null);
   const [holiday, setHoliday] = useState<string>(String(row.ot_holiday_hours ?? 0));
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -54,8 +55,17 @@ export function OvertimeDayGridModal({
     return init;
   }, [hours, data]);
 
+  const effectiveNoMeal: Record<number, boolean> = useMemo(() => {
+    if (noMeal) return noMeal;
+    const init: Record<number, boolean> = {};
+    for (const d of data?.data ?? []) if (d.no_meal) init[d.day] = true;
+    return init;
+  }, [noMeal, data]);
+
   const setDay = (day: number, val: string) =>
     setHours({ ...effectiveHours, [day]: val });
+  const toggleMeal = (day: number) =>
+    setNoMeal({ ...effectiveNoMeal, [day]: !effectiveNoMeal[day] });
 
   const isSunday = (day: number) => new Date(y, m - 1, day).getDay() === 0;
 
@@ -68,7 +78,7 @@ export function OvertimeDayGridModal({
       if (h <= 0) continue;
       if (isSunday(d)) sunday += h;
       else weekday += h;
-      meal += mealForHours(h);
+      if (!effectiveNoMeal[d]) meal += mealForHours(h);
     }
     const hol = Number(holiday) || 0;
     return {
@@ -79,14 +89,14 @@ export function OvertimeDayGridModal({
       meal,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveHours, holiday, daysInMonth]);
+  }, [effectiveHours, effectiveNoMeal, holiday, daysInMonth]);
 
   async function handleSave() {
     setSaving(true);
     setErr(null);
     try {
       const days = Object.entries(effectiveHours)
-        .map(([day, h]) => ({ day: Number(day), hours: Number(h) || 0 }))
+        .map(([day, h]) => ({ day: Number(day), hours: Number(h) || 0, noMeal: !!effectiveNoMeal[Number(day)] }))
         .filter((d) => d.hours > 0);
       const res = await saveOvertimeDaily({
         employeeId: row.employee_id,
@@ -119,7 +129,7 @@ export function OvertimeDayGridModal({
 
         <div className="mb-3 flex items-start gap-1.5 rounded-[8px] bg-[var(--color-page-bg)] px-3 py-2 text-[11.5px] leading-relaxed text-[var(--color-text-muted)]">
           <Info size={13} className="mt-0.5 flex-shrink-0" />
-          <span>Nhập số <b>giờ OT</b> mỗi ngày (bổ sung ngày quên chấm tại đây). Ngày <b className="text-[var(--color-danger)]">CN</b> tính OT chủ nhật; còn lại là ngày thường. Tiền cơm tự tính theo từng buổi.</span>
+          <span>Nhập số <b>giờ OT</b> mỗi ngày. Ngày <b className="text-[var(--color-danger)]">CN</b> tính OT chủ nhật; còn lại là ngày thường. Bấm nhãn <b>cơm</b> ở ô để <b>không tính tiền cơm</b> buổi đó (TC trưa / TC trước giờ làm).</span>
         </div>
 
         {isLoading ? (
@@ -134,8 +144,10 @@ export function OvertimeDayGridModal({
               {cells.map((d) => {
                 const sun = isSunday(d);
                 const h = effectiveHours[d] ?? "";
+                const hasH = Number(h) > 0;
+                const off = !!effectiveNoMeal[d];
                 return (
-                  <div key={d} className={cn("flex flex-col gap-0.5 rounded-[8px] border p-1", sun ? "border-[var(--color-danger)]/30 bg-[var(--color-danger-bg)]/40" : "border-[var(--color-border-light)]", Number(h) > 0 && "ring-1 ring-[var(--color-accent)]")}>
+                  <div key={d} className={cn("flex flex-col gap-0.5 rounded-[8px] border p-1", sun ? "border-[var(--color-danger)]/30 bg-[var(--color-danger-bg)]/40" : "border-[var(--color-border-light)]", hasH && "ring-1 ring-[var(--color-accent)]")}>
                     <span className={cn("text-[10px] leading-none", sun ? "text-[var(--color-danger)]" : "text-[var(--color-text-lighter)]")}>{d}</span>
                     <input
                       type="number"
@@ -146,6 +158,19 @@ export function OvertimeDayGridModal({
                       onChange={(e) => setDay(d, e.target.value)}
                       className="w-full rounded-[5px] border border-[var(--color-border)] px-1 py-0.5 text-center text-[12px] font-[family-name:var(--font-mono)] outline-none focus:border-[var(--color-accent)]"
                     />
+                    {hasH && (
+                      <button
+                        type="button"
+                        onClick={() => toggleMeal(d)}
+                        title={off ? "Không tính tiền cơm (TC trưa/trước giờ). Bấm để tính lại." : "Có tính tiền cơm. Bấm để bỏ."}
+                        className={cn(
+                          "rounded-[4px] py-[1px] text-center text-[9px] font-medium leading-tight",
+                          off ? "bg-[var(--color-danger-bg)] text-[var(--color-danger)] line-through" : "bg-[var(--color-page-bg)] text-[var(--color-text-lighter)]",
+                        )}
+                      >
+                        cơm
+                      </button>
+                    )}
                   </div>
                 );
               })}

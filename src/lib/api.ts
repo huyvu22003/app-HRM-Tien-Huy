@@ -502,6 +502,7 @@ export interface AttendanceImportRow {
 export interface ApiOvertimeDay {
   day: number;
   hours: number;
+  no_meal?: number;
   note: string | null;
 }
 
@@ -524,7 +525,7 @@ export function fetchOvertimeDaily(employeeId: number, period: string) {
 export function saveOvertimeDaily(payload: {
   employeeId: number;
   period: string;
-  days: { day: number; hours: number; note?: string | null }[];
+  days: { day: number; hours: number; noMeal?: boolean; note?: string | null }[];
   holidayHours: number;
 }) {
   return api.put<{ success: boolean; totals: OvertimeTotals }>("/overtime", payload);
