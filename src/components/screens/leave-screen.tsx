@@ -6,6 +6,7 @@ import { fetchLeaveRequests, createLeaveRequest, type ApiLeaveRequest } from "@/
 import { useQuery } from "@/lib/hooks";
 import { useAuth } from "@/lib/auth-context";
 import { cn, formatDate } from "@/lib/utils";
+import { DateField } from "@/components/ui/date-field";
 import { MaternityPanel } from "./maternity-panel";
 
 // Các loại nghỉ có thể tạo đơn (gồm cả thai sản).
@@ -244,7 +245,7 @@ export function LeaveScreen() {
             <div className="mb-4 grid grid-cols-2 gap-3">
               <div>
                 <label className="mb-1.5 block text-[12px] font-medium text-[var(--color-text-secondary)]">Từ ngày</label>
-                <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="h-10 w-full rounded-[8px] border border-[var(--color-border)] px-3 text-[13px] outline-none focus:border-[var(--color-accent)]" />
+                <DateField value={fromDate} onChange={setFromDate} className="h-10 w-full rounded-[8px] border border-[var(--color-border)] px-3 text-[13px] outline-none focus:border-[var(--color-accent)]" />
               </div>
               <div>
                 <label className="mb-1.5 block text-[12px] font-medium text-[var(--color-text-secondary)]">Số ngày nghỉ</label>

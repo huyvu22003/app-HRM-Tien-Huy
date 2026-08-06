@@ -7,6 +7,7 @@ import {
   fetchAllEmployees, type ApiMaternity, type ApiPrenatalCheckup,
 } from "@/lib/api";
 import { useQuery } from "@/lib/hooks";
+import { DateField } from "@/components/ui/date-field";
 import { cn, formatDate } from "@/lib/utils";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -116,8 +117,8 @@ function MaternityCard({ record, expanded, onToggle, onSaved }: { record: ApiMat
       {expanded && (
         <div className="border-t border-[var(--color-border-light)] px-4 py-4">
           <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-            <Fld label="Ngày dự sinh"><input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="fld" /></Fld>
-            <Fld label="Ngày bắt đầu nghỉ sanh"><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="fld" /></Fld>
+            <Fld label="Ngày dự sinh"><DateField value={dueDate} onChange={setDueDate} className="fld" /></Fld>
+            <Fld label="Ngày bắt đầu nghỉ sanh"><DateField value={startDate} onChange={setStartDate} className="fld" /></Fld>
             <Fld label="Trạng thái">
               <select value={status} onChange={(e) => setStatus(e.target.value)} className="fld">
                 {STATUS_OPTS.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
@@ -142,7 +143,7 @@ function MaternityCard({ record, expanded, onToggle, onSaved }: { record: ApiMat
                 {rows.map((r) => (
                   <tr key={r.seq} className="border-t border-[var(--color-border-light)]">
                     <td className="py-1.5 pr-2 font-[family-name:var(--font-mono)] text-[var(--color-text-muted)]">{r.seq}</td>
-                    <td className="py-1.5 pr-2"><input type="date" value={r.date} onChange={(e) => setRow(r.seq, { date: e.target.value })} className="fld !h-8" /></td>
+                    <td className="py-1.5 pr-2"><DateField value={r.date} onChange={(iso) => setRow(r.seq, { date: iso })} className="fld !h-8" /></td>
                     <td className="py-1.5 pr-2">
                       <button onClick={() => setRow(r.seq, { special: !r.special })} disabled={!r.date} className={cn("rounded-[6px] border px-2 py-1 text-[11px] font-medium disabled:opacity-40", r.special ? "border-[var(--color-warning)] bg-[var(--color-warning-bg)] text-[var(--color-warning)]" : "border-[var(--color-border)] text-[var(--color-text-muted)]")}>{r.special ? "Đặc biệt" : "Bình thường"}</button>
                     </td>
@@ -219,8 +220,8 @@ function RegisterModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
           {employees.map((e) => <option key={e.id} value={e.id}>{e.name} · {e.code}</option>)}
         </select>
         <div className="mb-4 grid grid-cols-2 gap-3">
-          <label className="flex flex-col gap-1"><span className="text-[12px] font-medium text-[var(--color-text-secondary)]">Ngày báo mang thai</span><input type="date" value={notifiedDate} onChange={(e) => setNotifiedDate(e.target.value)} className="h-10 rounded-[8px] border border-[var(--color-border)] px-3 text-[13px] outline-none focus:border-[var(--color-maternity)]" /></label>
-          <label className="flex flex-col gap-1"><span className="text-[12px] font-medium text-[var(--color-text-secondary)]">Ngày dự sinh</span><input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="h-10 rounded-[8px] border border-[var(--color-border)] px-3 text-[13px] outline-none focus:border-[var(--color-maternity)]" /></label>
+          <label className="flex flex-col gap-1"><span className="text-[12px] font-medium text-[var(--color-text-secondary)]">Ngày báo mang thai</span><DateField value={notifiedDate} onChange={setNotifiedDate} className="h-10 w-full rounded-[8px] border border-[var(--color-border)] px-3 text-[13px] outline-none focus:border-[var(--color-maternity)]" /></label>
+          <label className="flex flex-col gap-1"><span className="text-[12px] font-medium text-[var(--color-text-secondary)]">Ngày dự sinh</span><DateField value={dueDate} onChange={setDueDate} className="h-10 w-full rounded-[8px] border border-[var(--color-border)] px-3 text-[13px] outline-none focus:border-[var(--color-maternity)]" /></label>
         </div>
         {err && <div className="mb-3 rounded-[8px] bg-[var(--color-danger-bg)] px-3 py-2 text-[12px] text-[var(--color-danger)]">{err}</div>}
         <div className="flex gap-2">
