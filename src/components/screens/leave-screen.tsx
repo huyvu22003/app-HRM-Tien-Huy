@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Plus, X, HeartHandshake, CheckCircle2, Clock, XCircle, Loader2, Calendar } from "lucide-react";
+import { useState } from "react";
+import { Plus, X, CheckCircle2, Clock, XCircle, Loader2 } from "lucide-react";
 import { fetchLeaveRequests, createLeaveRequest, type ApiLeaveRequest } from "@/lib/api";
 import { useQuery } from "@/lib/hooks";
 import { useAuth } from "@/lib/auth-context";
-import { EMPLOYEES } from "@/lib/data/employees";
 import { cn, formatDate } from "@/lib/utils";
+import { MaternityPanel } from "./maternity-panel";
 
 // Các loại nghỉ có thể tạo đơn (gồm cả thai sản).
 const CREATE_TYPES: { code: string; label: string }[] = [
@@ -16,7 +16,6 @@ const CREATE_TYPES: { code: string; label: string }[] = [
   { code: "PC", label: "Phép cưới" },
   { code: "PT", label: "Phép tang" },
   { code: "TNLD", label: "Tai nạn LĐ" },
-  { code: "TS", label: "Nghỉ thai sản" },
 ];
 const TYPE_LABEL: Record<string, string> = Object.fromEntries(CREATE_TYPES.map((t) => [t.code, t.label]));
 
@@ -77,14 +76,11 @@ export function LeaveScreen() {
   const requests: ApiLeaveRequest[] = data?.data ?? [];
   const filtered = requests.filter((r) => matchesFilter(r.status, statusFilter));
 
-  const maternityEmployees = useMemo(() => EMPLOYEES.filter((e) => e.status === "Nghỉ thai sản"), []);
   const balance = { entitled: 12, carried: 2, used: 5, get remaining() { return this.entitled + this.carried - this.used; } };
 
-  const isMaternity = leaveType === "TS";
-
-  function openCreate(preset?: string) {
-    setLeaveType(preset ?? "PN");
-    setDays(preset === "TS" ? 180 : 1);
+  function openCreate() {
+    setLeaveType("PN");
+    setDays(1);
     setFromDate(todayISO());
     setReason("");
     setErr(null);
@@ -131,9 +127,6 @@ export function LeaveScreen() {
             )}
           >
             {label}
-            {key === "maternity" && maternityEmployees.length > 0 && (
-              <span className="ml-1.5 rounded-[10px] bg-[var(--color-maternity-bg)] px-1.5 py-0.5 text-[10.5px] text-[var(--color-maternity)]">{maternityEmployees.length}</span>
-            )}
           </button>
         ))}
       </div>
@@ -225,47 +218,13 @@ export function LeaveScreen() {
         </>
       )}
 
-      {tab === "maternity" && (
-        <div className="rounded-[14px] border border-[var(--color-maternity)] bg-[var(--color-maternity-bg)] p-[18px]">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="flex items-center gap-2 text-[13px] font-semibold text-[var(--color-maternity)]">
-              <HeartHandshake size={16} /> Chế độ thai sản
-            </div>
-            <button onClick={() => openCreate("TS")} className="flex items-center gap-1.5 rounded-[8px] bg-[var(--color-maternity)] px-3 py-1.5 text-[12px] font-medium text-white">
-              <Plus size={14} /> Đăng ký nghỉ thai sản
-            </button>
-          </div>
-          {maternityEmployees.length === 0 ? (
-            <p className="text-[12.5px] text-[var(--color-text-muted)]">Không có trường hợp nghỉ thai sản. Bấm “Đăng ký nghỉ thai sản” để tạo.</p>
-          ) : (
-            <div className="flex flex-col gap-2.5">
-              <p className="text-[12.5px] text-[var(--color-text-muted)]">{maternityEmployees.length} trường hợp đang trong thời gian nghỉ thai sản theo quy định BHXH (nghỉ 6 tháng, không trừ phép năm).</p>
-              {maternityEmployees.map((e) => {
-                const startDate = e.leaveDate || "";
-                const endMonth = startDate ? (() => { const d = new Date(startDate); d.setMonth(d.getMonth() + 6); return `${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`; })() : "";
-                return (
-                  <div key={e.code} className="flex items-center justify-between rounded-[10px] bg-white/70 px-3 py-2.5">
-                    <div>
-                      <div className="text-[12.5px] font-medium text-[var(--color-text-primary)]">{e.name}</div>
-                      <div className="text-[11px] text-[var(--color-text-muted)]">{e.department} · Mã {e.code}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="flex items-center gap-1 text-[11px] text-[var(--color-maternity)]"><Calendar size={11} /> Từ {formatDate(startDate)}</div>
-                      {endMonth && <div className="text-[10.5px] text-[var(--color-text-lighter)]">Dự kiến quay lại: {endMonth}</div>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
+      {tab === "maternity" && <MaternityPanel />}
 
       {modalOpen && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-[14px] bg-white p-[20px]">
             <div className="mb-4 flex items-center justify-between">
-              <div className="text-[15px] font-semibold text-[var(--color-text-primary)]">{isMaternity ? "Đăng ký nghỉ thai sản" : "Tạo đơn nghỉ phép"}</div>
+              <div className="text-[15px] font-semibold text-[var(--color-text-primary)]">Tạo đơn nghỉ phép</div>
               <button onClick={() => setModalOpen(false)}><X size={18} className="text-[var(--color-text-lighter)]" /></button>
             </div>
 
@@ -274,8 +233,8 @@ export function LeaveScreen() {
               {CREATE_TYPES.map((t) => (
                 <button
                   key={t.code}
-                  onClick={() => { setLeaveType(t.code); if (t.code === "TS" && days < 30) setDays(180); }}
-                  className={cn("rounded-[20px] border px-3 py-1.5 text-[12.5px] font-medium", leaveType === t.code ? (t.code === "TS" ? "border-[var(--color-maternity)] bg-[var(--color-maternity)] text-white" : "border-[var(--color-accent)] bg-[var(--color-accent)] text-white") : "border-[var(--color-border)] text-[var(--color-text-muted)]")}
+                  onClick={() => setLeaveType(t.code)}
+                  className={cn("rounded-[20px] border px-3 py-1.5 text-[12.5px] font-medium", leaveType === t.code ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-white" : "border-[var(--color-border)] text-[var(--color-text-muted)]")}
                 >
                   {t.label}
                 </button>
@@ -296,12 +255,8 @@ export function LeaveScreen() {
             <label className="mb-1.5 block text-[12px] font-medium text-[var(--color-text-secondary)]">Lý do (không bắt buộc)</label>
             <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="VD: về quê, khám bệnh…" className="mb-4 h-10 w-full rounded-[8px] border border-[var(--color-border)] px-3 text-[13px] outline-none focus:border-[var(--color-accent)]" />
 
-            <div className={cn("mb-4 rounded-[10px] p-3 text-[12.5px]", isMaternity ? "bg-[var(--color-maternity-bg)] text-[var(--color-maternity)]" : "bg-[var(--color-page-bg)] text-[var(--color-text-muted)]")}>
-              {isMaternity ? (
-                <>Nghỉ thai sản <b>{days}</b> ngày theo chế độ BHXH — <b>không trừ phép năm</b>. Từ {formatDate(fromDate)}.</>
-              ) : (
-                <>Ghi nhận <b className="text-[var(--color-text-primary)]">{days}</b> ngày nghỉ loại <b className="text-[var(--color-text-primary)]">{TYPE_LABEL[leaveType]}</b> vào kỳ {periodOf(fromDate)}.</>
-              )}
+            <div className="mb-4 rounded-[10px] bg-[var(--color-page-bg)] p-3 text-[12.5px] text-[var(--color-text-muted)]">
+              Ghi nhận <b className="text-[var(--color-text-primary)]">{days}</b> ngày nghỉ loại <b className="text-[var(--color-text-primary)]">{TYPE_LABEL[leaveType]}</b> vào kỳ {periodOf(fromDate)}.
             </div>
 
             {err && <div className="mb-3 rounded-[8px] bg-[var(--color-danger-bg)] px-3 py-2 text-[12px] text-[var(--color-danger)]">{err}</div>}

@@ -14,6 +14,7 @@ import {
 } from "./handlers/departments";
 import { listAttendance, updateAttendance, importAttendance, listAttendancePeriods } from "./handlers/attendance";
 import { listOvertimeDaily, saveOvertimeDaily } from "./handlers/overtime";
+import { listMaternity, createMaternity, updateMaternity, saveCheckups } from "./handlers/maternity";
 import {
   listLeaveRequests,
   createLeaveRequest,
@@ -200,6 +201,20 @@ export default {
       // --- Overtime (chi tiết tăng ca theo ngày) ---
       if (method === "GET" && pathname === "/api/overtime") return withCors(await listOvertimeDaily(request, env));
       if (method === "PUT" && pathname === "/api/overtime") return withCors(await saveOvertimeDaily(request, env));
+
+      // --- Maternity (theo dõi thai kỳ + khám thai) ---
+      if (method === "GET" && pathname === "/api/maternity") return withCors(await listMaternity(request, env));
+      if (method === "POST" && pathname === "/api/maternity") return withCors(await createMaternity(request, env));
+      if (method === "PUT" && /^\/api\/maternity\/\d+\/checkups$/.test(pathname)) {
+        const id = parseIdFromPath(pathname, "/api/maternity/");
+        if (!id) return withCors(error("Thiếu id hồ sơ thai kỳ", 400));
+        return withCors(await saveCheckups(request, env, id));
+      }
+      if (method === "PUT" && pathname.startsWith("/api/maternity/")) {
+        const id = parseIdFromPath(pathname, "/api/maternity/");
+        if (!id) return withCors(error("Thiếu id hồ sơ thai kỳ", 400));
+        return withCors(await updateMaternity(request, env, id));
+      }
 
       // --- Leave ---
       if (method === "GET" && pathname === "/api/leave/requests") return withCors(await listLeaveRequests(request, env));
