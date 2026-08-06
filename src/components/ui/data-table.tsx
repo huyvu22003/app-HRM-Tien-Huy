@@ -247,6 +247,13 @@ export interface DataTableProps<Row> {
   isColumnDeletable?: (c: ColumnDef<Row>) => boolean;
   /** Xoá cột (thường là cột tùy chỉnh). */
   onDeleteColumn?: (id: string) => void;
+  /**
+   * Cột cố định ngoài cùng bên trái (trước cả STT) — dùng cho cột thao tác để
+   * dễ bấm khi bảng rộng phải cuộn ngang. Không tham gia ẩn/hiện/đổi vị trí.
+   */
+  leadingColumn?: ColumnDef<Row>;
+  /** Độ rộng cột cố định bên trái (mặc định 96px). */
+  leadingWidth?: number;
 }
 
 export function DataTable<Row>({
@@ -265,7 +272,10 @@ export function DataTable<Row>({
   onAddColumn,
   isColumnDeletable,
   onDeleteColumn,
+  leadingColumn,
+  leadingWidth = 96,
 }: DataTableProps<Row>) {
+  const leadW = leadingColumn ? leadingWidth : 0;
   const {
     hidden,
     toggle,
@@ -373,7 +383,7 @@ export function DataTable<Row>({
   const firstLockedIdx = visibleColumns.findIndex((c) => c.locked);
   const frozenLeft: Record<string, number> = {};
   if (firstLockedIdx >= 0) {
-    let acc = STT_W;
+    let acc = leadW + STT_W;
     for (let idx = 0; idx <= firstLockedIdx; idx++) {
       const c = visibleColumns[idx];
       frozenLeft[c.id] = acc;
@@ -409,8 +419,9 @@ export function DataTable<Row>({
       </div>
 
       <div className="max-h-[calc(100vh-260px)] overflow-auto rounded-[14px] border border-[var(--color-border)] bg-white">
-        <table ref={tableRef} className="w-full table-fixed text-[13px]" style={{ minWidth }}>
+        <table ref={tableRef} className="w-full table-fixed text-[13px]" style={{ minWidth: minWidth + leadW }}>
           <colgroup>
+            {leadingColumn && <col style={{ width: leadW }} />}
             <col style={{ width: 52 }} />
             {visibleColumns.map((c) => (
               <col key={c.id} style={{ width: colWidth(c) }} />
@@ -418,7 +429,12 @@ export function DataTable<Row>({
           </colgroup>
           <thead>
             <tr className="text-left text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">
-              <th style={{ left: 0 }} className="sticky top-0 left-0 z-30 bg-white px-4 py-3 text-center font-medium">STT</th>
+              {leadingColumn && (
+                <th style={{ left: 0 }} className="sticky top-0 left-0 z-30 bg-white px-2 py-3 text-center font-medium">
+                  {leadingColumn.label}
+                </th>
+              )}
+              <th style={{ left: leadW }} className="sticky top-0 z-30 bg-white px-4 py-3 text-center font-medium">STT</th>
               {visibleColumns.map((c) => {
                 const canDrag = !reorderLocked && !c.noReorder;
                 const canMenu = !!c.exportValue && !c.noReorder;
@@ -513,7 +529,12 @@ export function DataTable<Row>({
                     rowClassName?.(row, i),
                   )}
                 >
-                  <td style={{ left: 0 }} className="sticky left-0 z-10 bg-white px-4 py-2.5 text-center font-[family-name:var(--font-mono)] text-[var(--color-text-lighter)] group-hover:bg-[var(--color-page-bg)]">
+                  {leadingColumn && (
+                    <td style={{ left: 0 }} className="sticky left-0 z-10 bg-white px-2 py-2.5 group-hover:bg-[var(--color-page-bg)]">
+                      {leadingColumn.cell(row, i)}
+                    </td>
+                  )}
+                  <td style={{ left: leadW }} className="sticky z-10 bg-white px-4 py-2.5 text-center font-[family-name:var(--font-mono)] text-[var(--color-text-lighter)] group-hover:bg-[var(--color-page-bg)]">
                     {stt}
                   </td>
                   {visibleColumns.map((c) => (
@@ -537,7 +558,7 @@ export function DataTable<Row>({
             })}
             {pageRows.length === 0 && (
               <tr>
-                <td colSpan={visibleColumns.length + 1} className="px-4 py-12 text-center text-[var(--color-text-muted)]">
+                <td colSpan={visibleColumns.length + 1 + (leadingColumn ? 1 : 0)} className="px-4 py-12 text-center text-[var(--color-text-muted)]">
                   {emptyText}
                 </td>
               </tr>
