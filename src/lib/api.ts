@@ -579,6 +579,65 @@ export function fetchLeaveRequests(params?: {
   );
 }
 
+// --- Maternity (theo dõi thai kỳ + khám thai) ---
+
+export interface ApiPrenatalCheckup {
+  id: number;
+  maternity_id: number;
+  seq: number;
+  checkup_date: string | null;
+  days: number;
+  special: number;
+  doc_submitted: number;
+  note: string | null;
+}
+
+export interface ApiMaternity {
+  id: number;
+  employee_id: number;
+  employee_name: string;
+  employee_code: string;
+  department_name: string | null;
+  notified_date: string | null;
+  due_date: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  months: number;
+  children: number;
+  status: string;
+  note: string | null;
+  checkups: ApiPrenatalCheckup[];
+}
+
+export function fetchMaternity() {
+  return api.get<{ data: ApiMaternity[] }>("/maternity");
+}
+
+export function createMaternity(data: {
+  employeeId: number;
+  notifiedDate?: string | null;
+  dueDate?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  months?: number;
+  children?: number;
+  status?: string;
+  note?: string | null;
+}) {
+  return api.post<{ id: number }>("/maternity", data);
+}
+
+export function updateMaternity(id: number, data: Record<string, unknown>) {
+  return api.put<{ success: boolean }>(`/maternity/${id}`, data);
+}
+
+export function saveMaternityCheckups(
+  id: number,
+  checkups: { seq: number; date?: string | null; days?: number; special?: boolean; docSubmitted?: boolean; note?: string | null }[],
+) {
+  return api.put<{ success: boolean; count: number }>(`/maternity/${id}/checkups`, { checkups });
+}
+
 export function createLeaveRequest(data: {
   employeeId: number;
   typeCode: string;

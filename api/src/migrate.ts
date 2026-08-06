@@ -61,6 +61,20 @@ const STEPS: { id: string; run: (env: Env) => Promise<void> }[] = [
       await addColumn(env, "overtime_daily", "no_meal", "INTEGER DEFAULT 0"); // buổi OT không tính cơm
     },
   },
+  {
+    id: "013_maternity_tracking",
+    run: async (env) => {
+      await addColumn(env, "maternity_leaves", "notified_date", "TEXT");
+      await addColumn(env, "maternity_leaves", "due_date", "TEXT");
+      await addColumn(env, "maternity_leaves", "note", "TEXT");
+      await env.DB.exec(
+        "CREATE TABLE IF NOT EXISTS prenatal_checkups (id INTEGER PRIMARY KEY AUTOINCREMENT, maternity_id INTEGER NOT NULL, seq INTEGER NOT NULL, checkup_date TEXT, days REAL NOT NULL DEFAULT 1, special INTEGER NOT NULL DEFAULT 0, doc_submitted INTEGER NOT NULL DEFAULT 0, note TEXT, UNIQUE(maternity_id, seq))",
+      );
+      await env.DB.exec(
+        "CREATE INDEX IF NOT EXISTS idx_prenatal_maternity ON prenatal_checkups(maternity_id)",
+      );
+    },
+  },
 ];
 
 /** Áp các bước migrate còn thiếu (một lần cho mỗi isolate). */

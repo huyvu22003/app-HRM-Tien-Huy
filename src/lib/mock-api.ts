@@ -928,6 +928,26 @@ const MOCK_ROUTES: MockRoute[] = [
     }),
   },
   {
+    match: /^\/maternity$/,
+    method: "GET",
+    handler: () => ({ data: [] }),
+  },
+  {
+    match: /^\/maternity$/,
+    method: "POST",
+    handler: () => ({ id: Date.now() }),
+  },
+  {
+    match: /^\/maternity\/\d+\/checkups$/,
+    method: "PUT",
+    handler: () => ({ success: true, count: 0 }),
+  },
+  {
+    match: /^\/maternity\/\d+$/,
+    method: "PUT",
+    handler: () => ({ success: true }),
+  },
+  {
     match: /^\/rewards$/,
     handler: (_path, params) => {
       const period = params.get("period") || "2026-06";
