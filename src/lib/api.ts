@@ -589,6 +589,8 @@ export interface ApiPrenatalCheckup {
   days: number;
   special: number;
   doc_submitted: number;
+  doc_key: string | null;
+  doc_name: string | null;
   note: string | null;
 }
 
@@ -633,9 +635,63 @@ export function updateMaternity(id: number, data: Record<string, unknown>) {
 
 export function saveMaternityCheckups(
   id: number,
-  checkups: { seq: number; date?: string | null; days?: number; special?: boolean; docSubmitted?: boolean; note?: string | null }[],
+  checkups: {
+    seq: number;
+    date?: string | null;
+    days?: number;
+    special?: boolean;
+    docSubmitted?: boolean;
+    docKey?: string | null;
+    docName?: string | null;
+    note?: string | null;
+  }[],
 ) {
   return api.put<{ success: boolean; count: number }>(`/maternity/${id}/checkups`, { checkups });
+}
+
+/**
+ * Tải giấy chứng nhận nghỉ hưởng BHXH của một lần khám thai lên R2.
+ * Gửi bytes thô kèm tên gốc; server trả { key, name } để lưu vào hồ sơ khi bấm Lưu.
+ */
+export async function uploadCheckupDoc(file: File): Promise<{ key: string; name: string }> {
+  if (isDemoMode()) return { key: `demo-${Date.now()}-${file.name}`, name: file.name };
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/maternity/checkup-doc?name=${encodeURIComponent(file.name)}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": file.type || "application/octet-stream",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: file,
+  });
+  if (!res.ok) {
+    const msg = res.status === 503 ? "Kho lưu trữ R2 chưa được bật." : "Tải giấy BHXH lên thất bại.";
+    throw new ApiError(res.status, msg);
+  }
+  return res.json();
+}
+
+/** Mở giấy BHXH đã tải lên (route yêu cầu đăng nhập → tải blob kèm token rồi mở tab mới). */
+export async function openCheckupDoc(key: string, name?: string | null): Promise<void> {
+  if (isDemoMode() || key.startsWith("demo-")) return; // demo: không có tệp thật để mở
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/maternity/checkup-doc/${encodeURIComponent(key)}`, {
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  });
+  if (!res.ok) throw new ApiError(res.status, "Không mở được giấy BHXH.");
+  const blob = await res.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const win = window.open(objectUrl, "_blank");
+  // Trình duyệt chặn popup → tải xuống thay thế.
+  if (!win) {
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = name || key;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }
 
 export function createLeaveRequest(data: {

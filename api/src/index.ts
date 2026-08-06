@@ -32,7 +32,7 @@ import {
 } from "./handlers/recognition";
 import { getConfig, updateConfig } from "./handlers/config";
 import { getPermissions, updatePermissions } from "./handlers/permissions";
-import { uploadFile, downloadFile, uploadAvatar, serveAvatar } from "./handlers/files";
+import { uploadFile, downloadFile, uploadAvatar, serveAvatar, uploadCheckupDoc, serveCheckupDoc } from "./handlers/files";
 import { updateHierarchy } from "./handlers/org";
 import {
   listCustomFields,
@@ -203,6 +203,13 @@ export default {
       if (method === "PUT" && pathname === "/api/overtime") return withCors(await saveOvertimeDaily(request, env));
 
       // --- Maternity (theo dõi thai kỳ + khám thai) ---
+      // Giấy BHXH khám thai: upload/tải (đặt trước các route /api/maternity/:id).
+      if (method === "POST" && pathname === "/api/maternity/checkup-doc") return withCors(await uploadCheckupDoc(request, env));
+      if (method === "GET" && pathname.startsWith("/api/maternity/checkup-doc/")) {
+        const key = parseIdFromPath(pathname, "/api/maternity/checkup-doc/");
+        if (!key) return withCors(error("Thiếu key tệp", 400));
+        return withCors(await serveCheckupDoc(request, env, key));
+      }
       if (method === "GET" && pathname === "/api/maternity") return withCors(await listMaternity(request, env));
       if (method === "POST" && pathname === "/api/maternity") return withCors(await createMaternity(request, env));
       if (method === "PUT" && /^\/api\/maternity\/\d+\/checkups$/.test(pathname)) {

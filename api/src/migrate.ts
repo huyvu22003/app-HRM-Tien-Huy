@@ -75,6 +75,13 @@ const STEPS: { id: string; run: (env: Env) => Promise<void> }[] = [
       );
     },
   },
+  {
+    id: "014_prenatal_doc_file",
+    run: async (env) => {
+      await addColumn(env, "prenatal_checkups", "doc_key", "TEXT"); // key tệp giấy BHXH trên R2
+      await addColumn(env, "prenatal_checkups", "doc_name", "TEXT"); // tên gốc tệp để hiển thị
+    },
+  },
 ];
 
 /** Áp các bước migrate còn thiếu (một lần cho mỗi isolate). */

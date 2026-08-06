@@ -13,6 +13,8 @@ interface CheckupBody {
   days?: number;
   special?: boolean;
   docSubmitted?: boolean;
+  docKey?: string | null;
+  docName?: string | null;
   note?: string | null;
 }
 
@@ -118,10 +120,12 @@ export async function saveCheckups(request: Request, env: Env, id: string): Prom
   for (const c of valid) {
     const special = c.special ? 1 : 0;
     const days = c.days ?? (special ? 2 : 1);
+    // Đã đính kèm giấy BHXH thì mặc nhiên coi là đã nộp.
+    const submitted = c.docKey || c.docSubmitted ? 1 : 0;
     await env.DB.prepare(
-      "INSERT INTO prenatal_checkups (maternity_id, seq, checkup_date, days, special, doc_submitted, note) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO prenatal_checkups (maternity_id, seq, checkup_date, days, special, doc_submitted, doc_key, doc_name, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
-      .bind(id, c.seq, c.date ?? null, days, special, c.docSubmitted ? 1 : 0, c.note ?? null)
+      .bind(id, c.seq, c.date ?? null, days, special, submitted, c.docKey ?? null, c.docName ?? null, c.note ?? null)
       .run();
   }
   return json({ success: true, count: valid.length });
