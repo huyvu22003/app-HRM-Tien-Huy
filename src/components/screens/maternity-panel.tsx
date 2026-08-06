@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Plus, X, HeartHandshake, Loader2, Calendar, FileCheck2, FileWarning, ChevronDown, Stethoscope } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { Plus, X, HeartHandshake, Loader2, Calendar, FileCheck2, FileWarning, ChevronDown, Stethoscope, Upload, Eye } from "lucide-react";
 import {
   fetchMaternity, createMaternity, updateMaternity, saveMaternityCheckups,
+  uploadCheckupDoc, openCheckupDoc,
   fetchAllEmployees, type ApiMaternity, type ApiPrenatalCheckup,
 } from "@/lib/api";
 import { useQuery } from "@/lib/hooks";
@@ -16,7 +17,15 @@ const STATUS_LABEL: Record<string, string> = {
 const STATUS_OPTS = ["soon", "active", "returning", "done"];
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
-type CheckRow = { seq: number; date: string; special: boolean; docSubmitted: boolean; note: string };
+type CheckRow = {
+  seq: number;
+  date: string;
+  special: boolean;
+  docSubmitted: boolean;
+  docKey: string;
+  docName: string;
+  note: string;
+};
 
 function toRows(checkups: ApiPrenatalCheckup[]): CheckRow[] {
   return Array.from({ length: 5 }, (_, i) => {
@@ -26,6 +35,8 @@ function toRows(checkups: ApiPrenatalCheckup[]): CheckRow[] {
       date: c?.checkup_date ? c.checkup_date.slice(0, 10) : "",
       special: !!c?.special,
       docSubmitted: !!c?.doc_submitted,
+      docKey: c?.doc_key ?? "",
+      docName: c?.doc_name ?? "",
       note: c?.note ?? "",
     };
   });
@@ -81,7 +92,7 @@ function MaternityCard({ record, expanded, onToggle, onSaved }: { record: ApiMat
 
   const done = rows.filter((r) => r.date).length;
   const totalDays = rows.reduce((s, r) => s + (r.date ? (r.special ? 2 : 1) : 0), 0);
-  const docsMissing = rows.filter((r) => r.date && !r.docSubmitted).length;
+  const docsMissing = rows.filter((r) => r.date && !r.docKey).length;
 
   const setRow = (seq: number, patch: Partial<CheckRow>) =>
     setRows((rs) => rs.map((r) => (r.seq === seq ? { ...r, ...patch } : r)));
@@ -90,7 +101,18 @@ function MaternityCard({ record, expanded, onToggle, onSaved }: { record: ApiMat
     setSaving(true);
     try {
       await updateMaternity(record.id, { status, dueDate: dueDate || null, startDate: startDate || null });
-      await saveMaternityCheckups(record.id, rows.map((r) => ({ seq: r.seq, date: r.date || null, special: r.special, docSubmitted: r.docSubmitted, note: r.note || null })));
+      await saveMaternityCheckups(
+        record.id,
+        rows.map((r) => ({
+          seq: r.seq,
+          date: r.date || null,
+          special: r.special,
+          docSubmitted: r.docSubmitted,
+          docKey: r.docKey || null,
+          docName: r.docName || null,
+          note: r.note || null,
+        })),
+      );
       onSaved();
     } finally {
       setSaving(false);
@@ -149,9 +171,7 @@ function MaternityCard({ record, expanded, onToggle, onSaved }: { record: ApiMat
                     </td>
                     <td className="py-1.5 pr-2 font-[family-name:var(--font-mono)]">{r.date ? (r.special ? 2 : 1) : "—"}</td>
                     <td className="py-1.5 pr-2">
-                      <button onClick={() => setRow(r.seq, { docSubmitted: !r.docSubmitted })} disabled={!r.date} className={cn("flex items-center gap-1 rounded-[6px] border px-2 py-1 text-[11px] font-medium disabled:opacity-40", r.docSubmitted ? "border-[var(--color-success)] bg-[var(--color-success-bg)] text-[var(--color-success)]" : "border-[var(--color-border)] text-[var(--color-text-muted)]")}>
-                        {r.docSubmitted ? <><FileCheck2 size={12} /> Đã nộp</> : <><FileWarning size={12} /> Chưa nộp</>}
-                      </button>
+                      <DocCell row={r} onChange={(patch) => setRow(r.seq, patch)} />
                     </td>
                     <td className="py-1.5"><input value={r.note} onChange={(e) => setRow(r.seq, { note: e.target.value })} placeholder="—" className="fld !h-8" /></td>
                   </tr>
@@ -172,6 +192,68 @@ function MaternityCard({ record, expanded, onToggle, onSaved }: { record: ApiMat
         :global(.fld){height:34px;width:100%;border:1px solid var(--color-border);border-radius:8px;padding:0 8px;font-size:12.5px;outline:none;background:white}
         :global(.fld:focus){border-color:var(--color-maternity)}
       `}</style>
+    </div>
+  );
+}
+
+/** Ô "Giấy BHXH": tải lên / xem / gỡ giấy chứng nhận nghỉ hưởng BHXH của lần khám. */
+function DocCell({ row, onChange }: { row: CheckRow; onChange: (patch: Partial<CheckRow>) => void }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // cho phép chọn lại cùng tệp
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { setErr("Tệp tối đa 10MB."); return; }
+    setErr(null);
+    setUploading(true);
+    try {
+      const { key, name } = await uploadCheckupDoc(file);
+      onChange({ docKey: key, docName: name, docSubmitted: true });
+    } catch (ex) {
+      setErr((ex as Error).message || "Tải lên thất bại.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  if (!row.date) return <span className="text-[11px] text-[var(--color-text-lighter)]">—</span>;
+
+  return (
+    <div className="flex flex-col gap-1">
+      <input ref={fileRef} type="file" accept="image/*,.pdf" onChange={onPick} className="hidden" />
+      {row.docKey ? (
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => openCheckupDoc(row.docKey, row.docName)}
+            title={row.docName || "Xem giấy BHXH"}
+            className="flex max-w-[150px] items-center gap-1 rounded-[6px] border border-[var(--color-success)] bg-[var(--color-success-bg)] px-2 py-1 text-[11px] font-medium text-[var(--color-success)]"
+          >
+            <FileCheck2 size={12} className="flex-shrink-0" />
+            <span className="truncate">{row.docName || "Đã nộp"}</span>
+            <Eye size={11} className="flex-shrink-0 opacity-70" />
+          </button>
+          <button
+            onClick={() => onChange({ docKey: "", docName: "", docSubmitted: false })}
+            title="Gỡ giấy"
+            className="rounded-[6px] border border-[var(--color-border)] p-1 text-[var(--color-text-lighter)] hover:text-[var(--color-danger)]"
+          >
+            <X size={12} />
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading}
+          className="flex items-center gap-1 rounded-[6px] border border-[var(--color-border)] px-2 py-1 text-[11px] font-medium text-[var(--color-text-muted)] hover:border-[var(--color-maternity)] hover:text-[var(--color-maternity)] disabled:opacity-50"
+        >
+          {uploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+          {uploading ? "Đang tải…" : "Tải giấy"}
+        </button>
+      )}
+      {err && <span className="text-[10px] text-[var(--color-danger)]">{err}</span>}
     </div>
   );
 }

@@ -96,3 +96,52 @@ export async function serveAvatar(_request: Request, env: Env, key: string): Pro
   headers.set("cache-control", "public, max-age=86400");
   return new Response(object.body, { headers });
 }
+
+function extFor(contentType: string, name: string): string {
+  const ct = contentType.toLowerCase();
+  if (ct.includes("pdf")) return "pdf";
+  if (ct.includes("png")) return "png";
+  if (ct.includes("webp")) return "webp";
+  if (ct.includes("jpeg") || ct.includes("jpg")) return "jpg";
+  const dot = name.lastIndexOf(".");
+  if (dot >= 0 && dot < name.length - 1) {
+    return name.slice(dot + 1).toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 8) || "bin";
+  }
+  return "bin";
+}
+
+/**
+ * Giấy chứng nhận nghỉ hưởng BHXH của một lần khám thai. Lưu bytes thô vào R2
+ * với key sạch (không nhét tên tệp gốc vào key để tránh lỗi ký tự/đường dẫn);
+ * tên gốc trả về để frontend hiển thị và ghi vào prenatal_checkups.doc_name.
+ */
+export async function uploadCheckupDoc(request: Request, env: Env): Promise<Response> {
+  if (!env.STORAGE) {
+    return error("Kho lưu trữ R2 chưa được bật. Vui lòng enable R2 trong Cloudflare rồi thử lại.", 503);
+  }
+  const url = new URL(request.url);
+  const name = url.searchParams.get("name") || `giay-bhxh-${Date.now()}`;
+  const contentType = request.headers.get("content-type") || "application/octet-stream";
+  const bytes = await request.arrayBuffer();
+  if (!bytes.byteLength) return error("Thiếu dữ liệu tệp", 400);
+
+  const key = `checkup-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extFor(contentType, name)}`;
+  await env.STORAGE.put(key, bytes, { httpMetadata: { contentType } });
+
+  return new Response(JSON.stringify({ key, name }), {
+    status: 201,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+/** Phục vụ giấy BHXH khám thai (yêu cầu đăng nhập — tài liệu nội bộ, không công khai). */
+export async function serveCheckupDoc(_request: Request, env: Env, key: string): Promise<Response> {
+  if (!env.STORAGE) return error("Kho lưu trữ R2 chưa được bật.", 503);
+  const object = await env.STORAGE.get(key);
+  if (!object) return error("Không tìm thấy tệp", 404);
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set("etag", object.httpEtag);
+  return new Response(object.body, { headers });
+}
