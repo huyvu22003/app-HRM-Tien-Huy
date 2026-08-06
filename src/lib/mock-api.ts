@@ -913,7 +913,13 @@ const MOCK_ROUTES: MockRoute[] = [
   },
   {
     match: /^\/leave\/requests$/,
+    method: "GET",
     handler: () => ({ data: mockLeaveRequests() }),
+  },
+  {
+    match: /^\/leave\/requests$/,
+    method: "POST",
+    handler: () => ({ id: Date.now() }),
   },
   {
     match: /^\/leave\/balance\/\d+$/,
