@@ -133,46 +133,46 @@ export function AttendanceScreen() {
       { id: "ot_sunday_hours", label: "OT CN (h)", align: "right", cell: (d) => mono(n0(d.row.ot_sunday_hours)), exportValue: (d) => d.row.ot_sunday_hours ?? 0 },
       { id: "ot_holiday_hours", label: "OT Lễ (h)", align: "right", cell: (d) => mono(n0(d.row.ot_holiday_hours)), exportValue: (d) => d.row.ot_holiday_hours ?? 0 },
       { id: "meal_allowance", label: "Tiền cơm TC", align: "right", cell: (d) => mono(money(d.row.meal_allowance)), exportValue: (d) => d.row.meal_allowance ?? 0, exportFormat: "money" },
-      {
-        id: "actions",
-        label: "",
-        align: "right",
-        noReorder: true,
-        cell: (d) => (
-          <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-            <button
-              onClick={() => setOtRow(d.row)}
-              title="Tăng ca theo ngày"
-              className="flex h-6 w-6 items-center justify-center rounded-[6px] border border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-page-bg)]"
-            >
-              <CalendarClock size={12} />
-            </button>
-            <button
-              onClick={() => setEditRow(d.row)}
-              disabled={d.row.locked === 1}
-              title={d.row.locked === 1 ? "Kỳ đã chốt — không sửa được" : "Điều chỉnh chấm công"}
-              className="flex h-6 w-6 items-center justify-center rounded-[6px] border border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-page-bg)] disabled:opacity-40"
-            >
-              <Pencil size={12} />
-            </button>
-            {d.row.is_edited === 1 && (
-              <span title="Đã điều chỉnh thủ công" className="flex h-6 w-6 items-center justify-center rounded-[6px] text-[var(--color-accent)]">
-                <RotateCcw size={12} />
-              </span>
-            )}
-          </div>
-        ),
-      },
     ];
   }, []);
 
-  // Cột tùy chỉnh dùng chung (đồng bộ theo nhân viên) — chèn trước cột thao tác.
+  // Cột thao tác cố định ngoài cùng bên trái (trước STT) để dễ bấm khi cuộn ngang.
+  const actionsColumn = useMemo<ColumnDef<AttRow>>(
+    () => ({
+      id: "actions",
+      label: "",
+      noReorder: true,
+      cell: (d) => (
+        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={() => setOtRow(d.row)}
+            title="Tăng ca theo ngày"
+            className="flex h-6 w-6 items-center justify-center rounded-[6px] border border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-page-bg)]"
+          >
+            <CalendarClock size={12} />
+          </button>
+          <button
+            onClick={() => setEditRow(d.row)}
+            disabled={d.row.locked === 1}
+            title={d.row.locked === 1 ? "Kỳ đã chốt — không sửa được" : "Điều chỉnh chấm công"}
+            className="flex h-6 w-6 items-center justify-center rounded-[6px] border border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-page-bg)] disabled:opacity-40"
+          >
+            <Pencil size={12} />
+          </button>
+          {d.row.is_edited === 1 && (
+            <span title="Đã điều chỉnh thủ công" className="flex h-6 w-6 items-center justify-center rounded-[6px] text-[var(--color-accent)]">
+              <RotateCcw size={12} />
+            </span>
+          )}
+        </div>
+      ),
+    }),
+    [],
+  );
+
+  // Cột tùy chỉnh dùng chung (đồng bộ theo nhân viên) — thêm vào cuối bảng.
   const { customColumns, addColumn, deleteColumn, isCustomColumn } = useCustomColumns<AttRow>((d) => d.row.employee_id);
-  const actionsIdx = columns.findIndex((c) => c.id === "actions");
-  const displayColumns =
-    actionsIdx >= 0
-      ? [...columns.slice(0, actionsIdx), ...customColumns, ...columns.slice(actionsIdx)]
-      : [...columns, ...customColumns];
+  const displayColumns = [...columns, ...customColumns];
 
   async function handleExport(exportRows: AttRow[], exportCols: ColumnDef<AttRow>[]) {
     const cols = exportCols.filter((c) => c.exportValue);
@@ -221,6 +221,8 @@ export function AttendanceScreen() {
         <DataTable<AttRow>
           tableKey="attendance"
           columns={displayColumns}
+          leadingColumn={actionsColumn}
+          leadingWidth={92}
           onAddColumn={(_after, opts) => addColumn(opts)}
           isColumnDeletable={(c) => isCustomColumn(c.id)}
           onDeleteColumn={(id) => {
