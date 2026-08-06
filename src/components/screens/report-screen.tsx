@@ -22,6 +22,7 @@ import {
 } from "@/lib/api";
 import { useQuery, useMutation } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
+import { DateField } from "@/components/ui/date-field";
 import { exportStyledExcel } from "@/lib/excel-export";
 import { useAuth } from "@/lib/auth-context";
 import { DEPARTMENTS } from "@/lib/data/departments";
@@ -202,10 +203,9 @@ export function ReportScreen() {
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
           <label className="text-[12.5px] font-medium text-[var(--color-text-secondary)]">Ngày:</label>
-          <input
-            type="date"
+          <DateField
             value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
+            onChange={setSelectedDate}
             className="rounded-lg border border-[var(--color-border)] bg-white px-3 py-1.5 text-[12.5px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-primary)]"
           />
         </div>

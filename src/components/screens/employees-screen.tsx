@@ -9,6 +9,7 @@ import { useQuery, useMutation } from "@/lib/hooks";
 import { getInitials, cn, formatDate, formatMoney, seededRandom } from "@/lib/utils";
 import { useColumnPrefs, type ColumnDef } from "@/lib/table-prefs";
 import { ColumnMenu } from "@/components/ui/column-menu";
+import { DateField } from "@/components/ui/date-field";
 import { exportStyledExcel } from "@/lib/excel-export";
 import { getEmployeePhoto } from "@/lib/photo-store";
 import { X, CheckCircle2, FileDown, Settings2, Trash2, Lock, Unlock, MoreVertical, GripVertical, ArrowDownAZ, ArrowUpAZ, Pencil, EyeOff, Type, Hash, Calendar } from "lucide-react";
@@ -2068,10 +2069,9 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
               {resignPrompt.emp.name} · {resignPrompt.emp.code}
             </div>
             <label className="mt-4 block text-[12px] font-medium text-[var(--color-text-secondary)]">Ngày nghỉ việc</label>
-            <input
-              type="date"
+            <DateField
               value={resignPrompt.date}
-              onChange={(e) => setResignPrompt((s) => (s ? { ...s, date: e.target.value } : s))}
+              onChange={(iso) => setResignPrompt((s) => (s ? { ...s, date: iso } : s))}
               className="mt-1.5 h-10 w-full rounded-[10px] border border-[var(--color-border)] px-3 text-[13px] outline-none focus:border-[var(--color-accent)]"
             />
             <div className="mt-1.5 text-[11px] text-[var(--color-text-lighter)]">Điền sẵn hôm nay — sửa lại nếu nghỉ vào ngày khác.</div>

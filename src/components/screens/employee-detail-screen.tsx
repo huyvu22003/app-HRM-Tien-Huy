@@ -22,6 +22,7 @@ import { fetchEmployee, updateEmployee, uploadEmployeeAvatar, fetchDepartments, 
 import { useAuth } from "@/lib/auth-context";
 import { useQuery, useMutation } from "@/lib/hooks";
 import { getInitials, cn, formatDate, formatMoney, seededRandom } from "@/lib/utils";
+import { DateField } from "@/components/ui/date-field";
 import { getEmployeePhoto, setEmployeePhoto } from "@/lib/photo-store";
 import { getCustomFields, getCustomValues, setCustomValues, hydrateCustomData, type CustomField } from "@/lib/custom-fields";
 import { getRaises, addRaise, deleteRaise, type SalaryRaise } from "@/lib/salary-history";
@@ -107,12 +108,20 @@ function Field({
     return (
       <div>
         <div className="text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">{label}</div>
-        <input
-          type={type === "date" ? "date" : "text"}
-          value={inputVal}
-          onChange={(e) => onChange(field, e.target.value)}
-          className="mt-1 h-9 w-full rounded-[8px] border border-[var(--color-accent)] px-2.5 text-[13px] outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
-        />
+        {type === "date" ? (
+          <DateField
+            value={inputVal}
+            onChange={(iso) => onChange(field, iso)}
+            className="mt-1 h-9 w-full rounded-[8px] border border-[var(--color-accent)] px-2.5 text-[13px] outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+          />
+        ) : (
+          <input
+            type="text"
+            value={inputVal}
+            onChange={(e) => onChange(field, e.target.value)}
+            className="mt-1 h-9 w-full rounded-[8px] border border-[var(--color-accent)] px-2.5 text-[13px] outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+          />
+        )}
       </div>
     );
   }
@@ -541,11 +550,10 @@ function SalaryHistorySection({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
             <label className="flex flex-col gap-1 text-[11.5px] text-[var(--color-text-muted)]">
               Ngày được tăng
-              <input
-                type="date"
+              <DateField
                 value={effectiveDate}
-                onChange={(e) => setEffectiveDate(e.target.value)}
-                className="h-9 rounded-[8px] border border-[var(--color-border)] px-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+                onChange={setEffectiveDate}
+                className="h-9 w-full rounded-[8px] border border-[var(--color-border)] px-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
               />
             </label>
             <label className="flex flex-col gap-1 text-[11.5px] text-[var(--color-text-muted)]">
@@ -1267,9 +1275,15 @@ export function EmployeeDetailScreen({
                             <option key={o} value={o}>{o}</option>
                           ))}
                         </select>
+                      ) : f.type === "date" ? (
+                        <DateField
+                          value={customVals[f.id] ?? ""}
+                          onChange={(iso) => setCustomVals((s) => ({ ...s, [f.id]: iso }))}
+                          className="mt-1 h-9 w-full rounded-[8px] border border-[var(--color-accent)] px-2.5 text-[13px] outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                        />
                       ) : (
                         <input
-                          type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
+                          type={f.type === "number" ? "number" : "text"}
                           inputMode={f.type === "number" ? "numeric" : undefined}
                           value={customVals[f.id] ?? ""}
                           onChange={(e) => setCustomVals((s) => ({ ...s, [f.id]: e.target.value }))}
