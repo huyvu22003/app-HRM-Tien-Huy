@@ -922,10 +922,14 @@ const MOCK_ROUTES: MockRoute[] = [
     handler: () => ({ id: Date.now() }),
   },
   {
-    match: /^\/leave\/balance\/\d+$/,
-    handler: () => ({
-      data: { id: 1, employee_id: 1, year: 2026, entitled: 12, carried: 2, used: 3, pending: 1 },
-    }),
+    match: /^\/leave\/balance\/(\d+)$/,
+    handler: (path) => {
+      const employeeId = Number(path.match(/\/leave\/balance\/(\d+)/)?.[1] ?? 1);
+      const entitled = 12, carried = 2, used = 3, pending = 1;
+      return {
+        data: { employee_id: employeeId, year: new Date().getFullYear(), entitled, carried, used, pending, remaining: entitled + carried - used },
+      };
+    },
   },
   {
     match: /^\/maternity$/,

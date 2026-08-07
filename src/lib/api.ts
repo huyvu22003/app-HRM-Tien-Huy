@@ -557,13 +557,13 @@ export interface ApiLeaveRequest {
 }
 
 export interface ApiLeaveBalance {
-  id: number;
   employee_id: number;
   year: number;
   entitled: number;
   carried: number;
   used: number;
   pending: number;
+  remaining: number;
 }
 
 export function fetchLeaveRequests(params?: {
