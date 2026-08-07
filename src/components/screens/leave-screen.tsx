@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Plus, X, CheckCircle2, Clock, XCircle, Loader2 } from "lucide-react";
-import { fetchLeaveRequests, createLeaveRequest, type ApiLeaveRequest } from "@/lib/api";
+import { fetchLeaveRequests, createLeaveRequest, fetchLeaveBalance, type ApiLeaveRequest } from "@/lib/api";
 import { useQuery } from "@/lib/hooks";
 import { useAuth } from "@/lib/auth-context";
 import { cn, formatDate } from "@/lib/utils";
@@ -81,9 +81,15 @@ export function LeaveScreen() {
 
   const { data, isLoading, refetch } = useQuery(() => fetchLeaveRequests(), []);
   const requests: ApiLeaveRequest[] = data?.data ?? [];
+
+  // Số dư phép năm của chính người đăng nhập (tính thật từ thâm niên + đơn đã duyệt).
+  const { data: balanceData } = useQuery(
+    user?.employeeId ? () => fetchLeaveBalance(user.employeeId as number) : null,
+    [user?.employeeId],
+  );
+  const balance = balanceData?.data ?? null;
   const filtered = requests.filter((r) => matchesFilter(r.status, statusFilter));
 
-  const balance = { entitled: 12, carried: 2, used: 5, get remaining() { return this.entitled + this.carried - this.used; } };
 
   function openCreate() {
     setLeaveType("PN");
@@ -212,15 +218,26 @@ export function LeaveScreen() {
           </div>
 
           <div className="rounded-[14px] border border-[var(--color-border)] bg-white p-[18px]">
-            <div className="mb-3 text-[13px] font-semibold text-[var(--color-text-primary)]">Số dư phép năm</div>
-            <div className="grid grid-cols-4 gap-3 text-center">
-              {[["Được cấp", balance.entitled], ["Chuyển kỳ", balance.carried], ["Đã dùng", balance.used], ["Còn lại", balance.remaining]].map(([label, val]) => (
-                <div key={label as string}>
-                  <div className="font-[family-name:var(--font-mono)] text-[18px] font-semibold text-[var(--color-text-primary)]">{val}</div>
-                  <div className="text-[11px] text-[var(--color-text-light)]">{label}</div>
-                </div>
-              ))}
+            <div className="mb-3 flex items-center justify-between">
+              <div className="text-[13px] font-semibold text-[var(--color-text-primary)]">Số dư phép năm {balance ? `(${balance.year})` : ""}</div>
+              {balance && balance.pending > 0 && (
+                <div className="text-[11px] text-[var(--color-warning)]">Đang chờ duyệt: {balance.pending} ngày</div>
+              )}
             </div>
+            {!user?.employeeId ? (
+              <p className="text-[12.5px] text-[var(--color-text-muted)]">Tài khoản chưa gắn nhân viên nên chưa có số dư phép.</p>
+            ) : !balance ? (
+              <p className="text-[12.5px] text-[var(--color-text-muted)]">Đang tải số dư phép…</p>
+            ) : (
+              <div className="grid grid-cols-4 gap-3 text-center">
+                {[["Được cấp", balance.entitled], ["Chuyển kỳ", balance.carried], ["Đã dùng", balance.used], ["Còn lại", balance.remaining]].map(([label, val]) => (
+                  <div key={label as string}>
+                    <div className="font-[family-name:var(--font-mono)] text-[18px] font-semibold text-[var(--color-text-primary)]">{val}</div>
+                    <div className="text-[11px] text-[var(--color-text-light)]">{label}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </>
       )}

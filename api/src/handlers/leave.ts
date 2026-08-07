@@ -124,14 +124,67 @@ export async function updateLeaveRequest(
   return error("Thiếu tham số action (approve|reject)", 400);
 }
 
+/** Phép năm được cấp: 12 ngày cơ bản + 1 ngày cho mỗi 5 năm thâm niên. */
+function annualEntitlement(joinDate: string | null | undefined, now: Date): number {
+  const base = 12;
+  if (!joinDate) return base;
+  const start = new Date(joinDate);
+  if (Number.isNaN(start.getTime())) return base;
+  let years = now.getFullYear() - start.getFullYear();
+  const m = now.getMonth() - start.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < start.getDate())) years -= 1;
+  return base + Math.floor(Math.max(0, years) / 5);
+}
+
+/**
+ * Số dư phép năm tính TRỰC TIẾP từ dữ liệu nguồn (không phụ thuộc bộ đếm
+ * leave_balances vốn cộng nhầm cả phép khác loại):
+ *   - entitled: theo thâm niên từ ngày vào làm.
+ *   - used   : tổng ngày đơn PN (phép năm) đã duyệt xong trong năm.
+ *   - pending: tổng ngày đơn PN đang chờ duyệt trong năm.
+ *   - carried: chuyển kỳ từ bảng leave_balances nếu có, mặc định 0.
+ */
 export async function getLeaveBalance(_request: Request, env: Env, employeeId: string): Promise<Response> {
-  const year = new Date().getFullYear();
-  const balance = await env.DB.prepare(
-    "SELECT * FROM leave_balances WHERE employee_id = ? AND year = ?"
+  const now = new Date();
+  const year = now.getFullYear();
+
+  const emp = await env.DB.prepare("SELECT join_date FROM employees WHERE id = ?")
+    .bind(employeeId)
+    .first<{ join_date: string | null }>();
+  if (!emp) return error("Không tìm thấy nhân viên", 404);
+
+  const agg = await env.DB.prepare(
+    `SELECT
+       COALESCE(SUM(CASE WHEN status = 'approved' THEN days ELSE 0 END), 0) AS used,
+       COALESCE(SUM(CASE WHEN status IN ('pending', 'approved_l1') THEN days ELSE 0 END), 0) AS pending
+     FROM leave_requests
+     WHERE employee_id = ? AND type_code = 'PN'
+       AND CAST(strftime('%Y', from_date) AS INTEGER) = ?`
   )
     .bind(employeeId, year)
-    .first();
+    .first<{ used: number; pending: number }>();
 
-  if (!balance) return error("Không tìm thấy dữ liệu phép năm", 404);
-  return json({ data: balance });
+  const stored = await env.DB.prepare(
+    "SELECT carried FROM leave_balances WHERE employee_id = ? AND year = ?"
+  )
+    .bind(employeeId, year)
+    .first<{ carried: number }>();
+
+  const entitled = annualEntitlement(emp.join_date, now);
+  const carried = stored?.carried ?? 0;
+  const used = agg?.used ?? 0;
+  const pending = agg?.pending ?? 0;
+  const remaining = entitled + carried - used;
+
+  return json({
+    data: {
+      employee_id: Number(employeeId),
+      year,
+      entitled,
+      carried,
+      used,
+      pending,
+      remaining,
+    },
+  });
 }
