@@ -73,6 +73,12 @@ export function LeaveScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // Thai sản chứa dữ liệu sức khỏe/BHXH — chỉ HR/super xem (đồng bộ với chặn ở API).
+  const canSeeMaternity = user?.role === "super" || user?.role === "hr";
+  const TABS: [Tab, string][] = canSeeMaternity
+    ? [["requests", "Đơn nghỉ phép"], ["maternity", "Nghỉ thai sản"]]
+    : [["requests", "Đơn nghỉ phép"]];
+
   const { data, isLoading, refetch } = useQuery(() => fetchLeaveRequests(), []);
   const requests: ApiLeaveRequest[] = data?.data ?? [];
   const filtered = requests.filter((r) => matchesFilter(r.status, statusFilter));
@@ -116,7 +122,7 @@ export function LeaveScreen() {
     <div className="flex flex-col gap-4">
       {/* Tabs */}
       <div className="flex gap-1 border-b border-[var(--color-border)]">
-        {([["requests", "Đơn nghỉ phép"], ["maternity", "Nghỉ thai sản"]] as [Tab, string][]).map(([key, label]) => (
+        {TABS.map(([key, label]) => (
           <button
             key={key}
             onClick={() => setTab(key)}

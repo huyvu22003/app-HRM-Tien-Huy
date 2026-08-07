@@ -76,9 +76,22 @@ const AUTHZ: { m: string; re: RegExp; roles: readonly string[] }[] = [
   { m: "PUT", re: /^\/api\/permissions$/, roles: R_SUPER },
 ];
 
-/** 403 nếu vai trò không đủ; null nếu được phép. Chỉ gác request thay đổi dữ liệu. */
+// Gác ĐỌC dữ liệu nhạy cảm ở backend (không chỉ ẩn trên giao diện). Route không
+// khớp → cho đọc bình thường (nhiều màn hình staff/lead cần). Riêng dữ liệu
+// lương và thông tin thai sản/BHXH thì chỉ super/hr được xem toàn bộ.
+const READ_AUTHZ: { re: RegExp; roles: readonly string[] }[] = [
+  { re: /^\/api\/salary$/, roles: R_HR }, // bảng lương toàn công ty
+  { re: /^\/api\/maternity(\/.*)?$/, roles: R_HR }, // theo dõi thai sản + giấy BHXH
+];
+
+/** 403 nếu vai trò không đủ; null nếu được phép. Gác cả đọc nhạy cảm lẫn ghi. */
 function authorize(method: string, pathname: string, role: string): Response | null {
-  if (method === "GET" || !pathname.startsWith("/api/")) return null;
+  if (!pathname.startsWith("/api/")) return null;
+  if (method === "GET") {
+    const rr = READ_AUTHZ.find((r) => r.re.test(pathname));
+    if (rr && !rr.roles.includes(role)) return error("Bạn không có quyền xem dữ liệu này.", 403);
+    return null;
+  }
   const rule = AUTHZ.find((r) => r.m === method && r.re.test(pathname));
   const allowed = rule ? rule.roles : R_HR;
   if (allowed.includes(role)) return null;
@@ -126,7 +139,7 @@ export default {
 
       // --- Employees ---
       if (method === "POST" && pathname === "/api/org/hierarchy") return withCors(await updateHierarchy(request, env, userId, userRole));
-      if (method === "GET" && pathname === "/api/employees") return withCors(await listEmployees(request, env));
+      if (method === "GET" && pathname === "/api/employees") return withCors(await listEmployees(request, env, userRole));
       if (method === "POST" && pathname === "/api/employees/import") return withCors(await importEmployees(request, env));
       if (method === "POST" && pathname === "/api/employees") return withCors(await createEmployee(request, env));
 
@@ -161,7 +174,7 @@ export default {
       if (method === "GET" && pathname.startsWith("/api/employees/")) {
         const id = parseIdFromPath(pathname, "/api/employees/");
         if (!id) return withCors(error("Thiếu id nhân viên", 400));
-        return withCors(await getEmployee(request, env, id));
+        return withCors(await getEmployee(request, env, id, userRole));
       }
       if (method === "PUT" && pathname.startsWith("/api/employees/")) {
         const id = parseIdFromPath(pathname, "/api/employees/");

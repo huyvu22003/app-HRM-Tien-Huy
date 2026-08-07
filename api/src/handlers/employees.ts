@@ -1,7 +1,25 @@
 import type { Env } from "../middleware/auth";
 import { json, error, readJson, getParams } from "../utils";
 
-export async function listEmployees(request: Request, env: Env): Promise<Response> {
+// Các trường lương/BHXH/định danh nhạy cảm — chỉ super/hr được xem. Các vai trò
+// khác (lead/staff) vẫn đọc được danh sách nhân viên nhưng bị ẩn các trường này.
+const SENSITIVE_EMP_KEYS = [
+  "base_salary", "allowance", "dependents", "responsibility_salary", "gas_allowance",
+  "attendance_bonus", "salary_base", "ins_status", "ins_salary_base",
+  "cccd", "bank", "tax_code",
+];
+
+function canSeeSensitive(role: string): boolean {
+  return role === "super" || role === "hr";
+}
+
+function stripSensitive<T extends Record<string, unknown>>(row: T): T {
+  const out = { ...row };
+  for (const k of SENSITIVE_EMP_KEYS) delete (out as Record<string, unknown>)[k];
+  return out;
+}
+
+export async function listEmployees(request: Request, env: Env, role = ""): Promise<Response> {
   const url = new URL(request.url);
   const params = getParams(url);
   const page = Math.max(1, parseInt(params.page || "1", 10) || 1);
@@ -50,10 +68,13 @@ export async function listEmployees(request: Request, env: Env): Promise<Respons
     .bind(...args, pageSize, offset)
     .all();
 
-  return json({ data: results, total, page, pageSize, totalPages });
+  const data = canSeeSensitive(role)
+    ? results
+    : (results as Record<string, unknown>[]).map(stripSensitive);
+  return json({ data, total, page, pageSize, totalPages });
 }
 
-export async function getEmployee(request: Request, env: Env, id: string): Promise<Response> {
+export async function getEmployee(request: Request, env: Env, id: string, role = ""): Promise<Response> {
   const employee = await env.DB.prepare(
     `SELECT e.*, d.name as department_name, manager_employee.name as manager_name
      FROM employees e LEFT JOIN departments d ON d.id = e.department_id
@@ -63,6 +84,11 @@ export async function getEmployee(request: Request, env: Env, id: string): Promi
     .bind(id)
     .first();
   if (!employee) return error("Không tìm thấy nhân viên", 404);
+
+  // Vai trò không đủ: ẩn toàn bộ lương/BHXH + trường định danh nhạy cảm.
+  if (!canSeeSensitive(role)) {
+    return json({ employee: stripSensitive(employee as Record<string, unknown>), compensation: null, insurance: null });
+  }
 
   const compensation = await env.DB.prepare("SELECT * FROM compensation WHERE employee_id = ?")
     .bind(id)
