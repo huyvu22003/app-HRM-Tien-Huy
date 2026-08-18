@@ -29,7 +29,7 @@ export function EmployeeQuickProfileModal({ employee, onClose, onViewFullProfile
       <div className="flex gap-4">
         <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--color-accent)] font-semibold text-white">
           {photo ? (
-            // eslint-disable-next-line @next/next/no-img-element
+             
             <img src={photo} alt="" className="h-full w-full object-cover" />
           ) : getInitials(employee.name)}
         </div>

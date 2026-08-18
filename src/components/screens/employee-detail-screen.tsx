@@ -265,7 +265,7 @@ function PrintPreviewModal({
           {/* Header */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
+              { }
               <img src="/logo.png" alt="" style={{ width: "40px", height: "40px", borderRadius: "8px", objectFit: "cover" }} />
               <div>
                 <div style={{ fontSize: "11pt", fontWeight: 700, color: "#1a3a5c" }}>CÔNG TY TNHH CƠ KHÍ</div>
@@ -285,7 +285,7 @@ function PrintPreviewModal({
           <div style={{ display: "flex", gap: "14px", marginBottom: "14px", alignItems: "center" }}>
             <div style={{ width: "70px", height: "85px", border: "1px solid #ccc", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: "#f4f6f8", overflow: "hidden" }}>
               {photoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
+                 
                 <img src={photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               ) : (
                 <span style={{ fontSize: "22pt", color: "#aaa", fontWeight: 600 }}>{getInitials(employee.name)}</span>
@@ -990,7 +990,7 @@ export function EmployeeDetailScreen({
           <div className="group relative">
             <div className="flex h-20 w-16 items-center justify-center overflow-hidden rounded-[10px] bg-[var(--color-page-bg)]">
               {currentPhoto ? (
-                // eslint-disable-next-line @next/next/no-img-element
+                 
                 <img src={currentPhoto} alt={employee.name} className="h-full w-full object-cover" />
               ) : (
                 <span className="text-[20px] font-semibold text-[var(--color-text-lighter)]">

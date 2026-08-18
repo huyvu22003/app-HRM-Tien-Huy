@@ -98,7 +98,7 @@ function ManagementNode({
         >
           <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--color-accent)] text-[11px] font-semibold text-white">
             {photo ? (
-              // eslint-disable-next-line @next/next/no-img-element
+               
               <img src={photo} alt="" className="h-full w-full object-cover" />
             ) : getInitials(node.person.name)}
           </span>

@@ -98,7 +98,7 @@ function authorize(method: string, pathname: string, role: string): Response | n
   return error("Bạn không có quyền thực hiện thao tác này.", 403);
 }
 
-export default {
+const worker = {
   async fetch(request: Request, env: Env): Promise<Response> {
     const origin = env.CORS_ORIGIN || "*";
     const preflight = handlePreflight(request, origin);
@@ -306,3 +306,5 @@ export default {
     }
   },
 };
+
+export default worker;

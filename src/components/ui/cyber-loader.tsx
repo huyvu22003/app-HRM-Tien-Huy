@@ -29,7 +29,7 @@ export function CyberLoader({ label = "ĐANG KHỞI ĐỘNG HỆ THỐNG" }: { l
           <div className="ckl-ring ckl-ring-a" />
           <div className="ckl-ring ckl-ring-b" />
           <div className="ckl-disc">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
+            { }
             <img src="/logo.png" alt="Cơ Khí Tiến Huy" className="ckl-logo" />
             <div className="ckl-sweep" />
           </div>
