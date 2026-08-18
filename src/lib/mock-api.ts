@@ -862,6 +862,16 @@ const MOCK_ROUTES: MockRoute[] = [
     handler: () => ({ data: ["2026-06"] }),
   },
   {
+    match: /^\/attendance\/leave-suggestions/,
+    method: "GET",
+    handler: (_path, params) => ({ data: [], period: params.get("period") || "2026-06" }),
+  },
+  {
+    match: /^\/attendance\/apply-leave$/,
+    method: "POST",
+    handler: () => ({ success: true }),
+  },
+  {
     match: /^\/attendance\/import$/,
     method: "POST",
     handler: (_path, _params, body) => {

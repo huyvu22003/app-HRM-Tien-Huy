@@ -130,6 +130,89 @@ export async function listAttendancePeriods(_request: Request, env: Env): Promis
   return json({ data: results.map((r) => r.period) });
 }
 
+// Loại đơn nghỉ → cột chấm công tương ứng. Thai sản (TS) theo dõi riêng, không map.
+const LEAVE_COL: Record<string, "pn" | "pb" | "vr" | "pc" | "pt" | "tnld"> = {
+  PN: "pn", PB: "pb", VR: "vr", PC: "pc", PT: "pt", TNLD: "tnld",
+};
+
+/**
+ * GET /api/attendance/leave-suggestions?period=YYYY-MM
+ * Các đơn nghỉ ĐÃ DUYỆT trong kỳ nhưng CHƯA áp vào bảng chấm công — để HR xác nhận.
+ */
+export async function listLeaveSuggestions(request: Request, env: Env): Promise<Response> {
+  const params = getParams(new URL(request.url));
+  const period = params.period;
+  if (!period) return error("Thiếu tham số period (VD: 2026-06)", 400);
+
+  const { results } = await env.DB.prepare(
+    `SELECT lr.id, lr.employee_id, lr.type_code, lr.days, lr.from_date, lr.to_date,
+            e.name AS employee_name, e.code AS employee_code,
+            a.id AS attendance_id, a.locked AS attendance_locked
+     FROM leave_requests lr
+     JOIN employees e ON e.id = lr.employee_id
+     LEFT JOIN attendance a ON a.employee_id = lr.employee_id AND a.period = ?
+     WHERE lr.status = 'approved'
+       AND COALESCE(lr.applied, 0) = 0
+       AND strftime('%Y-%m', lr.from_date) = ?
+       AND lr.type_code IN ('PN','PB','VR','PC','PT','TNLD')
+     ORDER BY e.code`,
+  )
+    .bind(period, period)
+    .all();
+
+  return json({ data: results, period });
+}
+
+/**
+ * POST /api/attendance/apply-leave { leaveId }
+ * Cộng số ngày của đơn nghỉ đã duyệt vào đúng cột (PN/PB/VR/PC/PT/TNLĐ) của dòng
+ * chấm công kỳ tương ứng, tính lại KP & ngày phép 100%, rồi đánh dấu đơn đã áp.
+ */
+export async function applyLeaveToAttendance(request: Request, env: Env): Promise<Response> {
+  const body = await readJson<{ leaveId?: number }>(request);
+  if (!body.leaveId) return error("Thiếu leaveId", 400);
+
+  const leave = await env.DB.prepare(
+    "SELECT * FROM leave_requests WHERE id = ?",
+  )
+    .bind(body.leaveId)
+    .first<{ id: number; employee_id: number; type_code: string; days: number; from_date: string; status: string; applied: number | null }>();
+  if (!leave) return error("Không tìm thấy đơn nghỉ", 404);
+  if (leave.status !== "approved") return error("Đơn chưa được duyệt xong", 409);
+  if (leave.applied) return json({ success: true, alreadyApplied: true });
+  const col = LEAVE_COL[leave.type_code];
+  if (!col) return error("Loại nghỉ này không áp vào chấm công", 400);
+
+  const period = leave.from_date.slice(0, 7); // YYYY-MM
+  const row = await env.DB.prepare(
+    "SELECT * FROM attendance WHERE employee_id = ? AND period = ?",
+  )
+    .bind(leave.employee_id, period)
+    .first<AttendanceRow & { id: number }>();
+  if (!row) return error(`Chưa có dòng chấm công kỳ ${period} cho nhân viên này. Hãy nhập chấm công trước.`, 409);
+  if (row.locked) return error("Kỳ chấm công đã bị khóa", 423);
+
+  const cur = {
+    pn: Number(row.pn ?? 0), pb: Number(row.pb ?? 0), vr: Number(row.vr ?? 0),
+    pc: Number(row.pc ?? 0), pts: Number(row.pts ?? 0), pt: Number(row.pt ?? 0), tnld: Number(row.tnld ?? 0),
+  };
+  cur[col] = +(cur[col] + Number(leave.days)).toFixed(2);
+
+  const std = Number(row.std_days ?? 0);
+  const nc = Number(row.actual_days ?? 0);
+  const kp = Math.max(0, +(std - nc - cur.pn - cur.pb - cur.vr - cur.pc - cur.pts - cur.pt - cur.tnld).toFixed(2));
+  const leaveDays = +(cur.pc + cur.pt + cur.tnld).toFixed(2);
+
+  await env.DB.prepare(
+    `UPDATE attendance SET pn = ?, pb = ?, vr = ?, pc = ?, pts = ?, pt = ?, tnld = ?, kp = ?, leave_days = ?, is_edited = 1 WHERE id = ?`,
+  )
+    .bind(cur.pn, cur.pb, cur.vr, cur.pc, cur.pts, cur.pt, cur.tnld, kp, leaveDays, row.id)
+    .run();
+  await env.DB.prepare("UPDATE leave_requests SET applied = 1 WHERE id = ?").bind(leave.id).run();
+
+  return json({ success: true, column: col, days: leave.days, period });
+}
+
 interface ImportRow {
   code?: string;
   name?: string;

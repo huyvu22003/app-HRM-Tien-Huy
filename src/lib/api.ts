@@ -483,6 +483,34 @@ export function fetchAttendancePeriods() {
   return api.get<{ data: string[] }>("/attendance/periods");
 }
 
+export interface ApiLeaveSuggestion {
+  id: number;
+  employee_id: number;
+  employee_name: string;
+  employee_code: string;
+  type_code: string;
+  days: number;
+  from_date: string;
+  to_date: string;
+  attendance_id: number | null;
+  attendance_locked: number | null;
+}
+
+/** Đơn nghỉ đã duyệt trong kỳ, chưa áp vào bảng chấm công. */
+export function fetchLeaveSuggestions(period: string) {
+  return api.get<{ data: ApiLeaveSuggestion[]; period: string }>(
+    `/attendance/leave-suggestions?period=${encodeURIComponent(period)}`,
+  );
+}
+
+/** Cộng đơn nghỉ đã duyệt vào cột chấm công tương ứng. */
+export function applyLeaveToAttendance(leaveId: number) {
+  return api.post<{ success: boolean; column?: string; days?: number; period?: string }>(
+    "/attendance/apply-leave",
+    { leaveId },
+  );
+}
+
 export interface AttendanceImportRow {
   code?: string;
   name?: string;

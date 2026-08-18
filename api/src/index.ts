@@ -12,7 +12,7 @@ import {
   updateDepartment,
   deleteDepartment,
 } from "./handlers/departments";
-import { listAttendance, updateAttendance, importAttendance, listAttendancePeriods } from "./handlers/attendance";
+import { listAttendance, updateAttendance, importAttendance, listAttendancePeriods, listLeaveSuggestions, applyLeaveToAttendance } from "./handlers/attendance";
 import { listOvertimeDaily, saveOvertimeDaily } from "./handlers/overtime";
 import { listMaternity, createMaternity, updateMaternity, saveCheckups } from "./handlers/maternity";
 import {
@@ -203,6 +203,8 @@ export default {
 
       // --- Attendance ---
       if (method === "GET" && pathname === "/api/attendance/periods") return withCors(await listAttendancePeriods(request, env));
+      if (method === "GET" && pathname === "/api/attendance/leave-suggestions") return withCors(await listLeaveSuggestions(request, env));
+      if (method === "POST" && pathname === "/api/attendance/apply-leave") return withCors(await applyLeaveToAttendance(request, env));
       if (method === "POST" && pathname === "/api/attendance/import") return withCors(await importAttendance(request, env));
       if (method === "GET" && pathname === "/api/attendance") return withCors(await listAttendance(request, env));
       if (method === "PUT" && pathname.startsWith("/api/attendance/")) {
