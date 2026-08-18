@@ -511,6 +511,33 @@ export function applyLeaveToAttendance(leaveId: number) {
   );
 }
 
+export interface ApiCheckupSuggestion {
+  id: number;
+  seq: number;
+  checkup_date: string;
+  days: number;
+  employee_id: number;
+  employee_name: string;
+  employee_code: string;
+  attendance_id: number | null;
+  attendance_locked: number | null;
+}
+
+/** Các lần khám thai trong kỳ chưa áp vào cột PTS của bảng chấm công. */
+export function fetchCheckupSuggestions(period: string) {
+  return api.get<{ data: ApiCheckupSuggestion[]; period: string }>(
+    `/attendance/checkup-suggestions?period=${encodeURIComponent(period)}`,
+  );
+}
+
+/** Cộng ngày nghỉ khám thai vào cột PTS. */
+export function applyCheckupToAttendance(checkupId: number) {
+  return api.post<{ success: boolean; column?: string; days?: number; period?: string }>(
+    "/attendance/apply-checkup",
+    { checkupId },
+  );
+}
+
 export interface AttendanceImportRow {
   code?: string;
   name?: string;

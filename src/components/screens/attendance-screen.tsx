@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { Pencil, X, RotateCcw, Lock, Loader2, Download, Upload, CalendarClock, CalendarPlus, CheckCircle2 } from "lucide-react";
+import { Pencil, X, RotateCcw, Lock, Loader2, Download, Upload, CalendarClock, CalendarPlus, CheckCircle2, Stethoscope } from "lucide-react";
 import { AttendanceEditModal } from "@/components/screens/attendance-edit-modal";
 import { OvertimeDayGridModal } from "@/components/screens/overtime-day-grid-modal";
 import { cn, formatDate } from "@/lib/utils";
@@ -12,6 +12,8 @@ import {
   importAttendance,
   fetchLeaveSuggestions,
   applyLeaveToAttendance,
+  fetchCheckupSuggestions,
+  applyCheckupToAttendance,
   type ApiAttendance,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -84,6 +86,37 @@ export function AttendanceScreen() {
       setApplying(null);
       refetch();
       refetchSuggestions();
+    }
+  }
+
+  // Lần khám thai trong kỳ chờ áp vào cột PTS (chỉ HR/super).
+  const { data: chkData, refetch: refetchCheckups } = useQuery(
+    canSync && period ? () => fetchCheckupSuggestions(period) : null,
+    [canSync, period],
+  );
+  const checkups = chkData?.data ?? [];
+
+  async function applyCheckupOne(id: number) {
+    setApplying(-id); // dùng id âm để phân biệt với đơn nghỉ
+    try {
+      await applyCheckupToAttendance(id);
+    } finally {
+      setApplying(null);
+      refetch();
+      refetchCheckups();
+    }
+  }
+
+  async function applyCheckupAll() {
+    setApplying("all");
+    try {
+      for (const c of checkups) {
+        if (c.attendance_id && !c.attendance_locked) await applyCheckupToAttendance(c.id);
+      }
+    } finally {
+      setApplying(null);
+      refetch();
+      refetchCheckups();
     }
   }
 
@@ -293,6 +326,51 @@ export function AttendanceScreen() {
                       className="flex items-center gap-1 rounded-[6px] border border-[var(--color-accent)] px-2.5 py-1 text-[11.5px] font-medium text-[var(--color-accent)] hover:bg-[var(--color-accent)] hover:text-white disabled:opacity-50"
                     >
                       {applying === s.id ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />} Áp dụng
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {canSync && checkups.length > 0 && (
+        <div className="rounded-[14px] border border-[var(--color-maternity)] bg-[var(--color-maternity-bg)] p-[14px]">
+          <div className="mb-2 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-[13px] font-semibold text-[var(--color-maternity)]">
+              <Stethoscope size={16} /> Ngày khám thai chờ áp vào chấm công — cột PTS ({checkups.length})
+            </div>
+            <button
+              onClick={applyCheckupAll}
+              disabled={applying !== null || !checkups.some((c) => c.attendance_id && !c.attendance_locked)}
+              className="flex items-center gap-1.5 rounded-[8px] bg-[var(--color-maternity)] px-3 py-1.5 text-[12px] font-medium text-white disabled:opacity-50"
+            >
+              {applying === "all" ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />} Áp dụng tất cả
+            </button>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {checkups.map((c) => {
+              const noRow = !c.attendance_id;
+              const locked = !!c.attendance_locked;
+              return (
+                <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-[8px] bg-white px-3 py-2 text-[12.5px]">
+                  <div className="min-w-0">
+                    <span className="font-medium text-[var(--color-text-primary)]">{c.employee_name}</span>
+                    <span className="text-[var(--color-text-muted)]"> · {c.employee_code} · Khám thai lần {c.seq} · </span>
+                    <span className="text-[var(--color-text-muted)]">{c.days} ngày · {formatDate(c.checkup_date)}</span>
+                  </div>
+                  {noRow ? (
+                    <span className="text-[11.5px] text-[var(--color-warning)]">Chưa có dòng chấm công kỳ này</span>
+                  ) : locked ? (
+                    <span className="text-[11.5px] text-[var(--color-text-lighter)]">Kỳ đã khoá</span>
+                  ) : (
+                    <button
+                      onClick={() => applyCheckupOne(c.id)}
+                      disabled={applying !== null}
+                      className="flex items-center gap-1 rounded-[6px] border border-[var(--color-maternity)] px-2.5 py-1 text-[11.5px] font-medium text-[var(--color-maternity)] hover:bg-[var(--color-maternity)] hover:text-white disabled:opacity-50"
+                    >
+                      {applying === -c.id ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />} Áp dụng
                     </button>
                   )}
                 </div>

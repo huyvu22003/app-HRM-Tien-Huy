@@ -213,6 +213,79 @@ export async function applyLeaveToAttendance(request: Request, env: Env): Promis
   return json({ success: true, column: col, days: leave.days, period });
 }
 
+/**
+ * GET /api/attendance/checkup-suggestions?period=YYYY-MM
+ * Các lần khám thai đã ghi trong kỳ nhưng CHƯA áp vào cột PTS (thai sản) của
+ * bảng chấm công — để HR xác nhận. Chỉ HR/super (gác ở index.ts).
+ */
+export async function listCheckupSuggestions(request: Request, env: Env): Promise<Response> {
+  const params = getParams(new URL(request.url));
+  const period = params.period;
+  if (!period) return error("Thiếu tham số period (VD: 2026-06)", 400);
+
+  const { results } = await env.DB.prepare(
+    `SELECT c.id, c.seq, c.checkup_date, c.days,
+            m.employee_id, e.name AS employee_name, e.code AS employee_code,
+            a.id AS attendance_id, a.locked AS attendance_locked
+     FROM prenatal_checkups c
+     JOIN maternity_leaves m ON m.id = c.maternity_id
+     JOIN employees e ON e.id = m.employee_id
+     LEFT JOIN attendance a ON a.employee_id = m.employee_id AND a.period = ?
+     WHERE c.checkup_date IS NOT NULL AND c.checkup_date != ''
+       AND COALESCE(c.applied, 0) = 0
+       AND strftime('%Y-%m', c.checkup_date) = ?
+     ORDER BY e.code, c.seq`,
+  )
+    .bind(period, period)
+    .all();
+
+  return json({ data: results, period });
+}
+
+/**
+ * POST /api/attendance/apply-checkup { checkupId }
+ * Cộng số ngày nghỉ khám thai vào cột PTS của dòng chấm công kỳ tương ứng, tính
+ * lại KP, rồi đánh dấu lần khám đã áp. Mặc định quyền HR (gác ở index.ts).
+ */
+export async function applyCheckupToAttendance(request: Request, env: Env): Promise<Response> {
+  const body = await readJson<{ checkupId?: number }>(request);
+  if (!body.checkupId) return error("Thiếu checkupId", 400);
+
+  const c = await env.DB.prepare(
+    `SELECT c.id, c.days, c.checkup_date, c.applied, m.employee_id
+     FROM prenatal_checkups c JOIN maternity_leaves m ON m.id = c.maternity_id
+     WHERE c.id = ?`,
+  )
+    .bind(body.checkupId)
+    .first<{ id: number; days: number; checkup_date: string | null; applied: number | null; employee_id: number }>();
+  if (!c) return error("Không tìm thấy lần khám", 404);
+  if (!c.checkup_date) return error("Lần khám chưa có ngày", 400);
+  if (c.applied) return json({ success: true, alreadyApplied: true });
+
+  const period = c.checkup_date.slice(0, 7);
+  const row = await env.DB.prepare(
+    "SELECT * FROM attendance WHERE employee_id = ? AND period = ?",
+  )
+    .bind(c.employee_id, period)
+    .first<AttendanceRow & { id: number }>();
+  if (!row) return error(`Chưa có dòng chấm công kỳ ${period} cho nhân viên này. Hãy nhập chấm công trước.`, 409);
+  if (row.locked) return error("Kỳ chấm công đã bị khóa", 423);
+
+  const pts = +((Number(row.pts ?? 0)) + Number(c.days)).toFixed(2);
+  const std = Number(row.std_days ?? 0);
+  const nc = Number(row.actual_days ?? 0);
+  const pn = Number(row.pn ?? 0), pb = Number(row.pb ?? 0), vr = Number(row.vr ?? 0);
+  const pc = Number(row.pc ?? 0), pt = Number(row.pt ?? 0), tnld = Number(row.tnld ?? 0);
+  const kp = Math.max(0, +(std - nc - pn - pb - vr - pc - pts - pt - tnld).toFixed(2));
+
+  await env.DB.prepare("UPDATE attendance SET pts = ?, kp = ?, is_edited = 1 WHERE id = ?")
+    .bind(pts, kp, row.id)
+    .run();
+  await env.DB.prepare("UPDATE prenatal_checkups SET applied = 1 WHERE id = ?").bind(c.id).run();
+
+  return json({ success: true, column: "pts", days: c.days, period });
+}
+
 interface ImportRow {
   code?: string;
   name?: string;
