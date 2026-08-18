@@ -577,7 +577,7 @@ function Avatar({ id, name, photoUrl, className }: { id: number; name: string; p
   return (
     <div className={cn("flex items-center justify-center overflow-hidden rounded-full bg-[var(--color-accent)] font-semibold text-white", className)}>
       {photo ? (
-        // eslint-disable-next-line @next/next/no-img-element
+         
         <img src={photo} alt={name} className="h-full w-full object-cover" />
       ) : (
         getInitials(name)
@@ -1140,6 +1140,8 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
   const totalSalary = (e: ApiEmployee) =>
     (e.base_salary ?? 0) + (e.responsibility_salary ?? 0) + (e.allowance ?? 0) + (e.gas_allowance ?? 0) + (e.attendance_bonus ?? 0);
 
+  // Dựng lại mỗi render có chủ đích (đóng closure theo state/handler hiện tại).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const columns: ColumnDef<ApiEmployee>[] = [
     {
       id: "code",
@@ -1305,12 +1307,17 @@ export function EmployeesScreen({ onNavigate }: { onNavigate: (screen: string, i
     exportFormat: f.type === "number" ? "int" : "text",
   }));
 
-  // Insert custom columns just before the trailing actions column.
-  const actionsIdx = columns.findIndex((c) => c.id === "actions");
-  const displayColumns =
-    actionsIdx >= 0
-      ? [...columns.slice(0, actionsIdx), ...customColumns, ...columns.slice(actionsIdx)]
-      : [...columns, ...customColumns];
+  // Chèn cột tùy chỉnh ngay trước cột thao tác. `columns`/`customColumns` được
+  // dựng lại mỗi render (có chủ đích) nên memo chỉ gộp mảng một lần cho mỗi render.
+  const displayColumns = useMemo(
+    () => {
+      const actionsIdx = columns.findIndex((c) => c.id === "actions");
+      return actionsIdx >= 0
+        ? [...columns.slice(0, actionsIdx), ...customColumns, ...columns.slice(actionsIdx)]
+        : [...columns, ...customColumns];
+    },
+    [columns, customColumns],
+  );
 
   const { hidden, toggle, reset, visibleColumns, orderedColumns, reorderLocked, toggleReorderLock, moveColumn, placeColumnAfter, renameColumn, widths, setColumnWidth } =
     useColumnPrefs("employees", displayColumns);

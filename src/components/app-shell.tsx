@@ -290,7 +290,7 @@ export function AppShell({
               >
                 <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[var(--color-accent)] text-[12px] font-semibold text-white">
                   {user?.photoUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
+                     
                     <img src={user.photoUrl} alt="" className="h-full w-full object-cover" />
                   ) : (
                     getInitials(user?.name ?? "?")
