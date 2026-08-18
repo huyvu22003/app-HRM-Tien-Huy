@@ -82,6 +82,13 @@ const STEPS: { id: string; run: (env: Env) => Promise<void> }[] = [
       await addColumn(env, "prenatal_checkups", "doc_name", "TEXT"); // tên gốc tệp để hiển thị
     },
   },
+  {
+    id: "015_leave_applied_flag",
+    run: async (env) => {
+      // Đánh dấu đơn nghỉ đã duyệt đã được áp vào bảng chấm công (tránh cộng trùng).
+      await addColumn(env, "leave_requests", "applied", "INTEGER DEFAULT 0");
+    },
+  },
 ];
 
 /** Áp các bước migrate còn thiếu (một lần cho mỗi isolate). */

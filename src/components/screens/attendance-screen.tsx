@@ -1,17 +1,20 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { Pencil, X, RotateCcw, Lock, Loader2, Download, Upload, CalendarClock } from "lucide-react";
+import { Pencil, X, RotateCcw, Lock, Loader2, Download, Upload, CalendarClock, CalendarPlus, CheckCircle2 } from "lucide-react";
 import { AttendanceEditModal } from "@/components/screens/attendance-edit-modal";
 import { OvertimeDayGridModal } from "@/components/screens/overtime-day-grid-modal";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import {
   fetchAttendance,
   updateAttendance,
   fetchAttendancePeriods,
   importAttendance,
+  fetchLeaveSuggestions,
+  applyLeaveToAttendance,
   type ApiAttendance,
 } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import { useQuery } from "@/lib/hooks";
 import { type ColumnDef } from "@/lib/table-prefs";
 import { DataTable } from "@/components/ui/data-table";
@@ -29,11 +32,18 @@ function currentPeriod() {
 const n0 = (v: number | undefined | null) => (v ? v : "-");
 const money = (v: number | undefined | null) => (v ? Math.round(v).toLocaleString("vi-VN") : "-");
 
+const LEAVE_TYPE_LABEL: Record<string, string> = {
+  PN: "Phép năm", PB: "Phép bệnh", VR: "Việc riêng", PC: "Phép cưới", PT: "Phép tang", TNLD: "Tai nạn LĐ",
+};
+
 export function AttendanceScreen() {
+  const { user } = useAuth();
+  const canSync = user?.role === "super" || user?.role === "hr";
   const [userPeriod, setUserPeriod] = useState<string | null>(null);
   const [flag, setFlag] = useState<Flag>("all");
   const [editRow, setEditRow] = useState<ApiAttendance | null>(null);
   const [otRow, setOtRow] = useState<ApiAttendance | null>(null);
+  const [applying, setApplying] = useState<number | "all" | null>(null);
 
   // Kỳ mặc định = tháng gần nhất có dữ liệu (nếu chưa có → tháng hiện tại).
   // Dẫn xuất (không dùng effect): khi user chưa chọn thì lấy kỳ mới nhất từ API.
@@ -45,6 +55,37 @@ export function AttendanceScreen() {
     () => (period ? fetchAttendance(period) : Promise.resolve({ data: [], period: "" })),
     [period],
   );
+
+  // Đơn nghỉ đã duyệt trong kỳ, chờ HR áp vào bảng chấm công (chỉ HR/super).
+  const { data: sugData, refetch: refetchSuggestions } = useQuery(
+    canSync && period ? () => fetchLeaveSuggestions(period) : null,
+    [canSync, period],
+  );
+  const suggestions = sugData?.data ?? [];
+
+  async function applyOne(id: number) {
+    setApplying(id);
+    try {
+      await applyLeaveToAttendance(id);
+    } finally {
+      setApplying(null);
+      refetch();
+      refetchSuggestions();
+    }
+  }
+
+  async function applyAll() {
+    setApplying("all");
+    try {
+      for (const s of suggestions) {
+        if (s.attendance_id && !s.attendance_locked) await applyLeaveToAttendance(s.id);
+      }
+    } finally {
+      setApplying(null);
+      refetch();
+      refetchSuggestions();
+    }
+  }
 
   const rows = useMemo<AttRow[]>(() => {
     if (!attData?.data) return [];
@@ -214,6 +255,52 @@ export function AttendanceScreen() {
           </button>
         </div>
       </div>
+
+      {canSync && suggestions.length > 0 && (
+        <div className="rounded-[14px] border border-[var(--color-accent)] bg-[var(--color-accent)]/[0.04] p-[14px]">
+          <div className="mb-2 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-[13px] font-semibold text-[var(--color-accent)]">
+              <CalendarPlus size={16} /> Đơn nghỉ đã duyệt chờ áp vào chấm công ({suggestions.length})
+            </div>
+            <button
+              onClick={applyAll}
+              disabled={applying !== null || !suggestions.some((s) => s.attendance_id && !s.attendance_locked)}
+              className="flex items-center gap-1.5 rounded-[8px] bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
+            >
+              {applying === "all" ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />} Áp dụng tất cả
+            </button>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {suggestions.map((s) => {
+              const noRow = !s.attendance_id;
+              const locked = !!s.attendance_locked;
+              return (
+                <div key={s.id} className="flex flex-wrap items-center justify-between gap-2 rounded-[8px] bg-white px-3 py-2 text-[12.5px]">
+                  <div className="min-w-0">
+                    <span className="font-medium text-[var(--color-text-primary)]">{s.employee_name}</span>
+                    <span className="text-[var(--color-text-muted)]"> · {s.employee_code} · </span>
+                    <span className="font-medium text-[var(--color-accent)]">{LEAVE_TYPE_LABEL[s.type_code] ?? s.type_code}</span>
+                    <span className="text-[var(--color-text-muted)]"> {s.days} ngày · {formatDate(s.from_date)}{s.to_date && s.to_date !== s.from_date ? `–${formatDate(s.to_date)}` : ""}</span>
+                  </div>
+                  {noRow ? (
+                    <span className="text-[11.5px] text-[var(--color-warning)]">Chưa có dòng chấm công kỳ này</span>
+                  ) : locked ? (
+                    <span className="text-[11.5px] text-[var(--color-text-lighter)]">Kỳ đã khoá</span>
+                  ) : (
+                    <button
+                      onClick={() => applyOne(s.id)}
+                      disabled={applying !== null}
+                      className="flex items-center gap-1 rounded-[6px] border border-[var(--color-accent)] px-2.5 py-1 text-[11.5px] font-medium text-[var(--color-accent)] hover:bg-[var(--color-accent)] hover:text-white disabled:opacity-50"
+                    >
+                      {applying === s.id ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />} Áp dụng
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="flex items-center justify-center py-16"><Loader2 size={28} className="animate-spin text-[var(--color-accent)]" /></div>
