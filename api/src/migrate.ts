@@ -89,6 +89,13 @@ const STEPS: { id: string; run: (env: Env) => Promise<void> }[] = [
       await addColumn(env, "leave_requests", "applied", "INTEGER DEFAULT 0");
     },
   },
+  {
+    id: "016_prenatal_applied_flag",
+    run: async (env) => {
+      // Đánh dấu lần khám thai đã được áp vào bảng chấm công (cột PTS).
+      await addColumn(env, "prenatal_checkups", "applied", "INTEGER DEFAULT 0");
+    },
+  },
 ];
 
 /** Áp các bước migrate còn thiếu (một lần cho mỗi isolate). */

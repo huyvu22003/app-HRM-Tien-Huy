@@ -12,7 +12,7 @@ import {
   updateDepartment,
   deleteDepartment,
 } from "./handlers/departments";
-import { listAttendance, updateAttendance, importAttendance, listAttendancePeriods, listLeaveSuggestions, applyLeaveToAttendance } from "./handlers/attendance";
+import { listAttendance, updateAttendance, importAttendance, listAttendancePeriods, listLeaveSuggestions, applyLeaveToAttendance, listCheckupSuggestions, applyCheckupToAttendance } from "./handlers/attendance";
 import { listOvertimeDaily, saveOvertimeDaily } from "./handlers/overtime";
 import { listMaternity, createMaternity, updateMaternity, saveCheckups } from "./handlers/maternity";
 import {
@@ -82,6 +82,7 @@ const AUTHZ: { m: string; re: RegExp; roles: readonly string[] }[] = [
 const READ_AUTHZ: { re: RegExp; roles: readonly string[] }[] = [
   { re: /^\/api\/salary$/, roles: R_HR }, // bảng lương toàn công ty
   { re: /^\/api\/maternity(\/.*)?$/, roles: R_HR }, // theo dõi thai sản + giấy BHXH
+  { re: /^\/api\/attendance\/checkup-suggestions$/, roles: R_HR }, // gợi ý khám thai (thông tin thai sản)
 ];
 
 /** 403 nếu vai trò không đủ; null nếu được phép. Gác cả đọc nhạy cảm lẫn ghi. */
@@ -205,6 +206,8 @@ const worker = {
       if (method === "GET" && pathname === "/api/attendance/periods") return withCors(await listAttendancePeriods(request, env));
       if (method === "GET" && pathname === "/api/attendance/leave-suggestions") return withCors(await listLeaveSuggestions(request, env));
       if (method === "POST" && pathname === "/api/attendance/apply-leave") return withCors(await applyLeaveToAttendance(request, env));
+      if (method === "GET" && pathname === "/api/attendance/checkup-suggestions") return withCors(await listCheckupSuggestions(request, env));
+      if (method === "POST" && pathname === "/api/attendance/apply-checkup") return withCors(await applyCheckupToAttendance(request, env));
       if (method === "POST" && pathname === "/api/attendance/import") return withCors(await importAttendance(request, env));
       if (method === "GET" && pathname === "/api/attendance") return withCors(await listAttendance(request, env));
       if (method === "PUT" && pathname.startsWith("/api/attendance/")) {
