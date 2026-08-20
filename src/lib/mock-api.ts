@@ -892,6 +892,11 @@ const MOCK_ROUTES: MockRoute[] = [
     handler: () => ({ success: true, data: null }),
   },
   {
+    match: /^\/notifications$/,
+    method: "GET",
+    handler: () => ({ data: [], unread: 0 }),
+  },
+  {
     match: /^\/attendance\/import$/,
     method: "POST",
     handler: (_path, _params, body) => {
