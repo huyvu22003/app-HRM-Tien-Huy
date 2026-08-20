@@ -925,6 +925,13 @@ const MOCK_ROUTES: MockRoute[] = [
     },
   },
   {
+    match: /^\/salary\/me/,
+    handler: (_path, params) => {
+      const period = params.get("period") || "2026-06";
+      return { data: mockSalaryRows()[0] ?? null, period };
+    },
+  },
+  {
     match: /^\/kpi$/,
     handler: (_path, params) => {
       const period = params.get("period") || "2026-06";

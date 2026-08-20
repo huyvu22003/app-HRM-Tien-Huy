@@ -21,7 +21,7 @@ import {
   updateLeaveRequest,
   getLeaveBalance,
 } from "./handlers/leave";
-import { getSalary } from "./handlers/salary";
+import { getSalary, getMySalary } from "./handlers/salary";
 import { getKpi, createKpi, updateKpi, signKpi } from "./handlers/kpi";
 import {
   listRewards,
@@ -256,6 +256,7 @@ const worker = {
       }
 
       // --- Salary ---
+      if (method === "GET" && pathname === "/api/salary/me") return withCors(await getMySalary(request, env, userId));
       if (method === "GET" && pathname === "/api/salary") return withCors(await getSalary(request, env));
 
       // --- KPI ---

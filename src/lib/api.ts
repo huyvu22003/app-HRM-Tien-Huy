@@ -826,6 +826,13 @@ export function fetchSalary(period: string) {
   );
 }
 
+/** Phiếu lương của chính người đăng nhập (tự phục vụ, mọi vai trò). */
+export function fetchMySalary(period: string) {
+  return api.get<{ data: ApiSalaryRow | null; period: string }>(
+    `/salary/me?period=${encodeURIComponent(period)}`,
+  );
+}
+
 // --- KPI ---
 
 export interface ApiKpi {
