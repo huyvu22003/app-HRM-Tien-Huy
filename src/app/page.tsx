@@ -6,6 +6,7 @@ import { AppShell } from "@/components/app-shell";
 import { CyberLoader } from "@/components/ui/cyber-loader";
 import { LoginScreen } from "@/components/screens/login-screen";
 import { MobileApp } from "@/components/mobile/mobile-app";
+import { MobileLogin } from "@/components/mobile/login";
 import { useIsMobile } from "@/lib/use-is-mobile";
 import { FrameworkScreen } from "@/components/screens/framework-screen";
 import { DashboardScreen } from "@/components/screens/dashboard-screen";
@@ -49,7 +50,7 @@ export default function Home() {
   }
 
   if (!isAuthenticated) {
-    return <LoginScreen />;
+    return isMobile ? <MobileLogin /> : <LoginScreen />;
   }
 
   // Trên điện thoại: ứng dụng di động 5 tab (chấm công selfie, nghỉ phép, lương…).

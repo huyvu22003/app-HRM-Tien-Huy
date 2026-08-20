@@ -13,6 +13,7 @@ import {
   deleteDepartment,
 } from "./handlers/departments";
 import { listAttendance, updateAttendance, importAttendance, listAttendancePeriods, listLeaveSuggestions, applyLeaveToAttendance, listCheckupSuggestions, applyCheckupToAttendance } from "./handlers/attendance";
+import { getTodayCheckin, saveCheckin, serveCheckinPhoto } from "./handlers/checkin";
 import { listOvertimeDaily, saveOvertimeDaily } from "./handlers/overtime";
 import { listMaternity, createMaternity, updateMaternity, saveCheckups } from "./handlers/maternity";
 import {
@@ -65,6 +66,7 @@ const R_ALL = ["super", "hr", "lead", "staff"] as const;
 const AUTHZ: { m: string; re: RegExp; roles: readonly string[] }[] = [
   { m: "POST", re: /^\/api\/auth\/logout$/, roles: R_ALL },
   { m: "POST", re: /^\/api\/leave\/requests$/, roles: R_ALL }, // nộp đơn nghỉ: tự phục vụ
+  { m: "POST", re: /^\/api\/attendance\/checkin$/, roles: R_ALL }, // chấm công selfie: tự phục vụ
   { m: "PUT", re: /^\/api\/leave\/requests\/\d+$/, roles: R_MANAGER }, // duyệt/từ chối
   { m: "POST", re: /^\/api\/kpi\/\d+\/sign$/, roles: R_MANAGER },
   { m: "POST", re: /^\/api\/kpi$/, roles: R_MANAGER },
@@ -208,6 +210,13 @@ const worker = {
       if (method === "POST" && pathname === "/api/attendance/apply-leave") return withCors(await applyLeaveToAttendance(request, env));
       if (method === "GET" && pathname === "/api/attendance/checkup-suggestions") return withCors(await listCheckupSuggestions(request, env));
       if (method === "POST" && pathname === "/api/attendance/apply-checkup") return withCors(await applyCheckupToAttendance(request, env));
+      if (method === "GET" && pathname === "/api/attendance/checkin/today") return withCors(await getTodayCheckin(request, env, userId));
+      if (method === "POST" && pathname === "/api/attendance/checkin") return withCors(await saveCheckin(request, env, userId));
+      if (method === "GET" && pathname.startsWith("/api/checkin-photos/")) {
+        const key = pathname.slice("/api/checkin-photos/".length);
+        if (!key) return withCors(error("Thiếu key ảnh", 400));
+        return withCors(await serveCheckinPhoto(request, env, key));
+      }
       if (method === "POST" && pathname === "/api/attendance/import") return withCors(await importAttendance(request, env));
       if (method === "GET" && pathname === "/api/attendance") return withCors(await listAttendance(request, env));
       if (method === "PUT" && pathname.startsWith("/api/attendance/")) {

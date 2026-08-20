@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery } from "@/lib/hooks";
-import { fetchAttendance, fetchLeaveBalance, fetchKpi, fetchLeaveRequests } from "@/lib/api";
+import { fetchAttendance, fetchLeaveBalance, fetchKpi, fetchLeaveRequests, fetchTodayCheckin } from "@/lib/api";
 import { getInitials } from "@/lib/utils";
 import { MCard, MBadge, mono } from "./primitives";
 import { type Go, type MobileScreen, currentPeriod, todayLabel } from "./nav";
@@ -39,6 +39,14 @@ export function MobileHome({ go }: { go: Go }) {
   const { data: bal } = useQuery(empId ? () => fetchLeaveBalance(empId) : null, [empId]);
   const { data: kpi } = useQuery(empId ? () => fetchKpi(period) : null, [empId, period]);
   const { data: leaves } = useQuery(isManager ? () => fetchLeaveRequests() : null, [isManager]);
+  const { data: ci } = useQuery(empId ? () => fetchTodayCheckin() : null, [empId]);
+
+  const checkin = ci?.data ?? null;
+  const checkinLabel = checkin?.time_in && checkin?.time_out
+    ? `Đã chấm công đủ · ${checkin.time_in}–${checkin.time_out}`
+    : checkin?.time_in
+      ? `Đã vào lúc ${checkin.time_in} · bấm để chấm ra`
+      : "Chưa chấm công vào";
 
   const myAtt = att?.data?.find((r) => r.employee_id === empId);
   const myKpi = kpi?.data?.find((k) => k.employee_id === empId);
@@ -73,7 +81,7 @@ export function MobileHome({ go }: { go: Go }) {
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-[12px] text-white/75">{todayLabel()}</div>
-                <div className="mt-0.5 text-[14px] font-semibold">Chưa chấm công vào</div>
+                <div className="mt-0.5 text-[14px] font-semibold">{checkinLabel}</div>
               </div>
               <div className={`${mono} text-[28px] font-bold`}>{clock}</div>
             </div>

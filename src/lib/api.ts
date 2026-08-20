@@ -538,6 +538,43 @@ export function applyCheckupToAttendance(checkupId: number) {
   );
 }
 
+// --- Chấm công selfie ---
+
+export interface ApiCheckin {
+  id: number;
+  employee_id: number;
+  date: string;
+  time_in: string | null;
+  time_out: string | null;
+  lat: number | null;
+  lng: number | null;
+  accuracy: number | null;
+  photo_key: string | null;
+  photo_out_key: string | null;
+  workplace: string | null;
+}
+
+/** Trạng thái chấm công hôm nay của người đăng nhập. */
+export function fetchTodayCheckin() {
+  return api.get<{ data: ApiCheckin | null }>("/attendance/checkin/today");
+}
+
+/** Ghi nhận chấm công vào/ra kèm ảnh selfie + toạ độ. */
+export function saveCheckin(data: {
+  type: "in" | "out";
+  time: string;
+  lat?: number | null;
+  lng?: number | null;
+  accuracy?: number | null;
+  workplace?: string;
+  photo?: string | null;
+}) {
+  if (isDemoMode()) {
+    return Promise.resolve({ success: true, data: null } as { success: boolean; data: ApiCheckin | null });
+  }
+  return api.post<{ success: boolean; data: ApiCheckin | null }>("/attendance/checkin", data);
+}
+
 export interface AttendanceImportRow {
   code?: string;
   name?: string;

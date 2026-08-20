@@ -6,8 +6,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  MapPin, LocateFixed, Camera, Info, RotateCcw, Check, ScanFace, Clock, Loader2, CameraOff,
+  MapPin, LocateFixed, Camera, Info, RotateCcw, Check, ScanFace, Clock, Loader2, CameraOff, LogOut,
 } from "lucide-react";
+import { useQuery } from "@/lib/hooks";
+import { fetchTodayCheckin, saveCheckin } from "@/lib/api";
 import { MCard, MHeader, MButton, MBadge, MBody, mono } from "./primitives";
 import { type Go, todayLabel } from "./nav";
 
@@ -31,6 +33,14 @@ export function MobileCheckIn({ go }: { go: Go }) {
   const [camErr, setCamErr] = useState<string | null>(null);
   const [photo, setPhoto] = useState<string | null>(null);
   const [stamp, setStamp] = useState<{ time: string; date: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveErr, setSaveErr] = useState<string | null>(null);
+
+  const { data: todayData, refetch: refetchToday } = useQuery(() => fetchTodayCheckin(), []);
+  const today = todayData?.data ?? null;
+  // Đã có giờ vào mà chưa có giờ ra → lần chấm này là CHẤM RA. Đủ cả hai → xong.
+  const mode: "in" | "out" = today?.time_in && !today?.time_out ? "out" : "in";
+  const bothDone = !!(today?.time_in && today?.time_out);
 
   // Định vị bắt buộc.
   useEffect(() => {
@@ -92,9 +102,28 @@ export function MobileCheckIn({ go }: { go: Go }) {
     setStep("confirm");
   }
 
-  function record() {
-    setStep("done");
-    stopCam();
+  async function record() {
+    if (!stamp) return;
+    setSaving(true);
+    setSaveErr(null);
+    try {
+      await saveCheckin({
+        type: mode,
+        time: stamp.time,
+        lat: geo?.lat ?? null,
+        lng: geo?.lng ?? null,
+        accuracy: geo?.acc ?? null,
+        workplace: WORKPLACE,
+        photo,
+      });
+      refetchToday();
+      setStep("done");
+      stopCam();
+    } catch (e) {
+      setSaveErr((e as Error).message || "Ghi nhận thất bại. Thử lại.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   const late = stamp ? Number(stamp.time.slice(0, 2)) >= 8 : false;
@@ -106,8 +135,8 @@ export function MobileCheckIn({ go }: { go: Go }) {
         <MBody>
           <div className="flex flex-col items-center pt-10 text-center">
             <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[var(--color-success-bg)]"><Check size={40} className="text-[var(--color-success)]" /></div>
-            <div className="mt-5 text-[19px] font-extrabold text-[var(--color-text-primary)]">Đã ghi nhận chấm công</div>
-            <div className={`${mono} mt-1 text-[15px] text-[var(--color-text-muted)]`}>Giờ vào {stamp?.time} · {todayLabel()}</div>
+            <div className="mt-5 text-[19px] font-extrabold text-[var(--color-text-primary)]">Đã ghi nhận chấm công {mode === "out" ? "ra" : "vào"}</div>
+            <div className={`${mono} mt-1 text-[15px] text-[var(--color-text-muted)]`}>Giờ {mode === "out" ? "ra" : "vào"} {stamp?.time} · {todayLabel()}</div>
             <div className="mt-1 text-[12.5px] text-[var(--color-text-muted)]">{WORKPLACE}</div>
             {photo && <img src={photo} alt="Ảnh chấm công" className="mt-6 w-full rounded-[16px]" />}
             <div className="mt-6 w-full"><MButton onClick={() => go("home")}>Về trang chủ</MButton></div>
@@ -132,11 +161,27 @@ export function MobileCheckIn({ go }: { go: Go }) {
               <Row icon={<LocateFixed size={18} className="text-[var(--color-success)]" />} label="Vị trí trong khu vực xưởng" value={geo ? "Hợp lệ" : "Chưa xác định"} ok={!!geo} />
               <Row icon={<Clock size={18} className="text-[var(--color-accent)]" />} label="Giờ vào" value={`${stamp?.time} · ${late ? "Trễ" : "Đúng giờ"}`} last />
             </MCard>
+            {saveErr && <div className="rounded-[10px] bg-[var(--color-danger-bg)] px-3 py-2 text-[12px] text-[var(--color-danger)]">{saveErr}</div>}
             <div className="flex gap-2.5">
-              <MButton tone="ghost" className="flex-1" onClick={() => { setPhoto(null); setStep("capture"); }}><RotateCcw size={16} /> Chụp lại</MButton>
-              <MButton tone="success" className="flex-[2]" onClick={record}><Check size={18} /> Ghi nhận chấm công</MButton>
+              <MButton tone="ghost" className="flex-1" onClick={() => { setPhoto(null); setStep("capture"); }} disabled={saving}><RotateCcw size={16} /> Chụp lại</MButton>
+              <MButton tone="success" className="flex-[2]" onClick={record} disabled={saving}>{saving ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />} Ghi nhận chấm công {mode === "out" ? "ra" : "vào"}</MButton>
             </div>
           </div>
+        </MBody>
+      </div>
+    );
+  }
+
+  if (bothDone) {
+    return (
+      <div className="flex h-full flex-col">
+        <MHeader title="Chấm công" subtitle={todayLabel()} right={<MBadge tone="success">Hoàn tất</MBadge>} />
+        <MBody>
+          <MCard className="flex flex-col items-center gap-2 p-8 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--color-success-bg)]"><Check size={32} className="text-[var(--color-success)]" /></div>
+            <div className="mt-2 text-[15px] font-bold">Đã chấm công đủ hôm nay</div>
+            <div className={`${mono} text-[13px] text-[var(--color-text-muted)]`}>Vào {today?.time_in} · Ra {today?.time_out}</div>
+          </MCard>
         </MBody>
       </div>
     );
@@ -146,7 +191,7 @@ export function MobileCheckIn({ go }: { go: Go }) {
     <div className="flex h-full flex-col">
       <MHeader
         title="Chấm công"
-        subtitle={todayLabel()}
+        subtitle={mode === "out" ? `Đã vào lúc ${today?.time_in} · ${todayLabel()}` : todayLabel()}
         right={<MBadge tone={geo ? "success" : "warning"}><MapPin size={13} /> {geo ? "Định vị đang bật" : "Đang định vị"}</MBadge>}
       />
       <MBody>
@@ -193,7 +238,9 @@ export function MobileCheckIn({ go }: { go: Go }) {
             Chụp góc rộng: thấy rõ khuôn mặt và khu vực làm việc để hệ thống xác thực.
           </div>
 
-          <MButton onClick={capture} disabled={!geo || !!camErr} className="h-[54px]"><Camera size={22} /> Chụp &amp; Chấm công vào</MButton>
+          <MButton onClick={capture} disabled={!geo || !!camErr} tone={mode === "out" ? "success" : "accent"} className="h-[54px]">
+            {mode === "out" ? <LogOut size={22} /> : <Camera size={22} />} Chụp &amp; Chấm công {mode === "out" ? "ra" : "vào"}
+          </MButton>
         </div>
       </MBody>
     </div>
