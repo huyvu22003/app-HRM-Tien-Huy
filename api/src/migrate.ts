@@ -96,6 +96,16 @@ const STEPS: { id: string; run: (env: Env) => Promise<void> }[] = [
       await addColumn(env, "prenatal_checkups", "applied", "INTEGER DEFAULT 0");
     },
   },
+  {
+    id: "017_selfie_checkins",
+    run: async (env) => {
+      // Chấm công selfie có định vị (mỗi nhân viên 1 dòng/ngày; vào & ra).
+      await env.DB.exec(
+        "CREATE TABLE IF NOT EXISTS checkins (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_id INTEGER NOT NULL, date TEXT NOT NULL, time_in TEXT, time_out TEXT, lat REAL, lng REAL, accuracy REAL, photo_key TEXT, photo_out_key TEXT, workplace TEXT, created_at TEXT DEFAULT (datetime('now')), UNIQUE(employee_id, date))",
+      );
+      await env.DB.exec("CREATE INDEX IF NOT EXISTS idx_checkins_emp_date ON checkins(employee_id, date)");
+    },
+  },
 ];
 
 /** Áp các bước migrate còn thiếu (một lần cho mỗi isolate). */
