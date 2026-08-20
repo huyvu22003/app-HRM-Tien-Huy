@@ -5,6 +5,8 @@ import { useAuth } from "@/lib/auth-context";
 import { AppShell } from "@/components/app-shell";
 import { CyberLoader } from "@/components/ui/cyber-loader";
 import { LoginScreen } from "@/components/screens/login-screen";
+import { MobileApp } from "@/components/mobile/mobile-app";
+import { useIsMobile } from "@/lib/use-is-mobile";
 import { FrameworkScreen } from "@/components/screens/framework-screen";
 import { DashboardScreen } from "@/components/screens/dashboard-screen";
 import { EmployeesScreen } from "@/components/screens/employees-screen";
@@ -26,6 +28,7 @@ import { AccountScreen } from "@/components/screens/account-screen";
 
 export default function Home() {
   const { isAuthenticated, isLoading } = useAuth();
+  const isMobile = useIsMobile();
   const [screen, setScreen] = useState("framework");
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | undefined>(undefined);
 
@@ -47,6 +50,11 @@ export default function Home() {
 
   if (!isAuthenticated) {
     return <LoginScreen />;
+  }
+
+  // Trên điện thoại: ứng dụng di động 5 tab (chấm công selfie, nghỉ phép, lương…).
+  if (isMobile) {
+    return <MobileApp />;
   }
 
   function renderScreen() {
