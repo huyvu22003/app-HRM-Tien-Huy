@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery } from "@/lib/hooks";
-import { fetchAttendance, fetchLeaveBalance, fetchKpi, fetchLeaveRequests, fetchTodayCheckin } from "@/lib/api";
+import { fetchAttendance, fetchLeaveBalance, fetchKpi, fetchLeaveRequests, fetchTodayCheckin, fetchNotifications } from "@/lib/api";
 import { getInitials } from "@/lib/utils";
 import { MCard, MBadge, mono } from "./primitives";
 import { type Go, type MobileScreen, currentPeriod, todayLabel } from "./nav";
@@ -40,6 +40,8 @@ export function MobileHome({ go }: { go: Go }) {
   const { data: kpi } = useQuery(empId ? () => fetchKpi(period) : null, [empId, period]);
   const { data: leaves } = useQuery(isManager ? () => fetchLeaveRequests() : null, [isManager]);
   const { data: ci } = useQuery(empId ? () => fetchTodayCheckin() : null, [empId]);
+  const { data: notif } = useQuery(() => fetchNotifications(), []);
+  const unread = notif?.unread ?? 0;
 
   const checkin = ci?.data ?? null;
   const checkinLabel = checkin?.time_in && checkin?.time_out
@@ -65,7 +67,7 @@ export function MobileHome({ go }: { go: Go }) {
           </div>
           <button onClick={() => go("notifications")} className="relative flex h-[42px] w-[42px] items-center justify-center rounded-[12px] bg-[#f2f5f9] text-[var(--color-text-secondary)]">
             <Bell size={20} />
-            <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full border-2 border-white bg-[var(--color-danger)]" />
+            {unread > 0 && <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full border-2 border-white bg-[var(--color-danger)]" />}
           </button>
         </div>
       </div>

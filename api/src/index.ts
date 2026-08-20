@@ -14,6 +14,7 @@ import {
 } from "./handlers/departments";
 import { listAttendance, updateAttendance, importAttendance, listAttendancePeriods, listLeaveSuggestions, applyLeaveToAttendance, listCheckupSuggestions, applyCheckupToAttendance } from "./handlers/attendance";
 import { getTodayCheckin, saveCheckin, serveCheckinPhoto } from "./handlers/checkin";
+import { getNotifications } from "./handlers/notifications";
 import { listOvertimeDaily, saveOvertimeDaily } from "./handlers/overtime";
 import { listMaternity, createMaternity, updateMaternity, saveCheckups } from "./handlers/maternity";
 import {
@@ -303,6 +304,9 @@ const worker = {
       // --- Permissions ---
       if (method === "GET" && pathname === "/api/permissions") return withCors(await getPermissions(request, env));
       if (method === "PUT" && pathname === "/api/permissions") return withCors(await updatePermissions(request, env));
+
+      // --- Notifications ---
+      if (method === "GET" && pathname === "/api/notifications") return withCors(await getNotifications(request, env, userId, userRole));
 
       // --- Files ---
       if (method === "POST" && pathname === "/api/files/upload") return withCors(await uploadFile(request, env));

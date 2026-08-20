@@ -3,14 +3,15 @@
 import { useState } from "react";
 import {
   Check, X, Loader2, TrendingUp, TrendingDown, Download, Send, Award, Bell,
-  CalendarClock, AlertTriangle, Target, UserPlus, Wallet, LogOut, ChevronRight,
+  CalendarClock, CheckCircle2, XCircle, Target, LogOut, ChevronRight,
   User as UserIcon, Shield, Phone, Building2,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery } from "@/lib/hooks";
 import {
   fetchLeaveRequests, updateLeaveRequest, fetchMySalary, fetchKpi, fetchRewards,
-  fetchDailyReports, createDailyReport, type ApiLeaveRequest,
+  fetchDailyReports, createDailyReport, fetchNotifications,
+  type ApiLeaveRequest, type ApiNotification,
 } from "@/lib/api";
 import { formatMoney, formatDate, getInitials } from "@/lib/utils";
 import { computeSalary } from "@/lib/salary-compute";
@@ -252,42 +253,74 @@ export function MobileKpi() {
 }
 
 /* ---------------- Thông báo ---------------- */
-const NOTIFS = [
-  { group: "Hôm nay", items: [
-    { icon: CalendarClock, tone: "warning" as const, title: "Đơn phép chờ duyệt", body: "Có đơn nghỉ phép cần bạn xử lý", time: "10 phút trước", unread: true },
-    { icon: AlertTriangle, tone: "danger" as const, title: "Chấm công lệch chuẩn", body: "Một số nhân viên có công lệch chuẩn kỳ này", time: "1 giờ trước", unread: true },
-    { icon: Target, tone: "accent" as const, title: "KPI kỳ này đã chốt", body: "Kết quả xếp hạng đã sẵn sàng xem", time: "3 giờ trước", unread: false },
-  ] },
-  { group: "Trước đó", items: [
-    { icon: UserPlus, tone: "success" as const, title: "Nhân viên mới", body: "Đã thêm hồ sơ nhân viên mới", time: "Hôm qua", unread: false },
-    { icon: Wallet, tone: "maternity" as const, title: "Phiếu lương đã phát hành", body: "Xem chi tiết phiếu lương kỳ mới", time: "2 ngày trước", unread: false },
-  ] },
-];
-const NOTIF_BG: Record<string, string> = { warning: "var(--color-warning-bg)", danger: "var(--color-danger-bg)", accent: "#e8f0fb", success: "var(--color-success-bg)", maternity: "var(--color-maternity-bg)" };
-const NOTIF_FG: Record<string, string> = { warning: "var(--color-warning)", danger: "var(--color-danger)", accent: "var(--color-accent)", success: "var(--color-success)", maternity: "var(--color-maternity)" };
+const NOTIF_BG: Record<string, string> = { warning: "var(--color-warning-bg)", danger: "var(--color-danger-bg)", accent: "#e8f0fb", success: "var(--color-success-bg)" };
+const NOTIF_FG: Record<string, string> = { warning: "var(--color-warning)", danger: "var(--color-danger)", accent: "var(--color-accent)", success: "var(--color-success)" };
+const NOTIF_ICON = { leave_pending: CalendarClock, leave_approved: CheckCircle2, leave_rejected: XCircle };
+
+function groupNotifs(items: ApiNotification[]) {
+  const dayMs = 24 * 3600 * 1000;
+  const now = Date.now();
+  const ts = (at: string) => new Date(at.replace(" ", "T") + "Z").getTime();
+  return [
+    { group: "Hôm nay", items: items.filter((n) => now - ts(n.at) < dayMs) },
+    { group: "Trước đó", items: items.filter((n) => now - ts(n.at) >= dayMs) },
+  ].filter((g) => g.items.length > 0);
+}
+
+function relTime(at: string): string {
+  const t = new Date(at.includes("T") ? at : at.replace(" ", "T") + "Z").getTime();
+  if (!Number.isFinite(t)) return "";
+  const diff = Date.now() - t;
+  const m = Math.round(diff / 60000);
+  if (m < 1) return "Vừa xong";
+  if (m < 60) return `${m} phút trước`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h} giờ trước`;
+  const d = Math.round(h / 24);
+  return d === 1 ? "Hôm qua" : `${d} ngày trước`;
+}
 
 export function MobileNotifications({ go }: { go: Go }) {
+  const { data } = useQuery(() => fetchNotifications(), []);
+  const items = data?.data ?? [];
+  const groups = groupNotifs(items);
+
   return (
     <div className="flex h-full flex-col">
-      <MHeader title="Thông báo" plain onBack={() => go("home")} right={<button className="text-[12.5px] font-semibold text-[var(--color-accent)]">Đọc tất cả</button>} />
+      <MHeader title="Thông báo" plain onBack={() => go("home")} />
       <MBody>
-        <div className="flex flex-col gap-2">
-          {NOTIFS.map((sec) => (
-            <div key={sec.group}>
-              <div className="px-0.5 py-2 text-[11px] font-bold uppercase tracking-wide text-[var(--color-text-lighter)]">{sec.group}</div>
-              <div className="flex flex-col gap-2">
-                {sec.items.map((n, i) => (
-                  <MCard key={i} className="flex gap-2.5 p-3.5" style={n.unread ? { borderLeft: `3px solid ${NOTIF_FG[n.tone]}` } : undefined}>
-                    <div className="flex h-9 w-9 flex-none items-center justify-center rounded-[10px]" style={{ background: NOTIF_BG[n.tone] }}><n.icon size={18} style={{ color: NOTIF_FG[n.tone] }} /></div>
-                    <div className="flex-1"><div className="text-[13px] font-bold text-[var(--color-text-primary)]">{n.title}</div><div className="mt-0.5 text-[12px] leading-snug text-[var(--color-text-muted)]">{n.body}</div><div className="mt-1 text-[11px] text-[var(--color-text-lighter)]">{n.time}</div></div>
-                    {n.unread && <span className="mt-1 h-2 w-2 flex-none rounded-full bg-[var(--color-accent)]" />}
-                  </MCard>
-                ))}
+        {items.length === 0 ? (
+          <MCard className="flex flex-col items-center gap-2 p-8 text-center">
+            <Bell size={26} className="text-[var(--color-text-lighter)]" />
+            <div className="text-[12.5px] text-[var(--color-text-muted)]">Chưa có thông báo nào.</div>
+          </MCard>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {groups.map((sec) => (
+              <div key={sec.group}>
+                <div className="px-0.5 py-2 text-[11px] font-bold uppercase tracking-wide text-[var(--color-text-lighter)]">{sec.group}</div>
+                <div className="flex flex-col gap-2">
+                  {sec.items.map((n) => {
+                    const Icon = NOTIF_ICON[n.kind] ?? Bell;
+                    const clickable = n.kind === "leave_pending";
+                    return (
+                      <MCard key={n.id} className="flex cursor-default gap-2.5 p-3.5" style={n.unread ? { borderLeft: `3px solid ${NOTIF_FG[n.tone]}` } : undefined}>
+                        <div className="flex h-9 w-9 flex-none items-center justify-center rounded-[10px]" style={{ background: NOTIF_BG[n.tone] }}><Icon size={18} style={{ color: NOTIF_FG[n.tone] }} /></div>
+                        <button onClick={clickable ? () => go("approvals") : undefined} className="flex-1 text-left">
+                          <div className="text-[13px] font-bold text-[var(--color-text-primary)]">{n.title}</div>
+                          <div className="mt-0.5 text-[12px] leading-snug text-[var(--color-text-muted)]">{n.body}</div>
+                          <div className="mt-1 text-[11px] text-[var(--color-text-lighter)]">{relTime(n.at)}</div>
+                        </button>
+                        {n.unread && <span className="mt-1 h-2 w-2 flex-none rounded-full bg-[var(--color-accent)]" />}
+                      </MCard>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
-          <div className="pt-2 text-center text-[11px] text-[var(--color-text-lighter)]"><Bell size={13} className="mb-1 inline" /> Thông báo đẩy đang được phát triển</div>
-        </div>
+            ))}
+            <div className="pt-2 text-center text-[11px] text-[var(--color-text-lighter)]"><Bell size={13} className="mb-1 inline" /> Thông báo đẩy (push) sẽ bổ sung sau</div>
+          </div>
+        )}
       </MBody>
     </div>
   );

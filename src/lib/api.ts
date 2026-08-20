@@ -559,6 +559,23 @@ export function fetchTodayCheckin() {
   return api.get<{ data: ApiCheckin | null }>("/attendance/checkin/today");
 }
 
+// --- Thông báo ---
+
+export interface ApiNotification {
+  id: string;
+  kind: "leave_pending" | "leave_approved" | "leave_rejected";
+  tone: "warning" | "success" | "danger" | "accent";
+  title: string;
+  body: string;
+  at: string;
+  unread: boolean;
+}
+
+/** Thông báo của người đăng nhập (suy từ dữ liệu thật, theo vai trò). */
+export function fetchNotifications() {
+  return api.get<{ data: ApiNotification[]; unread: number }>("/notifications");
+}
+
 /** Ghi nhận chấm công vào/ra kèm ảnh selfie + toạ độ. */
 export function saveCheckin(data: {
   type: "in" | "out";
