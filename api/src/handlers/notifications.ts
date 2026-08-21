@@ -12,7 +12,7 @@ const LEAVE_LABEL: Record<string, string> = { PN: "Phép năm", PB: "Phép bện
 
 interface Notif {
   id: string;
-  kind: "leave_pending" | "leave_approved" | "leave_rejected";
+  kind: "leave_pending" | "leave_approved" | "leave_rejected" | "report";
   tone: "warning" | "success" | "danger" | "accent";
   title: string;
   body: string;
@@ -66,6 +66,21 @@ export async function getNotifications(_request: Request, env: Env, userId: numb
         title: rejected ? "Đơn nghỉ bị từ chối" : "Đơn nghỉ đã được duyệt",
         body: `${LEAVE_LABEL[r.type_code] ?? r.type_code} · ${r.days} ngày`,
         at: r.decided_at, unread: isRecent(r.decided_at),
+      });
+    }
+
+    const rep = await env.DB.prepare(
+      `SELECT id, status, verified_at, date FROM reports
+       WHERE employee_id = ? AND status IN ('verified', 'rejected') AND verified_at IS NOT NULL
+       ORDER BY verified_at DESC LIMIT 6`,
+    ).bind(empId).all<{ id: number; status: string; verified_at: string; date: string }>();
+    for (const r of rep.results) {
+      const rejected = r.status === "rejected";
+      out.push({
+        id: `rp-${r.id}`, kind: "report", tone: rejected ? "danger" : "accent",
+        title: rejected ? "Báo cáo bị trả lại" : "Báo cáo đã được duyệt",
+        body: `Báo cáo ngày ${r.date}`,
+        at: r.verified_at, unread: isRecent(r.verified_at),
       });
     }
   }

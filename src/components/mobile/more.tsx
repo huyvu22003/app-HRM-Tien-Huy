@@ -3,7 +3,7 @@
 import { useState } from "react";
 import {
   Check, X, Loader2, TrendingUp, TrendingDown, Download, Send, Award, Bell,
-  CalendarClock, CheckCircle2, XCircle, Target, LogOut, ChevronRight,
+  CalendarClock, CheckCircle2, XCircle, Target, LogOut, ChevronRight, FileText,
   User as UserIcon, Shield, Phone, Building2,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
@@ -255,7 +255,7 @@ export function MobileKpi() {
 /* ---------------- Thông báo ---------------- */
 const NOTIF_BG: Record<string, string> = { warning: "var(--color-warning-bg)", danger: "var(--color-danger-bg)", accent: "#e8f0fb", success: "var(--color-success-bg)" };
 const NOTIF_FG: Record<string, string> = { warning: "var(--color-warning)", danger: "var(--color-danger)", accent: "var(--color-accent)", success: "var(--color-success)" };
-const NOTIF_ICON = { leave_pending: CalendarClock, leave_approved: CheckCircle2, leave_rejected: XCircle };
+const NOTIF_ICON = { leave_pending: CalendarClock, leave_approved: CheckCircle2, leave_rejected: XCircle, report: FileText };
 
 function groupNotifs(items: ApiNotification[]) {
   const dayMs = 24 * 3600 * 1000;
