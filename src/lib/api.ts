@@ -563,7 +563,7 @@ export function fetchTodayCheckin() {
 
 export interface ApiNotification {
   id: string;
-  kind: "leave_pending" | "leave_approved" | "leave_rejected";
+  kind: "leave_pending" | "leave_approved" | "leave_rejected" | "report";
   tone: "warning" | "success" | "danger" | "accent";
   title: string;
   body: string;

@@ -15,6 +15,7 @@ import {
 import { listAttendance, updateAttendance, importAttendance, listAttendancePeriods, listLeaveSuggestions, applyLeaveToAttendance, listCheckupSuggestions, applyCheckupToAttendance } from "./handlers/attendance";
 import { getTodayCheckin, saveCheckin, serveCheckinPhoto } from "./handlers/checkin";
 import { getNotifications } from "./handlers/notifications";
+import { listReports, createReport, verifyReport } from "./handlers/reports";
 import { listOvertimeDaily, saveOvertimeDaily } from "./handlers/overtime";
 import { listMaternity, createMaternity, updateMaternity, saveCheckups } from "./handlers/maternity";
 import {
@@ -68,6 +69,8 @@ const AUTHZ: { m: string; re: RegExp; roles: readonly string[] }[] = [
   { m: "POST", re: /^\/api\/auth\/logout$/, roles: R_ALL },
   { m: "POST", re: /^\/api\/leave\/requests$/, roles: R_ALL }, // nộp đơn nghỉ: tự phục vụ
   { m: "POST", re: /^\/api\/attendance\/checkin$/, roles: R_ALL }, // chấm công selfie: tự phục vụ
+  { m: "POST", re: /^\/api\/reports$/, roles: R_ALL }, // nộp báo cáo ngày: tự phục vụ
+  { m: "PUT", re: /^\/api\/reports\/\d+$/, roles: R_MANAGER }, // xác nhận báo cáo
   { m: "PUT", re: /^\/api\/leave\/requests\/\d+$/, roles: R_MANAGER }, // duyệt/từ chối
   { m: "POST", re: /^\/api\/kpi\/\d+\/sign$/, roles: R_MANAGER },
   { m: "POST", re: /^\/api\/kpi$/, roles: R_MANAGER },
@@ -304,6 +307,15 @@ const worker = {
       // --- Permissions ---
       if (method === "GET" && pathname === "/api/permissions") return withCors(await getPermissions(request, env));
       if (method === "PUT" && pathname === "/api/permissions") return withCors(await updatePermissions(request, env));
+
+      // --- Daily reports ---
+      if (method === "GET" && pathname === "/api/reports") return withCors(await listReports(request, env));
+      if (method === "POST" && pathname === "/api/reports") return withCors(await createReport(request, env, userId));
+      if (method === "PUT" && pathname.startsWith("/api/reports/")) {
+        const id = parseIdFromPath(pathname, "/api/reports/");
+        if (!id) return withCors(error("Thiếu id báo cáo", 400));
+        return withCors(await verifyReport(request, env, id, userId));
+      }
 
       // --- Notifications ---
       if (method === "GET" && pathname === "/api/notifications") return withCors(await getNotifications(request, env, userId, userRole));

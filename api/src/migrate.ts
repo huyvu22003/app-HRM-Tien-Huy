@@ -106,6 +106,17 @@ const STEPS: { id: string; run: (env: Env) => Promise<void> }[] = [
       await env.DB.exec("CREATE INDEX IF NOT EXISTS idx_checkins_emp_date ON checkins(employee_id, date)");
     },
   },
+  {
+    id: "018_daily_reports",
+    run: async (env) => {
+      // Báo cáo công việc ngày (nhân viên nộp; tổ trưởng/HR xác nhận).
+      await env.DB.exec(
+        "CREATE TABLE IF NOT EXISTS reports (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_id INTEGER NOT NULL, date TEXT NOT NULL, content TEXT NOT NULL, quantity REAL DEFAULT 0, ng_count REAL DEFAULT 0, note TEXT, status TEXT DEFAULT 'pending', submitted_at TEXT DEFAULT (datetime('now')), verified_by INTEGER, verified_at TEXT)",
+      );
+      await env.DB.exec("CREATE INDEX IF NOT EXISTS idx_reports_date ON reports(date)");
+      await env.DB.exec("CREATE INDEX IF NOT EXISTS idx_reports_emp ON reports(employee_id)");
+    },
+  },
 ];
 
 /** Áp các bước migrate còn thiếu (một lần cho mỗi isolate). */
