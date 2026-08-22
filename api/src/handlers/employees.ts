@@ -308,17 +308,32 @@ export async function importEmployees(request: Request, env: Env): Promise<Respo
     const removed = (results ?? []).filter((e) => !fileCodes.has(String(e.code).trim())).map((e) => e.id);
     if (removed.length) {
       const ph = removed.map(() => "?").join(",");
-      const childTables = [
-        "compensation", "insurance", "attendance", "leave_requests", "leave_balances",
-        "maternity_leaves", "kpi_scores", "employee_documents", "rewards",
-        "improvement_plans", "employee_custom_values",
+
+      // Chỉ xoá ở các bảng con THỰC SỰ tồn tại. DB production migrate thủ công có
+      // thể thiếu vài bảng; batch của D1 chạy nguyên khối nên một câu DELETE trỏ
+      // bảng không tồn tại sẽ làm HỎNG TOÀN BỘ thao tác xoá → nhân viên cũ không
+      // bị xoá (roster phình ra). Lọc theo sqlite_master để tránh lỗi này.
+      const tblRes = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all<{ name: string }>();
+      const existingTables = new Set((tblRes.results ?? []).map((t) => t.name));
+      const childCandidates = [
+        "compensation", "insurance", "attendance", "overtime_daily", "checkins",
+        "leave_requests", "leave_balances", "maternity_leaves", "kpi_scores",
+        "employee_documents", "rewards", "improvement_plans", "employee_custom_values",
       ];
-      const stmts = childTables.map((t) =>
-        env.DB.prepare(`DELETE FROM ${t} WHERE employee_id IN (${ph})`).bind(...removed),
-      );
+      const stmts = childCandidates
+        .filter((t) => existingTables.has(t))
+        .map((t) => env.DB.prepare(`DELETE FROM ${t} WHERE employee_id IN (${ph})`).bind(...removed));
+
+      // Khám thai tham chiếu qua maternity_id → dọn trước khi xoá maternity_leaves.
+      if (existingTables.has("prenatal_checkups") && existingTables.has("maternity_leaves")) {
+        stmts.unshift(
+          env.DB.prepare(`DELETE FROM prenatal_checkups WHERE maternity_id IN (SELECT id FROM maternity_leaves WHERE employee_id IN (${ph}))`).bind(...removed),
+        );
+      }
+
       stmts.push(env.DB.prepare(`UPDATE employees SET manager_employee_id = NULL WHERE manager_employee_id IN (${ph})`).bind(...removed));
-      stmts.push(env.DB.prepare(`UPDATE departments SET head_employee_id = NULL WHERE head_employee_id IN (${ph})`).bind(...removed));
-      stmts.push(env.DB.prepare(`UPDATE users SET employee_id = NULL WHERE employee_id IN (${ph})`).bind(...removed));
+      if (existingTables.has("departments")) stmts.push(env.DB.prepare(`UPDATE departments SET head_employee_id = NULL WHERE head_employee_id IN (${ph})`).bind(...removed));
+      if (existingTables.has("users")) stmts.push(env.DB.prepare(`UPDATE users SET employee_id = NULL WHERE employee_id IN (${ph})`).bind(...removed));
       stmts.push(env.DB.prepare(`DELETE FROM employees WHERE id IN (${ph})`).bind(...removed));
       await env.DB.batch(stmts);
       deleted = removed.length;
