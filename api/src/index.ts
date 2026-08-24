@@ -13,7 +13,7 @@ import {
   deleteDepartment,
 } from "./handlers/departments";
 import { listAttendance, updateAttendance, importAttendance, listAttendancePeriods, listLeaveSuggestions, applyLeaveToAttendance, listCheckupSuggestions, applyCheckupToAttendance } from "./handlers/attendance";
-import { getTodayCheckin, saveCheckin, serveCheckinPhoto } from "./handlers/checkin";
+import { getTodayCheckin, saveCheckin, serveCheckinPhoto, listCheckins } from "./handlers/checkin";
 import { getNotifications } from "./handlers/notifications";
 import { listReports, createReport, verifyReport } from "./handlers/reports";
 import { listOvertimeDaily, saveOvertimeDaily } from "./handlers/overtime";
@@ -89,6 +89,8 @@ const READ_AUTHZ: { re: RegExp; roles: readonly string[] }[] = [
   { re: /^\/api\/salary$/, roles: R_HR }, // bảng lương toàn công ty
   { re: /^\/api\/maternity(\/.*)?$/, roles: R_HR }, // theo dõi thai sản + giấy BHXH
   { re: /^\/api\/attendance\/checkup-suggestions$/, roles: R_HR }, // gợi ý khám thai (thông tin thai sản)
+  { re: /^\/api\/checkins$/, roles: R_MANAGER }, // nhật ký chấm công selfie (vị trí + ảnh)
+  { re: /^\/api\/checkin-photos\//, roles: R_MANAGER }, // ảnh chấm công selfie
 ];
 
 /** 403 nếu vai trò không đủ; null nếu được phép. Gác cả đọc nhạy cảm lẫn ghi. */
@@ -214,6 +216,7 @@ const worker = {
       if (method === "POST" && pathname === "/api/attendance/apply-leave") return withCors(await applyLeaveToAttendance(request, env));
       if (method === "GET" && pathname === "/api/attendance/checkup-suggestions") return withCors(await listCheckupSuggestions(request, env));
       if (method === "POST" && pathname === "/api/attendance/apply-checkup") return withCors(await applyCheckupToAttendance(request, env));
+      if (method === "GET" && pathname === "/api/checkins") return withCors(await listCheckins(request, env));
       if (method === "GET" && pathname === "/api/attendance/checkin/today") return withCors(await getTodayCheckin(request, env, userId));
       if (method === "POST" && pathname === "/api/attendance/checkin") return withCors(await saveCheckin(request, env, userId));
       if (method === "GET" && pathname.startsWith("/api/checkin-photos/")) {

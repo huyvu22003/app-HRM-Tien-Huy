@@ -559,6 +559,30 @@ export function fetchTodayCheckin() {
   return api.get<{ data: ApiCheckin | null }>("/attendance/checkin/today");
 }
 
+export interface ApiCheckinRecord extends ApiCheckin {
+  employee_name: string;
+  employee_code: string;
+  department_name: string | null;
+}
+
+/** Nhật ký chấm công selfie trong ngày (quản lý). */
+export function fetchCheckins(date: string) {
+  return api.get<{ data: ApiCheckinRecord[]; date: string }>(
+    `/checkins?date=${encodeURIComponent(date)}`,
+  );
+}
+
+/** Tải ảnh chấm công (route yêu cầu đăng nhập) → trả object URL để hiển thị. */
+export async function loadCheckinPhoto(key: string): Promise<string | null> {
+  if (isDemoMode()) return null;
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/checkin-photos/${encodeURIComponent(key)}`, {
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  });
+  if (!res.ok) return null;
+  return URL.createObjectURL(await res.blob());
+}
+
 // --- Thông báo ---
 
 export interface ApiNotification {

@@ -887,6 +887,11 @@ const MOCK_ROUTES: MockRoute[] = [
     handler: () => ({ data: null }),
   },
   {
+    match: /^\/checkins/,
+    method: "GET",
+    handler: (_path, params) => ({ data: [], date: params.get("date") || "2026-08-24" }),
+  },
+  {
     match: /^\/attendance\/checkin$/,
     method: "POST",
     handler: () => ({ success: true, data: null }),
