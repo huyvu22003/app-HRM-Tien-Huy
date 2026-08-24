@@ -362,9 +362,9 @@ export function deleteEmployee(id: number) {
 
 export function importEmployees(
   employees: Record<string, unknown>[],
-  mode: "upsert" | "replace" = "upsert",
+  mode: "upsert" | "replace" | "soft" = "upsert",
 ) {
-  return api.post<{ success: boolean; created: number; updated: number; deleted: number }>(
+  return api.post<{ success: boolean; created: number; updated: number; deleted: number; resigned?: number }>(
     "/employees/import",
     { employees, mode },
   );

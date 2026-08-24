@@ -203,12 +203,16 @@ export async function importEmployees(request: Request, env: Env): Promise<Respo
   const body = await readJson<{ employees?: Array<Record<string, unknown>>; mode?: string }>(request);
   const rows = Array.isArray(body.employees) ? body.employees : [];
   await ensureEmployeeColumns(env);
-  // "replace" = đồng bộ sạch theo file: xoá trắng ô trống + xoá NV không có trong file.
+  // "replace" = đồng bộ sạch (xoá trắng ô trống + XOÁ VĨNH VIỄN NV vắng mặt).
+  // "soft"    = đồng bộ mềm: NV vắng mặt được ĐÁNH DẤU "Nghỉ việc" nhưng GIỮ NGUYÊN
+  //             dữ liệu (chấm công/lương/KPI của các kỳ trước không bị mất).
   const isReplace = body.mode === "replace";
+  const isSoft = body.mode === "soft";
   const fileCodes = new Set<string>();
   let created = 0;
   let updated = 0;
   let deleted = 0;
+  let resigned = 0;
 
   for (const r of rows) {
     const code = String(r.code ?? "").trim();
@@ -340,7 +344,23 @@ export async function importEmployees(request: Request, env: Env): Promise<Respo
     }
   }
 
-  return json({ success: true, created, updated, deleted });
+  // Đồng bộ mềm: NV còn "đang làm" mà vắng mặt trong file → đánh dấu Nghỉ việc,
+  // GIỮ NGUYÊN toàn bộ dữ liệu lịch sử. resign_date điền hôm nay nếu chưa có.
+  if (isSoft) {
+    const { results } = await env.DB.prepare("SELECT id, code FROM employees WHERE status != 'Nghỉ việc'").all<{ id: number; code: string }>();
+    const toResign = (results ?? []).filter((e) => !fileCodes.has(String(e.code).trim())).map((e) => e.id);
+    if (toResign.length) {
+      const ph = toResign.map(() => "?").join(",");
+      await env.DB.prepare(
+        `UPDATE employees SET status = 'Nghỉ việc', resign_date = COALESCE(NULLIF(resign_date, ''), date('now')) WHERE id IN (${ph})`,
+      )
+        .bind(...toResign)
+        .run();
+      resigned = toResign.length;
+    }
+  }
+
+  return json({ success: true, created, updated, deleted, resigned });
 }
 
 /** Xoá 1 nhân viên + dữ liệu con (chấm công, lương, BH, KPI, nghỉ phép…). */

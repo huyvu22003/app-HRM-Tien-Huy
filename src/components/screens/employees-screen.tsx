@@ -785,11 +785,11 @@ function ImportModal({ existing, onClose, onImported }: { existing: ApiEmployee[
   const [parsing, setParsing] = useState(false);
   const [infos, setInfos] = useState<ImportRowInfo[]>([]);
   const [unsupported, setUnsupported] = useState<string[]>([]);
-  const [result, setResult] = useState<{ created: number; updated: number; deleted: number } | null>(null);
-  const [replaceMode, setReplaceMode] = useState(false);
+  const [result, setResult] = useState<{ created: number; updated: number; deleted: number; resigned: number } | null>(null);
+  const [syncMode, setSyncMode] = useState<"upsert" | "soft" | "replace">("upsert");
   const [confirmText, setConfirmText] = useState("");
   const { mutate: doImport, isLoading } = useMutation(
-    (args: { rows: Record<string, unknown>[]; mode: "upsert" | "replace" }) => importEmployees(args.rows, args.mode),
+    (args: { rows: Record<string, unknown>[]; mode: "upsert" | "soft" | "replace" }) => importEmployees(args.rows, args.mode),
   );
 
   const counts = useMemo(() => ({
@@ -824,31 +824,34 @@ function ImportModal({ existing, onClose, onImported }: { existing: ApiEmployee[
     }
   }
 
-  // Đồng bộ sạch: NV hiện có mà mã thẻ KHÔNG có trong file sẽ bị xoá.
+  // NV hiện có mà mã thẻ KHÔNG có trong file (dùng cho đồng bộ sạch/mềm).
   const fileCodeSet = useMemo(
     () => new Set(infos.filter((i) => i.status !== "invalid").map((i) => String(i.row.code).trim())),
     [infos],
   );
-  const toDeleteCount = useMemo(
-    () => (replaceMode ? existing.filter((e) => !fileCodeSet.has(String(e.code).trim())).length : 0),
-    [replaceMode, existing, fileCodeSet],
+  const notInFile = useMemo(
+    () => existing.filter((e) => !fileCodeSet.has(String(e.code).trim())),
+    [existing, fileCodeSet],
   );
-  // Chấp nhận mọi cách gõ dấu: "XÓA" / "XOÁ" / "xoa" (bỏ dấu khi so sánh).
+  const toDeleteCount = syncMode === "replace" ? notInFile.length : 0;
+  const toResignCount = syncMode === "soft" ? notInFile.filter((e) => e.status !== "Nghỉ việc").length : 0;
+  // Chỉ đồng bộ sạch (xoá vĩnh viễn) mới cần gõ xác nhận. Chấp nhận "XÓA"/"XOÁ"/"xoa".
   const confirmOk =
-    !replaceMode ||
+    syncMode !== "replace" ||
     confirmText.normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toUpperCase() === "XOA";
 
   async function handleImport() {
-    // Upsert: chỉ gửi Mới + Cập nhật. Replace: gửi mọi dòng hợp lệ (kể cả "không đổi")
-    // để backend biết đủ tập mã thẻ trong file mà xoá NV thừa + xoá trắng ô trống.
+    // Upsert: chỉ gửi Mới + Cập nhật. Replace/Soft: gửi mọi dòng hợp lệ (kể cả "không
+    // đổi") để backend biết đủ tập mã thẻ trong file mà xử lý NV vắng mặt.
+    const fullSet = syncMode !== "upsert";
     const payload = infos
-      .filter((r) => r.status === "new" || r.status === "update" || (replaceMode && r.status === "same"))
+      .filter((r) => r.status === "new" || r.status === "update" || (fullSet && r.status === "same"))
       .map((r) => r.row);
     if (payload.length === 0) return;
     if (!confirmOk) return;
     try {
-      const res = await doImport({ rows: payload, mode: replaceMode ? "replace" : "upsert" });
-      setResult({ created: res.created, updated: res.updated, deleted: res.deleted ?? 0 });
+      const res = await doImport({ rows: payload, mode: syncMode });
+      setResult({ created: res.created, updated: res.updated, deleted: res.deleted ?? 0, resigned: res.resigned ?? 0 });
       onImported();
     } catch {
       setError("Cập nhật thất bại. Vui lòng thử lại.");
@@ -876,7 +879,7 @@ function ImportModal({ existing, onClose, onImported }: { existing: ApiEmployee[
           <div className="flex flex-col items-center gap-3 py-8 text-center">
             <CheckCircle2 size={40} className="text-[var(--color-success)]" />
             <div className="text-[14px] font-medium text-[var(--color-text-primary)]">
-              Đã đồng bộ: {result.created} thêm mới, {result.updated} cập nhật{result.deleted > 0 ? `, ${result.deleted} đã xoá` : ""}
+              Đã đồng bộ: {result.created} thêm mới, {result.updated} cập nhật{result.deleted > 0 ? `, ${result.deleted} đã xoá` : ""}{result.resigned > 0 ? `, ${result.resigned} chuyển nghỉ việc` : ""}
             </div>
             <button onClick={onClose} className="mt-2 rounded-[8px] bg-[var(--color-accent)] px-4 py-1.5 text-[12.5px] font-medium text-white">Đóng</button>
           </div>
@@ -967,21 +970,29 @@ function ImportModal({ existing, onClose, onImported }: { existing: ApiEmployee[
             )}
 
             {infos.length > 0 && (
-              <div className="mt-4 rounded-[10px] border border-[var(--color-border)] p-3">
-                <label className="flex cursor-pointer items-start gap-2">
-                  <input
-                    type="checkbox"
-                    checked={replaceMode}
-                    onChange={(e) => { setReplaceMode(e.target.checked); setConfirmText(""); }}
-                    className="mt-0.5 h-4 w-4 accent-[var(--color-danger)]"
-                  />
-                  <span className="text-[12.5px] text-[var(--color-text-secondary)]">
-                    <b className="text-[var(--color-danger)]">Thay toàn bộ danh sách (đồng bộ sạch)</b> — làm cho danh sách khớp
-                    <b> đúng file</b>: ô để trống sẽ <b>xoá trắng</b>, và nhân viên không có trong file sẽ bị <b>xoá</b>.
-                  </span>
-                </label>
-                {replaceMode && (
-                  <div className="mt-3 rounded-[8px] bg-[var(--color-danger-bg)] px-3 py-2.5 text-[12px] text-[var(--color-danger)]">
+              <div className="mt-4 flex flex-col gap-2 rounded-[10px] border border-[var(--color-border)] p-3">
+                <div className="text-[12px] font-semibold text-[var(--color-text-secondary)]">Cách đồng bộ với danh sách hiện có</div>
+                {([
+                  { key: "upsert", title: "Chỉ thêm & cập nhật", desc: "Thêm NV mới, cập nhật NV có trong file. Không đụng tới NV vắng mặt." },
+                  { key: "soft", title: "Đồng bộ mềm — đánh dấu Nghỉ việc (khuyến nghị)", desc: "NV không có trong file được chuyển trạng thái “Nghỉ việc” nhưng GIỮ NGUYÊN dữ liệu chấm công, lương, KPI các kỳ trước." },
+                  { key: "replace", title: "Đồng bộ sạch — xoá vĩnh viễn", desc: "NV không có trong file bị XOÁ hẳn kèm toàn bộ dữ liệu liên quan; ô để trống trong file sẽ xoá trắng dữ liệu cũ." },
+                ] as { key: "upsert" | "soft" | "replace"; title: string; desc: string }[]).map((m) => (
+                  <label key={m.key} className={cn("flex cursor-pointer items-start gap-2 rounded-[8px] border p-2.5", syncMode === m.key ? (m.key === "replace" ? "border-[var(--color-danger)] bg-[var(--color-danger-bg)]" : m.key === "soft" ? "border-[var(--color-accent)] bg-[var(--color-page-bg)]" : "border-[var(--color-accent)] bg-[var(--color-page-bg)]") : "border-[var(--color-border)]")}>
+                    <input type="radio" name="syncMode" checked={syncMode === m.key} onChange={() => { setSyncMode(m.key); setConfirmText(""); }} className={cn("mt-0.5 h-4 w-4", m.key === "replace" ? "accent-[var(--color-danger)]" : "accent-[var(--color-accent)]")} />
+                    <span className="text-[12.5px] text-[var(--color-text-secondary)]">
+                      <b className={m.key === "replace" ? "text-[var(--color-danger)]" : "text-[var(--color-text-primary)]"}>{m.title}</b>
+                      <div className="mt-0.5 text-[11.5px] text-[var(--color-text-muted)]">{m.desc}</div>
+                    </span>
+                  </label>
+                ))}
+
+                {syncMode === "soft" && toResignCount > 0 && (
+                  <div className="rounded-[8px] bg-[var(--color-page-bg)] px-3 py-2 text-[12px] text-[var(--color-text-secondary)]">
+                    <b>{toResignCount}</b> nhân viên vắng mặt sẽ chuyển sang <b>Nghỉ việc</b> — dữ liệu các kỳ trước vẫn giữ nguyên.
+                  </div>
+                )}
+                {syncMode === "replace" && (
+                  <div className="rounded-[8px] bg-[var(--color-danger-bg)] px-3 py-2.5 text-[12px] text-[var(--color-danger)]">
                     <div className="font-medium">⚠️ Thao tác không thể hoàn tác:</div>
                     <ul className="ml-4 mt-1 list-disc space-y-0.5">
                       <li><b>{toDeleteCount}</b> nhân viên không có trong file sẽ bị <b>xoá vĩnh viễn</b> (kèm dữ liệu chấm công, lương, KPI… liên quan).</li>
@@ -1007,19 +1018,23 @@ function ImportModal({ existing, onClose, onImported }: { existing: ApiEmployee[
                 onClick={handleImport}
                 disabled={
                   isLoading || !confirmOk ||
-                  (replaceMode ? counts.new + counts.update + counts.same === 0 && toDeleteCount === 0 : applyCount === 0)
+                  (syncMode === "upsert"
+                    ? applyCount === 0
+                    : counts.new + counts.update + counts.same === 0 && toDeleteCount === 0 && toResignCount === 0)
                 }
                 className={cn(
                   "flex items-center gap-1.5 rounded-[8px] px-4 py-1.5 text-[12.5px] font-medium text-white disabled:opacity-60",
-                  replaceMode ? "bg-[var(--color-danger)]" : "bg-[var(--color-accent)]",
+                  syncMode === "replace" ? "bg-[var(--color-danger)]" : "bg-[var(--color-accent)]",
                 )}
               >
                 {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
                 {isLoading
                   ? "Đang đồng bộ..."
-                  : replaceMode
+                  : syncMode === "replace"
                     ? `Đồng bộ sạch (${counts.new + counts.update + counts.same} theo file · ${toDeleteCount} xoá)`
-                    : `Cập nhật (${counts.new} mới · ${counts.update} sửa)`}
+                    : syncMode === "soft"
+                      ? `Đồng bộ mềm (${counts.new + counts.update + counts.same} theo file · ${toResignCount} nghỉ việc)`
+                      : `Cập nhật (${counts.new} mới · ${counts.update} sửa)`}
               </button>
             </div>
           </>
