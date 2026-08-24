@@ -103,6 +103,23 @@ export async function saveCheckin(request: Request, env: Env, userId: number): P
   return json({ success: true, data: row }, 201);
 }
 
+/** GET /api/checkins?date=YYYY-MM-DD — nhật ký chấm công selfie trong ngày (quản lý). */
+export async function listCheckins(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const date = url.searchParams.get("date") || todayStr();
+  const { results } = await env.DB.prepare(
+    `SELECT c.*, e.name AS employee_name, e.code AS employee_code, d.name AS department_name
+     FROM checkins c
+     JOIN employees e ON e.id = c.employee_id
+     LEFT JOIN departments d ON d.id = e.department_id
+     WHERE c.date = ?
+     ORDER BY e.code`,
+  )
+    .bind(date)
+    .all();
+  return json({ data: results, date });
+}
+
 /** GET /api/checkin-photos/:key — phục vụ ảnh chấm công (yêu cầu đăng nhập). */
 export async function serveCheckinPhoto(_request: Request, env: Env, key: string): Promise<Response> {
   if (!env.STORAGE) return error("Kho lưu trữ R2 chưa được bật.", 503);
