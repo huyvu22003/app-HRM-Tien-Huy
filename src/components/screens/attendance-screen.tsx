@@ -140,7 +140,7 @@ export function AttendanceScreen() {
     [rows, flag],
   );
 
-  async function saveEdit(id: number, payload: Record<string, number>) {
+  async function saveEdit(id: number, payload: Record<string, number | string>) {
     await updateAttendance(id, payload);
     setEditRow(null);
     refetch();
