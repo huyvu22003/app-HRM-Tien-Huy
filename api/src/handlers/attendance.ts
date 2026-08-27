@@ -22,6 +22,8 @@ export async function listAttendance(request: Request, env: Env): Promise<Respon
 }
 
 interface AttendanceUpdateBody {
+  employeeId?: number;
+  period?: string;
   stdDays?: number;
   actualDays?: number;
   pn?: number;
@@ -40,6 +42,7 @@ interface AttendanceUpdateBody {
 }
 
 interface AttendanceRow {
+  id: number;
   locked: number;
   std_days: number;
   actual_days: number;
@@ -65,41 +68,47 @@ interface AttendanceRow {
  *   - Tổng OT = OT ngày thường + OT chủ nhật + OT lễ
  */
 export async function updateAttendance(request: Request, env: Env, id: string): Promise<Response> {
-  const existing = await env.DB.prepare("SELECT * FROM attendance WHERE id = ?")
+  const body = await readJson<AttendanceUpdateBody>(request);
+
+  // Tìm bản ghi theo id; nếu không có (id cũ/không khớp), tra theo nhân viên + kỳ.
+  let existing = await env.DB.prepare("SELECT * FROM attendance WHERE id = ?")
     .bind(id)
     .first<AttendanceRow>();
-  if (!existing) return error("Không tìm thấy bản ghi chấm công", 404);
-
-  const body = await readJson<AttendanceUpdateBody>(request);
+  if (!existing && body.employeeId && body.period) {
+    existing = await env.DB.prepare("SELECT * FROM attendance WHERE employee_id = ? AND period = ?")
+      .bind(body.employeeId, body.period)
+      .first<AttendanceRow>();
+  }
 
   // Thao tác khoá/mở khoá kỳ: chỉ đổi trạng thái, không đụng số liệu.
   if (body.locked !== undefined && Object.keys(body).length === 1) {
+    if (!existing) return error("Không tìm thấy bản ghi chấm công", 404);
     await env.DB.prepare("UPDATE attendance SET locked = ? WHERE id = ?")
-      .bind(body.locked ? 1 : 0, id)
+      .bind(body.locked ? 1 : 0, existing.id)
       .run();
     return json({ success: true });
   }
 
-  if (existing.locked) return error("Kỳ chấm công đã bị khóa", 423);
+  if (existing?.locked) return error("Kỳ chấm công đã bị khóa", 423);
 
-  // Trường nào không gửi thì giữ nguyên giá trị hiện có.
+  // Trường nào không gửi thì giữ nguyên giá trị hiện có (bản ghi mới → mặc định 0).
   const keep = (v: number | undefined, cur: number | null | undefined): number =>
     v === undefined || v === null || Number.isNaN(Number(v)) ? Number(cur ?? 0) : Number(v);
 
-  const std = keep(body.stdDays, existing.std_days);
-  const nc = keep(body.actualDays, existing.actual_days);
-  const pn = keep(body.pn, existing.pn);
-  const pb = keep(body.pb, existing.pb);
-  const vr = keep(body.vr, existing.vr);
-  const pc = keep(body.pc, existing.pc);
-  const pts = keep(body.pts, existing.pts);
-  const pt = keep(body.pt, existing.pt);
-  const tnld = keep(body.tnld, existing.tnld);
-  const otW = keep(body.otWeekdayHours, existing.ot_weekday_hours);
-  const otS = keep(body.otSundayHours, existing.ot_sunday_hours);
-  const otH = keep(body.otHolidayHours, existing.ot_holiday_hours);
-  const gas = keep(body.gasDays, existing.gas_days);
-  const meal = keep(body.mealAllowance, existing.meal_allowance);
+  const std = keep(body.stdDays, existing?.std_days ?? 26);
+  const nc = keep(body.actualDays, existing?.actual_days);
+  const pn = keep(body.pn, existing?.pn);
+  const pb = keep(body.pb, existing?.pb);
+  const vr = keep(body.vr, existing?.vr);
+  const pc = keep(body.pc, existing?.pc);
+  const pts = keep(body.pts, existing?.pts);
+  const pt = keep(body.pt, existing?.pt);
+  const tnld = keep(body.tnld, existing?.tnld);
+  const otW = keep(body.otWeekdayHours, existing?.ot_weekday_hours);
+  const otS = keep(body.otSundayHours, existing?.ot_sunday_hours);
+  const otH = keep(body.otHolidayHours, existing?.ot_holiday_hours);
+  const gas = keep(body.gasDays, existing?.gas_days);
+  const meal = keep(body.mealAllowance, existing?.meal_allowance);
 
   // KP = phần vắng không phép còn lại sau khi trừ mọi loại phép có lý do.
   const kp = Math.max(0, +(std - nc - pn - pb - vr - pc - pts - pt - tnld).toFixed(2));
@@ -108,18 +117,39 @@ export async function updateAttendance(request: Request, env: Env, id: string): 
   // PTS (thai sản) không hưởng lương → không tính vào leave_days.
   const leaveDays = +(pc + pt + tnld).toFixed(2);
 
+  if (existing) {
+    await env.DB.prepare(
+      `UPDATE attendance SET
+         std_days = ?, actual_days = ?, pn = ?, pb = ?, vr = ?,
+         pc = ?, pts = ?, pt = ?, tnld = ?, kp = ?, leave_days = ?,
+         ot_weekday_hours = ?, ot_sunday_hours = ?, ot_holiday_hours = ?, overtime_hours = ?,
+         gas_days = ?, meal_allowance = ?, is_edited = 1
+       WHERE id = ?`,
+    )
+      .bind(std, nc, pn, pb, vr, pc, pts, pt, tnld, kp, leaveDays, otW, otS, otH, otTotal, gas, meal, existing.id)
+      .run();
+    return json({ success: true });
+  }
+
+  // Chưa có bản ghi nào → tạo bản ghi điều chỉnh mới cho nhân viên + kỳ (upsert).
+  if (!body.employeeId || !body.period) {
+    return error("Không tìm thấy bản ghi chấm công (thiếu nhân viên/kỳ để tạo mới)", 404);
+  }
   await env.DB.prepare(
-    `UPDATE attendance SET
-       std_days = ?, actual_days = ?, pn = ?, pb = ?, vr = ?,
-       pc = ?, pts = ?, pt = ?, tnld = ?, kp = ?, leave_days = ?,
-       ot_weekday_hours = ?, ot_sunday_hours = ?, ot_holiday_hours = ?, overtime_hours = ?,
-       gas_days = ?, meal_allowance = ?, is_edited = 1
-     WHERE id = ?`,
+    `INSERT INTO attendance
+       (employee_id, period, std_days, actual_days, pn, pb, vr, pc, pts, pt, tnld, kp, leave_days,
+        ot_weekday_hours, ot_sunday_hours, ot_holiday_hours, overtime_hours, gas_days, meal_allowance, is_edited)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+     ON CONFLICT(employee_id, period) DO UPDATE SET
+       std_days = excluded.std_days, actual_days = excluded.actual_days, pn = excluded.pn, pb = excluded.pb, vr = excluded.vr,
+       pc = excluded.pc, pts = excluded.pts, pt = excluded.pt, tnld = excluded.tnld, kp = excluded.kp, leave_days = excluded.leave_days,
+       ot_weekday_hours = excluded.ot_weekday_hours, ot_sunday_hours = excluded.ot_sunday_hours, ot_holiday_hours = excluded.ot_holiday_hours,
+       overtime_hours = excluded.overtime_hours, gas_days = excluded.gas_days, meal_allowance = excluded.meal_allowance, is_edited = 1`,
   )
-    .bind(std, nc, pn, pb, vr, pc, pts, pt, tnld, kp, leaveDays, otW, otS, otH, otTotal, gas, meal, id)
+    .bind(body.employeeId, body.period, std, nc, pn, pb, vr, pc, pts, pt, tnld, kp, leaveDays, otW, otS, otH, otTotal, gas, meal)
     .run();
 
-  return json({ success: true });
+  return json({ success: true, created: true });
 }
 
 /** Danh sách các kỳ (period) đã có dữ liệu chấm công, mới nhất trước. */

@@ -34,7 +34,7 @@ export function AttendanceEditModal({
   onClose,
 }: {
   row: ApiAttendance;
-  onSave: (id: number, payload: Record<string, number>) => Promise<void>;
+  onSave: (id: number, payload: Record<string, number | string>) => Promise<void>;
   onClose: () => void;
 }) {
   const [form, setForm] = useState<Record<FieldKey, string>>({
@@ -85,6 +85,10 @@ export function AttendanceEditModal({
     setErr(null);
     try {
       await onSave(row.id, {
+        // Gửi kèm nhân viên + kỳ để API tự tạo bản ghi nếu chưa có (upsert),
+        // tránh lỗi 404 khi dòng chấm công gốc chưa tồn tại / đã cũ.
+        employeeId: row.employee_id,
+        period: row.period,
         stdDays: v("std_days"),
         actualDays: v("actual_days"),
         pn: v("pn"),
