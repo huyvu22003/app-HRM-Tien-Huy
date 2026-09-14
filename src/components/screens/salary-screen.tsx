@@ -30,6 +30,8 @@ const SAL_COLUMNS_ALL: ColumnDef<SalaryDisplayRow>[] = [
     ),
     exportValue: (d) => `${d.row.name} (${d.row.code})`,
   },
+  { id: "position", label: "Chức vụ", defaultHidden: true, cell: (d) => d.row.position ?? "-", exportValue: (d) => d.row.position ?? "" },
+  { id: "code", label: "Mã thẻ", defaultHidden: true, cell: (d) => d.row.code, exportValue: (d) => d.row.code },
   { id: "department_name", label: "Bộ phận", cell: (d) => d.row.department_name ?? "-", exportValue: (d) => d.row.department_name ?? "" },
   // --- Cột thông tin (mặc định ẩn; đọc từ hồ sơ NV/BHXH, chỉ hiển thị, không sửa) ---
   { id: "bank", label: "Ngân hàng / STK", defaultHidden: true, cell: (d) => d.row.bank ?? "-", exportValue: (d) => d.row.bank ?? "" },
@@ -38,6 +40,7 @@ const SAL_COLUMNS_ALL: ColumnDef<SalaryDisplayRow>[] = [
   { id: "cong", label: "Công", align: "right", cell: (d) => `${d.s.actualDays}/${STD_DAYS}`, exportValue: (d) => d.s.actualDays, exportFormat: "int" },
   { id: "workSalary", label: "Lương công", align: "right", cell: (d) => formatMoney(d.s.workSalary), exportValue: (d) => d.s.workSalary, exportFormat: "money" },
   // --- Bóc tách thu nhập (mặc định ẩn) ---
+  { id: "monthlyTotal", label: "Tổng lương (cứng)", align: "right", defaultHidden: true, cell: (d) => formatMoney(d.s.totalMonthly), exportValue: (d) => d.s.totalMonthly, exportFormat: "money" },
   { id: "baseSalary", label: "Lương CB (tháng)", align: "right", defaultHidden: true, cell: (d) => formatMoney(d.s.base), exportValue: (d) => d.s.base, exportFormat: "money" },
   { id: "allowanceActual", label: "Phụ cấp", align: "right", defaultHidden: true, cell: (d) => (d.s.allowanceActual > 0 ? formatMoney(d.s.allowanceActual) : "-"), exportValue: (d) => d.s.allowanceActual, exportFormat: "money" },
   { id: "gasDays", label: "Ngày xăng", align: "right", defaultHidden: true, cell: (d) => (d.s.gasDays > 0 ? String(d.s.gasDays) : "-"), exportValue: (d) => d.s.gasDays, exportFormat: "int" },
@@ -46,6 +49,7 @@ const SAL_COLUMNS_ALL: ColumnDef<SalaryDisplayRow>[] = [
   { id: "mealAllowance", label: "Tiền cơm", align: "right", defaultHidden: true, cell: (d) => (d.s.mealAllowance > 0 ? formatMoney(d.s.mealAllowance) : "-"), exportValue: (d) => d.s.mealAllowance, exportFormat: "money" },
   { id: "nightAllowance", label: "PC đêm", align: "right", defaultHidden: true, cell: (d) => (d.s.nightAllowance > 0 ? formatMoney(d.s.nightAllowance) : "-"), exportValue: (d) => d.s.nightAllowance, exportFormat: "money" },
   { id: "leavePay", label: "Lương phép", align: "right", defaultHidden: true, cell: (d) => (d.s.leavePay > 0 ? formatMoney(d.s.leavePay) : "-"), exportValue: (d) => d.s.leavePay, exportFormat: "money" },
+  { id: "bonus", label: "Thưởng", align: "right", defaultHidden: true, cell: (d) => (d.s.bonus > 0 ? formatMoney(d.s.bonus) : "-"), exportValue: (d) => d.s.bonus, exportFormat: "money" },
   { id: "responsibilityActual", label: "Trách nhiệm", align: "right", cell: (d) => formatMoney(d.s.responsibilityActual), exportValue: (d) => d.s.responsibilityActual, exportFormat: "money" },
   { id: "overtime", label: "Tăng ca", align: "right", cell: (d) => (totalOtOf(d.s) > 0 ? formatMoney(totalOtOf(d.s)) : "-"), exportValue: (d) => totalOtOf(d.s), exportFormat: "money" },
   { id: "otWeekday", label: "OT thường", align: "right", defaultHidden: true, cell: (d) => (d.s.otWeekday > 0 ? formatMoney(d.s.otWeekday) : "-"), exportValue: (d) => d.s.otWeekday, exportFormat: "money" },

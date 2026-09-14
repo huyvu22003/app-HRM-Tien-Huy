@@ -860,6 +860,7 @@ export interface ApiSalaryRow {
   employee_id: number;
   code: string;
   name: string;
+  position?: string | null;
   department_id: number | null;
   department_name: string | null;
   base_salary: number | null;
