@@ -400,23 +400,33 @@ export function DataTable<Row>({
           <button
             onClick={toggleReorderLock}
             className={cn(
-              "flex items-center gap-1.5 rounded-[8px] border px-3 py-1.5 text-[12.5px] transition-colors",
+              "flex items-center gap-1.5 rounded-[8px] border px-3 py-1.5 text-[12.5px] font-medium transition-colors",
               reorderLocked
                 ? "border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]"
-                : "border-[var(--color-accent)] bg-[var(--color-accent)] text-white",
+                : "border-[var(--color-success)] bg-[var(--color-success)] text-white",
             )}
             title={
               reorderLocked
-                ? "Mở khoá để kéo đổi vị trí và chỉnh rộng cột"
-                : "Đang mở khoá — kéo grip để đổi vị trí, kéo vạch phải để chỉnh rộng, nháy đúp vạch để tự canh. Bấm để khoá & lưu lại"
+                ? "Đang khoá cột. Bấm để MỞ KHOÁ, sau đó kéo cột đổi vị trí / chỉnh rộng."
+                : "Đang mở khoá — kéo tay nắm ⋮⋮ để đổi vị trí, kéo mép phải để chỉnh rộng, nháy đúp mép để tự canh. Bấm để khoá & lưu bố cục."
             }
           >
             {reorderLocked ? <Lock size={14} /> : <Unlock size={14} />}
-            {reorderLocked ? "Khoá cột" : "Đang chỉnh cột · Lưu"}
+            {reorderLocked ? "Mở khoá cột" : "Xong · Khoá & lưu"}
           </button>
           {toolbarActions?.({ rows: filtered, columns: visibleColumns })}
         </div>
       </div>
+
+      {!reorderLocked && (
+        <div className="flex items-center gap-2 rounded-[10px] border border-[var(--color-success)] bg-[var(--color-success)]/10 px-3 py-2 text-[12px] text-[var(--color-text-secondary)]">
+          <GripVertical size={14} className="flex-shrink-0 text-[var(--color-success)]" />
+          <span>
+            Đang mở khoá cột — kéo tay nắm <span className="font-medium">⋮⋮</span> ở tiêu đề để đổi vị trí, kéo mép phải để chỉnh rộng, nháy đúp mép để tự canh.
+            Xong bấm <span className="font-medium">“Xong · Khoá &amp; lưu”</span> để giữ bố cục.
+          </span>
+        </div>
+      )}
 
       <div className="max-h-[calc(100vh-260px)] overflow-auto rounded-[14px] border border-[var(--color-border)] bg-white">
         <table ref={tableRef} className="w-full table-fixed text-[13px]" style={{ minWidth: minWidth + leadW }}>
