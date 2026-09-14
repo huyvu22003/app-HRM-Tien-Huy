@@ -8,7 +8,7 @@ export async function getSalary(request: Request, env: Env): Promise<Response> {
   if (!period) return error("Thiếu tham số period (VD: 2026-06)", 400);
 
   const { results } = await env.DB.prepare(
-    `SELECT e.id as employee_id, e.code, e.name, e.department_id, e.bank,
+    `SELECT e.id as employee_id, e.code, e.name, e.position, e.department_id, e.bank,
             d.name as department_name,
             c.pay_method, c.merge_into,
             c.base_salary, c.allowance, c.responsibility_salary,
@@ -52,7 +52,7 @@ export async function getMySalary(request: Request, env: Env, userId: number): P
   if (!acc?.employee_id) return error("Tài khoản chưa gắn nhân viên", 404);
 
   const row = await env.DB.prepare(
-    `SELECT e.id as employee_id, e.code, e.name, e.department_id, e.bank,
+    `SELECT e.id as employee_id, e.code, e.name, e.position, e.department_id, e.bank,
             d.name as department_name,
             c.pay_method, c.merge_into,
             c.base_salary, c.allowance, c.responsibility_salary,
