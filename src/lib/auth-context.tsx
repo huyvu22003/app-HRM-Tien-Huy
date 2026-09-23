@@ -49,7 +49,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 function apiUserToAuthUser(u: ApiUser): AuthUser {
   return {
     id: u.id,
-    employeeId: u.employee_id,
+    employeeId: u.employee_id ?? u.employeeId ?? null,
     phone: u.phone,
     name: u.name || u.phone,
     role: u.role as Role,

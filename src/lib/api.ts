@@ -121,7 +121,8 @@ export const api = {
 
 export interface ApiUser {
   id: number;
-  employee_id: number | null;
+  employee_id?: number | null;
+  employeeId?: number | null;
   phone: string;
   role: "super" | "hr" | "lead" | "staff";
   name?: string;
