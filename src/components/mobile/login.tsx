@@ -8,9 +8,10 @@ import { mono } from "./primitives";
 
 const DEMO = [
   { phone: "0909000001", name: "BGĐ" },
-  { phone: "0909000002", name: "HR" },
+  { phone: "0985040797", name: "HR" },
   { phone: "0909000003", name: "Tổ trưởng" },
   { phone: "0909000004", name: "Nhân viên" },
+  { phone: "0937454099", name: "IT" },
 ];
 
 export function MobileLogin() {

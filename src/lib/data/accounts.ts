@@ -8,6 +8,7 @@ export interface Account {
   department: string;
   code: string;
   email: string;
+  employeeId: number;
 }
 
 export const ACCOUNTS: Record<string, Account> = {
@@ -19,15 +20,17 @@ export const ACCOUNTS: Record<string, Account> = {
     department: "Ban Giám đốc",
     code: "BGD-001",
     email: "giamdoc@tienhuy.vn",
+    employeeId: 82,
   },
-  "0909000002": {
-    phone: "0909000002",
+  "0985040797": {
+    phone: "0985040797",
     password: "123456",
     name: "Ôn Thị Uy Lam",
     role: "hr",
-    department: "Phòng Nhân sự",
-    code: "HR-001",
-    email: "uylam@tienhuy.vn",
+    department: "Nhân Sự",
+    code: "0088",
+    email: "on.thi.uy.lam.0088@tienhuy.vn",
+    employeeId: 75,
   },
   "0909000003": {
     phone: "0909000003",
@@ -37,6 +40,7 @@ export const ACCOUNTS: Record<string, Account> = {
     department: "Tổ Phay CNC",
     code: "0142",
     email: "thien@tienhuy.vn",
+    employeeId: 1,
   },
   "0909000004": {
     phone: "0909000004",
@@ -46,15 +50,17 @@ export const ACCOUNTS: Record<string, Account> = {
     department: "Tổ Tiện CNC",
     code: "0087",
     email: "namanh@tienhuy.vn",
+    employeeId: 6,
   },
-  "0909000005": {
-    phone: "0909000005",
+  "0937454099": {
+    phone: "0937454099",
     password: "123456",
     name: "_Huy (IT)",
     role: "super",
     department: "Bộ phận IT",
     code: "IT-001",
     email: "it@tienhuy.vn",
+    employeeId: 83,
   },
 };
 

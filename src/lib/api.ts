@@ -151,7 +151,7 @@ export async function apiLogin(phone: string, password: string) {
       const userId = accountIdx >= 0 ? accountIdx + 1 : 1;
       const demoUser = {
         id: userId,
-        employee_id: userId,
+        employee_id: acc.employeeId,
         phone: acc.phone,
         role: acc.role as ApiUser["role"],
         name: acc.name,

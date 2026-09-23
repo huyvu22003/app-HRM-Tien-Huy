@@ -23,10 +23,10 @@ interface DemoAccount {
 
 const DEMO_ACCOUNTS: DemoAccount[] = [
   { phone: "0909000001", password: "123456", name: "Mr. Trung", role: "super" },
-  { phone: "0909000002", password: "123456", name: "Ôn Thị Uy Lam", role: "hr" },
+  { phone: "0985040797", password: "123456", name: "Ôn Thị Uy Lam", role: "hr" },
   { phone: "0909000003", password: "123456", name: "Nguyễn Văn Thiện", role: "lead" },
   { phone: "0909000004", password: "123456", name: "Chu Nam Anh", role: "staff" },
-  { phone: "0909000005", password: "123456", name: "_Huy (IT)", role: "super" },
+  { phone: "0937454099", password: "123456", name: "_Huy (IT)", role: "super" },
 ];
 
 export function LoginScreen() {

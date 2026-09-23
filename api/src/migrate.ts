@@ -117,6 +117,35 @@ const STEPS: { id: string; run: (env: Env) => Promise<void> }[] = [
       await env.DB.exec("CREATE INDEX IF NOT EXISTS idx_reports_emp ON reports(employee_id)");
     },
   },
+
+  {
+    id: "019_link_hr_it_accounts",
+    run: async (env) => {
+      // Gắn tài khoản test HR/IT với đúng hồ sơ nhân viên và số điện thoại trong danh sách.
+      await env.DB.prepare(
+        `UPDATE users
+         SET employee_id = (SELECT id FROM employees WHERE code = '0088'),
+             phone = (SELECT phone FROM employees WHERE code = '0088'),
+             updated_at = datetime('now')
+         WHERE phone IN ('0909000002', '0985040797')
+            OR employee_id = (SELECT id FROM employees WHERE code = '0088')`,
+      ).run();
+      await env.DB.prepare(
+        `UPDATE employees
+         SET phone = '0937454099',
+             updated_at = datetime('now')
+         WHERE code = 'IT-001'`,
+      ).run();
+      await env.DB.prepare(
+        `UPDATE users
+         SET employee_id = (SELECT id FROM employees WHERE code = 'IT-001'),
+             phone = '0937454099',
+             updated_at = datetime('now')
+         WHERE phone IN ('0909000005', '0966703958', '0937454099')
+            OR employee_id = (SELECT id FROM employees WHERE code = 'IT-001')`,
+      ).run();
+    },
+  },
 ];
 
 /** Áp các bước migrate còn thiếu (một lần cho mỗi isolate). */

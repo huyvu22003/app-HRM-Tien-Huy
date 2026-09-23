@@ -1019,7 +1019,7 @@ export const EMPLOYEES: Employee[] = [
   },
   {
     code: 'IT-001', name: '_Huy (IT)', department: 'Bộ phận IT', position: 'Quản trị hệ thống',
-    phone: '0966703958', gender: 'Nam', dob: '2000-02-03', cccd: '020008862989',
+    phone: '0937454099', gender: 'Nam', dob: '2000-02-03', cccd: '020008862989',
     address: 'Quận 12, TP.HCM', bank: 'Agribank - 1813761875', taxCode: '1579537517',
     joinDate: '2024-11-08', contractType: 'Không xác định thời hạn', contractEnd: '',
     workplace: 'Văn phòng', manager: '-', level: 'Chuyên viên',
