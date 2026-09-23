@@ -146,6 +146,35 @@ const STEPS: { id: string; run: (env: Env) => Promise<void> }[] = [
       ).run();
     },
   },
+  {
+    id: "020_ensure_hr_it_accounts",
+    run: async (env) => {
+      // Migration 019 only updated existing rows. Some production databases do
+      // not contain the legacy HR row, so upsert the two canonical accounts.
+      const defaultPasswordHash =
+        "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92";
+      await env.DB.prepare(
+        `INSERT INTO users (employee_id, phone, password_hash, role, active)
+         VALUES ((SELECT id FROM employees WHERE code = '0088'), '0985040797', ?, 'hr', 1)
+         ON CONFLICT(phone) DO UPDATE SET
+           employee_id = excluded.employee_id,
+           password_hash = excluded.password_hash,
+           role = excluded.role,
+           active = 1,
+           updated_at = datetime('now')`,
+      ).bind(defaultPasswordHash).run();
+      await env.DB.prepare(
+        `INSERT INTO users (employee_id, phone, password_hash, role, active)
+         VALUES ((SELECT id FROM employees WHERE code = 'IT-001'), '0937454099', ?, 'super', 1)
+         ON CONFLICT(phone) DO UPDATE SET
+           employee_id = excluded.employee_id,
+           password_hash = excluded.password_hash,
+           role = excluded.role,
+           active = 1,
+           updated_at = datetime('now')`,
+      ).bind(defaultPasswordHash).run();
+    },
+  },
 ];
 
 /** Áp các bước migrate còn thiếu (một lần cho mỗi isolate). */
