@@ -254,6 +254,12 @@ export interface DataTableProps<Row> {
   leadingColumn?: ColumnDef<Row>;
   /** Độ rộng cột cố định bên trái (mặc định 96px). */
   leadingWidth?: number;
+  /** Optional pinned summary row rendered after the current filtered rows. */
+  summaryRow?: (ctx: { rows: Row[]; columns: ColumnDef<Row>[] }) => {
+    leadingCell?: React.ReactNode;
+    sttCell?: React.ReactNode;
+    cells: Record<string, React.ReactNode>;
+  } | null;
 }
 
 export function DataTable<Row>({
@@ -274,6 +280,7 @@ export function DataTable<Row>({
   onDeleteColumn,
   leadingColumn,
   leadingWidth = 96,
+  summaryRow,
 }: DataTableProps<Row>) {
   const leadW = leadingColumn ? leadingWidth : 0;
   const {
@@ -343,6 +350,7 @@ export function DataTable<Row>({
 
   const totalPages = pageSize ? Math.max(1, Math.ceil(filtered.length / pageSize)) : 1;
   const pageRows = pageSize ? filtered.slice((page - 1) * pageSize, page * pageSize) : filtered;
+  const summary = summaryRow?.({ rows: filtered, columns: visibleColumns }) ?? null;
 
   function colWidth(c: ColumnDef<Row>): number {
     if (widths[c.id]) return widths[c.id];
@@ -574,6 +582,35 @@ export function DataTable<Row>({
               </tr>
             )}
           </tbody>
+          {summary && pageRows.length > 0 && (
+            <tfoot>
+              <tr className="border-t border-[var(--color-border)] bg-[var(--color-page-bg)] text-[12.5px] font-semibold text-[var(--color-text-primary)]">
+                {leadingColumn && (
+                  <td style={{ left: 0 }} className="sticky bottom-0 left-0 z-20 bg-[var(--color-page-bg)] px-2 py-2.5">
+                    {summary.leadingCell ?? null}
+                  </td>
+                )}
+                <td style={{ left: leadW }} className="sticky bottom-0 z-20 bg-[var(--color-page-bg)] px-4 py-2.5 text-center font-[family-name:var(--font-mono)]">
+                  {summary.sttCell ?? "SUM"}
+                </td>
+                {visibleColumns.map((c) => (
+                  <td
+                    key={c.id}
+                    data-col={c.id}
+                    style={frozenLeft[c.id] != null ? { left: frozenLeft[c.id] } : undefined}
+                    className={cn(
+                      "sticky bottom-0 border-l border-[var(--color-border-light)] bg-[var(--color-page-bg)] px-3 py-2.5",
+                      frozenLeft[c.id] != null && "z-20",
+                      c.align === "right" && "text-right",
+                      c.align === "center" && "text-center",
+                    )}
+                  >
+                    <div className="min-w-0 truncate">{summary.cells[c.id] ?? ""}</div>
+                  </td>
+                ))}
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
 

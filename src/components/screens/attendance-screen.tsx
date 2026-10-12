@@ -33,6 +33,13 @@ function currentPeriod() {
 }
 const n0 = (v: number | undefined | null) => (v ? v : "-");
 const money = (v: number | undefined | null) => (v ? Math.round(v).toLocaleString("vi-VN") : "-");
+const sumNumber = (rows: AttRow[], field: keyof ApiAttendance) =>
+  rows.reduce((sum, item) => sum + Number(item.row[field] ?? 0), 0);
+const fmtSum = (value: number, moneyValue = false) => {
+  if (moneyValue) return value ? `${Math.round(value).toLocaleString("vi-VN")} ₫` : "-";
+  if (!value) return "-";
+  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(3)));
+};
 
 const LEAVE_TYPE_LABEL: Record<string, string> = {
   PN: "Phép năm", PB: "Phép bệnh", VR: "Việc riêng", PC: "Phép cưới", PT: "Phép tang", TNLD: "Tai nạn LĐ",
@@ -400,6 +407,28 @@ export function AttendanceScreen() {
           rowClassName={(d) => (d.mismatch ? "bg-[var(--color-warning-bg)]" : "")}
           emptyText={`Chưa có dữ liệu chấm công kỳ ${periodDisplay}. Bấm “Nhập Excel” để tải bảng chấm công lên.`}
           toolbarLeft={flagButtons}
+          summaryRow={({ rows: summaryRows }) => ({
+            sttCell: "SUM",
+            cells: {
+              code: "",
+              name: "Tổng",
+              std_days: fmtSum(sumNumber(summaryRows, "std_days")),
+              actual_days: fmtSum(sumNumber(summaryRows, "actual_days")),
+              pn: fmtSum(sumNumber(summaryRows, "pn")),
+              pb: fmtSum(sumNumber(summaryRows, "pb")),
+              vr: fmtSum(sumNumber(summaryRows, "vr")),
+              kp: fmtSum(sumNumber(summaryRows, "kp")),
+              pc: fmtSum(sumNumber(summaryRows, "pc")),
+              pt: fmtSum(sumNumber(summaryRows, "pt")),
+              tnld: fmtSum(sumNumber(summaryRows, "tnld")),
+              pts: fmtSum(sumNumber(summaryRows, "pts")),
+              gas_days: fmtSum(sumNumber(summaryRows, "gas_days")),
+              ot_weekday_hours: fmtSum(sumNumber(summaryRows, "ot_weekday_hours")),
+              ot_sunday_hours: fmtSum(sumNumber(summaryRows, "ot_sunday_hours")),
+              ot_holiday_hours: fmtSum(sumNumber(summaryRows, "ot_holiday_hours")),
+              meal_allowance: fmtSum(sumNumber(summaryRows, "meal_allowance"), true),
+            },
+          })}
           toolbarActions={({ rows: fr, columns: fc }) => (
             <button onClick={() => handleExport(fr, fc)} className="flex items-center gap-1.5 rounded-[8px] border border-[var(--color-border)] px-3 py-1.5 text-[12.5px] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]">
               <Download size={14} /> Xuất Excel
