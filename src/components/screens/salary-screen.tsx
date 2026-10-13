@@ -66,10 +66,9 @@ const SAL_COLUMNS_ALL: ColumnDef<SalaryDisplayRow>[] = [
     cell: (d) => (
       <div className="min-w-0">
         <div className="truncate font-medium text-[var(--color-text-primary)]">{d.row.name}</div>
-        <div className="text-[11px] text-[var(--color-text-lighter)]">{d.row.code}</div>
       </div>
     ),
-    exportValue: (d) => `${d.row.name} (${d.row.code})`,
+    exportValue: (d) => d.row.name,
   },
   { id: "position", label: "Chức vụ", defaultHidden: true, cell: (d) => d.row.position ?? "-", exportValue: (d) => d.row.position ?? "" },
   { id: "code", label: "Mã thẻ", defaultHidden: true, cell: (d) => d.row.code, exportValue: (d) => d.row.code },
