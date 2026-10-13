@@ -1,5 +1,39 @@
 import type { Env } from "../middleware/auth";
-import { json, error, getParams } from "../utils";
+import { json, error, getParams, readJson } from "../utils";
+
+const COMP_FIELDS: Record<string, string> = {
+  base_salary: "base_salary",
+  allowance: "allowance",
+  responsibility_salary: "responsibility_salary",
+  gas_allowance: "gas_allowance",
+  attendance_bonus: "attendance_bonus",
+  union_dues: "union_dues",
+  dependents: "dependents",
+  advance: "advance",
+  advance_ck: "advance_ck",
+  advance_tm: "advance_tm",
+  company_debt: "company_debt",
+};
+
+const ATT_FIELDS: Record<string, string> = {
+  std_days: "std_days",
+  actual_days: "actual_days",
+  pn: "pn",
+  gas_days: "gas_days",
+  ot_weekday_hours: "ot_weekday_hours",
+  ot_sunday_hours: "ot_sunday_hours",
+  ot_holiday_hours: "ot_holiday_hours",
+  ot_night_hours: "ot_night_hours",
+  meal_allowance: "meal_allowance",
+  night_allowance: "night_allowance",
+  bonus: "bonus",
+};
+
+interface SalaryUpdateBody {
+  period?: string;
+  field?: string;
+  value?: number | string | null;
+}
 
 export async function getSalary(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
@@ -35,6 +69,61 @@ export async function getSalary(request: Request, env: Env): Promise<Response> {
     .all();
 
   return json({ data: results, period });
+}
+
+export async function updateSalaryCell(request: Request, env: Env, employeeId: string): Promise<Response> {
+  const body = await readJson<SalaryUpdateBody>(request);
+  const period = String(body.period ?? "").trim();
+  const field = String(body.field ?? "").trim();
+  if (!period) return error("Thiếu kỳ lương", 400);
+  if (!field) return error("Thiếu cột cần sửa", 400);
+
+  const value = Number(String(body.value ?? "").replace(/[^\d.-]/g, ""));
+  if (!Number.isFinite(value)) return error("Giá trị không hợp lệ", 400);
+
+  const employee = await env.DB.prepare("SELECT id FROM employees WHERE id = ?")
+    .bind(employeeId)
+    .first<{ id: number }>();
+  if (!employee) return error("Không tìm thấy nhân viên", 404);
+
+  const compCol = COMP_FIELDS[field];
+  if (compCol) {
+    await env.DB.prepare("INSERT OR IGNORE INTO compensation (employee_id) VALUES (?)")
+      .bind(employeeId)
+      .run();
+    if (field === "advance") {
+      await env.DB.prepare("UPDATE compensation SET advance = ?, advance_ck = ?, advance_tm = 0 WHERE employee_id = ?")
+        .bind(value, value, employeeId)
+        .run();
+      return json({ success: true });
+    }
+    await env.DB.prepare(`UPDATE compensation SET ${compCol} = ? WHERE employee_id = ?`)
+      .bind(value, employeeId)
+      .run();
+    if (field === "advance_ck" || field === "advance_tm") {
+      await env.DB.prepare("UPDATE compensation SET advance = COALESCE(advance_ck, 0) + COALESCE(advance_tm, 0) WHERE employee_id = ?")
+        .bind(employeeId)
+        .run();
+    }
+    return json({ success: true });
+  }
+
+  const attCol = ATT_FIELDS[field];
+  if (attCol) {
+    await env.DB.prepare(
+      `INSERT INTO attendance (employee_id, period, std_days, actual_days)
+       VALUES (?, ?, 26, 0)
+       ON CONFLICT(employee_id, period) DO NOTHING`,
+    )
+      .bind(employeeId, period)
+      .run();
+    await env.DB.prepare(`UPDATE attendance SET ${attCol} = ? WHERE employee_id = ? AND period = ?`)
+      .bind(value, employeeId, period)
+      .run();
+    return json({ success: true });
+  }
+
+  return error("Cột này chưa hỗ trợ sửa thủ công", 400);
 }
 
 /**

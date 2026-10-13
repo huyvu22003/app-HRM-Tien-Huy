@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState, useRef } from "react";
-import { X, Printer, Download } from "lucide-react";
-import { fetchSalary, fetchDepartments, type ApiSalaryRow } from "@/lib/api";
+import { useEffect, useMemo, useState, useRef } from "react";
+import { X, Printer, Download, Pencil, Loader2 } from "lucide-react";
+import { fetchSalary, fetchDepartments, updateSalaryCell, type ApiSalaryRow } from "@/lib/api";
 import { useQuery } from "@/lib/hooks";
 import { useCustomColumns } from "@/lib/use-custom-columns";
 import { formatMoney, cn } from "@/lib/utils";
@@ -12,6 +12,35 @@ import { exportStyledExcel } from "@/lib/excel-export";
 import { STD_DAYS, SALARY_PIT_ENABLED, computeSalary, type SalaryComputed } from "@/lib/salary-compute";
 
 type SalaryDisplayRow = { row: ApiSalaryRow; s: SalaryComputed };
+
+type EditableSalaryField = {
+  field: string;
+  value: (d: SalaryDisplayRow) => number;
+  format?: "money" | "number";
+};
+
+const EDITABLE_SALARY_FIELDS: Record<string, EditableSalaryField> = {
+  dependents: { field: "dependents", value: (d) => d.s.dependents, format: "number" },
+  cong: { field: "actual_days", value: (d) => d.s.actualDays, format: "number" },
+  pn: { field: "pn", value: (d) => d.s.leaveDays, format: "number" },
+  baseSalary: { field: "base_salary", value: (d) => d.s.base, format: "money" },
+  allowanceActual: { field: "allowance", value: (d) => d.s.allowance, format: "money" },
+  gasDays: { field: "gas_days", value: (d) => d.s.gasDays, format: "number" },
+  gasAllowanceActual: { field: "gas_allowance", value: (d) => d.s.gasAllowanceMonth, format: "money" },
+  attendanceActual: { field: "attendance_bonus", value: (d) => d.s.attendanceBonus, format: "money" },
+  mealAllowance: { field: "meal_allowance", value: (d) => d.s.mealAllowance, format: "money" },
+  nightAllowance: { field: "night_allowance", value: (d) => d.s.nightAllowance, format: "money" },
+  bonus: { field: "bonus", value: (d) => d.s.bonus, format: "money" },
+  otWeekdayHours: { field: "ot_weekday_hours", value: (d) => d.s.otWeekdayHours, format: "number" },
+  otSundayHours: { field: "ot_sunday_hours", value: (d) => d.s.otSundayHours, format: "number" },
+  otHolidayHours: { field: "ot_holiday_hours", value: (d) => d.s.otHolidayHours, format: "number" },
+  otNightHours: { field: "ot_night_hours", value: (d) => d.s.otNightHours, format: "number" },
+  unionDues: { field: "union_dues", value: (d) => d.s.unionDues, format: "money" },
+  advance: { field: "advance", value: (d) => d.s.advance, format: "money" },
+  advanceCk: { field: "advance_ck", value: (d) => d.s.advanceCk, format: "money" },
+  advanceTm: { field: "advance_tm", value: (d) => d.s.advanceTm, format: "money" },
+  companyDebt: { field: "company_debt", value: (d) => d.s.companyDebt, format: "money" },
+};
 
 function totalOtOf(s: SalaryComputed): number {
   return s.otWeekday + s.otSunday + s.otHoliday;
@@ -47,6 +76,7 @@ const SAL_COLUMNS_ALL: ColumnDef<SalaryDisplayRow>[] = [
   { id: "dependents", label: "Người phụ thuộc", align: "right", defaultHidden: true, cell: (d) => String(d.s.dependents ?? 0), exportValue: (d) => d.s.dependents, exportFormat: "int" },
   { id: "insBase", label: "Mức đóng BH", align: "right", defaultHidden: true, cell: (d) => (d.row.ins_salary_base ? formatMoney(d.row.ins_salary_base) : "-"), exportValue: (d) => d.row.ins_salary_base ?? 0, exportFormat: "money" },
   { id: "cong", label: "Công", align: "right", cell: (d) => `${d.s.actualDays}/${STD_DAYS}`, exportValue: (d) => d.s.actualDays, exportFormat: "int" },
+  { id: "pn", label: "PN", align: "right", defaultHidden: true, cell: (d) => (d.s.leaveDays > 0 ? String(d.s.leaveDays) : "-"), exportValue: (d) => d.s.leaveDays, exportFormat: "int" },
   { id: "workSalary", label: "Lương ngày công", align: "right", cell: (d) => formatMoney(d.s.dailyBase), exportValue: (d) => d.s.dailyBase, exportFormat: "money" },
   // --- Bóc tách thu nhập (mặc định ẩn) ---
   { id: "monthlyTotal", label: "Tổng lương (cứng)", align: "right", defaultHidden: true, cell: (d) => formatMoney(d.s.totalMonthly), exportValue: (d) => d.s.totalMonthly, exportFormat: "money" },
@@ -61,6 +91,10 @@ const SAL_COLUMNS_ALL: ColumnDef<SalaryDisplayRow>[] = [
   { id: "bonus", label: "Thưởng", align: "right", defaultHidden: true, cell: (d) => (d.s.bonus > 0 ? formatMoney(d.s.bonus) : "-"), exportValue: (d) => d.s.bonus, exportFormat: "money" },
   { id: "responsibilityActual", label: "Trách nhiệm", align: "right", cell: (d) => formatMoney(d.s.responsibilityActual), exportValue: (d) => d.s.responsibilityActual, exportFormat: "money" },
   { id: "overtime", label: "Tăng ca", align: "right", cell: (d) => (totalOtOf(d.s) > 0 ? formatMoney(totalOtOf(d.s)) : "-"), exportValue: (d) => totalOtOf(d.s), exportFormat: "money" },
+  { id: "otWeekdayHours", label: "Giờ OT thường", align: "right", defaultHidden: true, cell: (d) => (d.s.otWeekdayHours > 0 ? String(d.s.otWeekdayHours) : "-"), exportValue: (d) => d.s.otWeekdayHours, exportFormat: "int" },
+  { id: "otSundayHours", label: "Giờ OT CN", align: "right", defaultHidden: true, cell: (d) => (d.s.otSundayHours > 0 ? String(d.s.otSundayHours) : "-"), exportValue: (d) => d.s.otSundayHours, exportFormat: "int" },
+  { id: "otHolidayHours", label: "Giờ OT lễ", align: "right", defaultHidden: true, cell: (d) => (d.s.otHolidayHours > 0 ? String(d.s.otHolidayHours) : "-"), exportValue: (d) => d.s.otHolidayHours, exportFormat: "int" },
+  { id: "otNightHours", label: "Giờ OT đêm", align: "right", defaultHidden: true, cell: (d) => (d.s.otNightHours > 0 ? String(d.s.otNightHours) : "-"), exportValue: (d) => d.s.otNightHours, exportFormat: "int" },
   { id: "otWeekday", label: "OT thường", align: "right", defaultHidden: true, cell: (d) => (d.s.otWeekday > 0 ? formatMoney(d.s.otWeekday) : "-"), exportValue: (d) => d.s.otWeekday, exportFormat: "money" },
   { id: "otSunday", label: "OT chủ nhật", align: "right", defaultHidden: true, cell: (d) => (d.s.otSunday > 0 ? formatMoney(d.s.otSunday) : "-"), exportValue: (d) => d.s.otSunday, exportFormat: "money" },
   { id: "otHoliday", label: "OT lễ", align: "right", defaultHidden: true, cell: (d) => (d.s.otHoliday > 0 ? formatMoney(d.s.otHoliday) : "-"), exportValue: (d) => d.s.otHoliday, exportFormat: "money" },
@@ -200,6 +234,58 @@ function Row({ label, value, bold, raw }: { label: string; value: number; bold?:
         {raw ? value : formatMoney(value)}
       </span>
     </div>
+  );
+}
+
+function EditableNumberCell({
+  value,
+  format = "money",
+  saving,
+  onSave,
+}: {
+  value: number;
+  format?: "money" | "number";
+  saving?: boolean;
+  onSave: (value: number) => Promise<void> | void;
+}) {
+  const [text, setText] = useState(String(value || ""));
+
+  useEffect(() => {
+    setText(String(value || ""));
+  }, [value]);
+
+  const commit = async () => {
+    const cleaned = text.trim().replace(/[^\d.-]/g, "");
+    const next = cleaned ? Number(cleaned) : 0;
+    if (!Number.isFinite(next)) {
+      setText(String(value || ""));
+      return;
+    }
+    if (next === value) return;
+    await onSave(next);
+  };
+
+  return (
+    <span className="relative block" onClick={(e) => e.stopPropagation()}>
+      <input
+        value={text}
+        disabled={saving}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        onFocus={() => setText(value ? String(value) : "")}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Escape") {
+            setText(String(value || ""));
+            e.currentTarget.blur();
+          }
+        }}
+        placeholder="0"
+        className="h-7 w-full rounded-[6px] border border-[var(--color-border)] bg-white px-2 pr-6 text-right font-[family-name:var(--font-mono)] text-[12.5px] outline-none focus:border-[var(--color-accent)] disabled:opacity-60"
+        title={format === "money" ? (value ? formatMoney(value) : "0") : String(value || 0)}
+      />
+      {saving && <Loader2 size={12} className="absolute right-1.5 top-2 animate-spin text-[var(--color-accent)]" />}
+    </span>
   );
 }
 
@@ -497,13 +583,43 @@ export function SalaryScreen() {
   const [deptFilter, setDeptFilter] = useState<number | "">("");
   const [selected, setSelected] = useState<SalaryDisplayRow | null>(null);
   const [tab, setTab] = useState<"table" | "chi">("table");
+  const [manualEdit, setManualEdit] = useState(false);
+  const [savingCell, setSavingCell] = useState<string | null>(null);
 
-  const { data, isLoading } = useQuery(() => fetchSalary(period), [period]);
+  const { data, isLoading, refetch } = useQuery(() => fetchSalary(period), [period]);
   const { data: deptData } = useQuery(() => fetchDepartments(), []);
 
   // Cột tùy chỉnh dùng chung (đồng bộ theo nhân viên).
   const { customColumns, addColumn, deleteColumn, isCustomColumn } = useCustomColumns<SalaryDisplayRow>((d) => d.row.employee_id);
-  const displayColumns = [...SAL_COLUMNS, ...customColumns];
+  async function handleSaveSalaryCell(row: SalaryDisplayRow, field: string, value: number) {
+    const key = `${row.row.employee_id}:${field}`;
+    setSavingCell(key);
+    try {
+      await updateSalaryCell(row.row.employee_id, { period, field, value });
+      refetch();
+    } finally {
+      setSavingCell(null);
+    }
+  }
+
+  const displayColumns = useMemo<ColumnDef<SalaryDisplayRow>[]>(() => {
+    const base = SAL_COLUMNS.map((c) => {
+      const editable = EDITABLE_SALARY_FIELDS[c.id];
+      if (!manualEdit || !editable) return c;
+      return {
+        ...c,
+        cell: (d: SalaryDisplayRow) => (
+          <EditableNumberCell
+            value={editable.value(d)}
+            format={editable.format}
+            saving={savingCell === `${d.row.employee_id}:${editable.field}`}
+            onSave={(value) => handleSaveSalaryCell(d, editable.field, value)}
+          />
+        ),
+      } satisfies ColumnDef<SalaryDisplayRow>;
+    });
+    return [...base, ...customColumns];
+  }, [customColumns, manualEdit, savingCell, period]);
 
   const rows = useMemo<SalaryDisplayRow[]>(() => {
     if (!data?.data) return [];
@@ -543,7 +659,21 @@ export function SalaryScreen() {
   }
 
   const toolbarLeft = (
-    <div className="text-[13px] font-semibold text-[var(--color-text-primary)]">Bảng lương kỳ {periodLabel}</div>
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="text-[13px] font-semibold text-[var(--color-text-primary)]">Bảng lương kỳ {periodLabel}</div>
+      <button
+        onClick={() => setManualEdit((v) => !v)}
+        className={cn(
+          "flex items-center gap-1.5 rounded-[8px] border px-3 py-1.5 text-[12.5px] font-medium transition-colors",
+          manualEdit
+            ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-white"
+            : "border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]",
+        )}
+        title="Bật để sửa trực tiếp các cột số liệu nguồn trên bảng lương"
+      >
+        <Pencil size={14} /> {manualEdit ? "Đang sửa số liệu" : "Sửa số liệu"}
+      </button>
+    </div>
   );
 
   return (
@@ -628,7 +758,7 @@ export function SalaryScreen() {
           }}
           rows={rows}
           getRowKey={(d) => d.row.code}
-          onRowClick={(d) => setSelected(d)}
+          onRowClick={manualEdit ? undefined : (d) => setSelected(d)}
           minWidth={1400}
           pageSize={15}
           emptyText="Không có dữ liệu lương trong kỳ."
@@ -644,6 +774,7 @@ export function SalaryScreen() {
               dependents: String(sumSalary(summaryRows, (d) => d.s.dependents)),
               insBase: fmtSum(sumSalary(summaryRows, (d) => d.row.ins_salary_base ?? 0)),
               cong: String(sumSalary(summaryRows, (d) => d.s.actualDays)),
+              pn: String(sumSalary(summaryRows, (d) => d.s.leaveDays)),
               workSalary: fmtSum(sumSalary(summaryRows, (d) => d.s.dailyBase)),
               monthlyTotal: fmtSum(sumSalary(summaryRows, (d) => d.s.totalMonthly)),
               baseSalary: fmtSum(sumSalary(summaryRows, (d) => d.s.base)),
@@ -657,6 +788,10 @@ export function SalaryScreen() {
               bonus: fmtSum(sumSalary(summaryRows, (d) => d.s.bonus)),
               responsibilityActual: fmtSum(sumSalary(summaryRows, (d) => d.s.responsibilityActual)),
               overtime: fmtSum(sumSalary(summaryRows, (d) => totalOtOf(d.s))),
+              otWeekdayHours: String(sumSalary(summaryRows, (d) => d.s.otWeekdayHours)),
+              otSundayHours: String(sumSalary(summaryRows, (d) => d.s.otSundayHours)),
+              otHolidayHours: String(sumSalary(summaryRows, (d) => d.s.otHolidayHours)),
+              otNightHours: String(sumSalary(summaryRows, (d) => d.s.otNightHours)),
               otWeekday: fmtSum(sumSalary(summaryRows, (d) => d.s.otWeekday)),
               otSunday: fmtSum(sumSalary(summaryRows, (d) => d.s.otSunday)),
               otHoliday: fmtSum(sumSalary(summaryRows, (d) => d.s.otHoliday)),

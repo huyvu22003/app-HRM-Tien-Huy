@@ -907,6 +907,13 @@ export function fetchSalary(period: string) {
   );
 }
 
+export function updateSalaryCell(
+  employeeId: number,
+  data: { period: string; field: string; value: number },
+) {
+  return api.put<{ success: boolean }>(`/salary/${employeeId}`, data);
+}
+
 /** Phiếu lương của chính người đăng nhập (tự phục vụ, mọi vai trò). */
 export function fetchMySalary(period: string) {
   return api.get<{ data: ApiSalaryRow | null; period: string }>(

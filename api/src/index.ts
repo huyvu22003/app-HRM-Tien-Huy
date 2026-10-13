@@ -24,7 +24,7 @@ import {
   updateLeaveRequest,
   getLeaveBalance,
 } from "./handlers/leave";
-import { getSalary, getMySalary } from "./handlers/salary";
+import { getSalary, getMySalary, updateSalaryCell } from "./handlers/salary";
 import { getKpi, createKpi, updateKpi, signKpi } from "./handlers/kpi";
 import {
   listRewards,
@@ -274,6 +274,11 @@ const worker = {
       // --- Salary ---
       if (method === "GET" && pathname === "/api/salary/me") return withCors(await getMySalary(request, env, userId));
       if (method === "GET" && pathname === "/api/salary") return withCors(await getSalary(request, env));
+      if (method === "PUT" && pathname.startsWith("/api/salary/")) {
+        const id = parseIdFromPath(pathname, "/api/salary/");
+        if (!id) return withCors(error("Thiếu id nhân viên", 400));
+        return withCors(await updateSalaryCell(request, env, id));
+      }
 
       // --- KPI ---
       if (method === "GET" && pathname === "/api/kpi") return withCors(await getKpi(request, env));
