@@ -17,6 +17,15 @@ function totalOtOf(s: SalaryComputed): number {
   return s.otWeekday + s.otSunday + s.otHoliday;
 }
 
+function sumSalary(rows: SalaryDisplayRow[], pick: (row: SalaryDisplayRow) => number | null | undefined): number {
+  return rows.reduce((sum, row) => sum + Number(pick(row) ?? 0), 0);
+}
+
+function fmtSum(value: number, negative = false): string {
+  if (!value) return negative ? "-" : "0";
+  return `${negative ? "-" : ""}${formatMoney(value)}`;
+}
+
 const SAL_COLUMNS_ALL: ColumnDef<SalaryDisplayRow>[] = [
   {
     id: "name",
@@ -624,6 +633,50 @@ export function SalaryScreen() {
           pageSize={15}
           emptyText="Không có dữ liệu lương trong kỳ."
           toolbarLeft={toolbarLeft}
+          summaryRow={({ rows: summaryRows }) => ({
+            sttCell: "SUM",
+            cells: {
+              name: "Tổng",
+              position: "",
+              code: "",
+              department_name: "",
+              bank: "",
+              dependents: String(sumSalary(summaryRows, (d) => d.s.dependents)),
+              insBase: fmtSum(sumSalary(summaryRows, (d) => d.row.ins_salary_base ?? 0)),
+              cong: String(sumSalary(summaryRows, (d) => d.s.actualDays)),
+              workSalary: fmtSum(sumSalary(summaryRows, (d) => d.s.dailyBase)),
+              monthlyTotal: fmtSum(sumSalary(summaryRows, (d) => d.s.totalMonthly)),
+              baseSalary: fmtSum(sumSalary(summaryRows, (d) => d.s.base)),
+              allowanceActual: fmtSum(sumSalary(summaryRows, (d) => d.s.allowanceActual)),
+              gasDays: String(sumSalary(summaryRows, (d) => d.s.gasDays)),
+              gasAllowanceActual: fmtSum(sumSalary(summaryRows, (d) => d.s.gasAllowanceActual)),
+              attendanceActual: fmtSum(sumSalary(summaryRows, (d) => d.s.attendanceActual)),
+              mealAllowance: fmtSum(sumSalary(summaryRows, (d) => d.s.mealAllowance)),
+              nightAllowance: fmtSum(sumSalary(summaryRows, (d) => d.s.nightAllowance)),
+              leavePay: fmtSum(sumSalary(summaryRows, (d) => d.s.leavePay)),
+              bonus: fmtSum(sumSalary(summaryRows, (d) => d.s.bonus)),
+              responsibilityActual: fmtSum(sumSalary(summaryRows, (d) => d.s.responsibilityActual)),
+              overtime: fmtSum(sumSalary(summaryRows, (d) => totalOtOf(d.s))),
+              otWeekday: fmtSum(sumSalary(summaryRows, (d) => d.s.otWeekday)),
+              otSunday: fmtSum(sumSalary(summaryRows, (d) => d.s.otSunday)),
+              otHoliday: fmtSum(sumSalary(summaryRows, (d) => d.s.otHoliday)),
+              totalIncome: fmtSum(sumSalary(summaryRows, (d) => d.s.totalIncome)),
+              insuranceTotal: fmtSum(sumSalary(summaryRows, (d) => d.s.insuranceTotal), true),
+              bhxh: fmtSum(sumSalary(summaryRows, (d) => d.s.bhxh), true),
+              bhyt: fmtSum(sumSalary(summaryRows, (d) => d.s.bhyt), true),
+              bhtn: fmtSum(sumSalary(summaryRows, (d) => d.s.bhtn), true),
+              unionDues: fmtSum(sumSalary(summaryRows, (d) => d.s.unionDues), true),
+              pit: fmtSum(sumSalary(summaryRows, (d) => d.s.pit), true),
+              advance: fmtSum(sumSalary(summaryRows, (d) => d.s.advance), true),
+              advanceCk: fmtSum(sumSalary(summaryRows, (d) => d.s.advanceCk), true),
+              advanceTm: fmtSum(sumSalary(summaryRows, (d) => d.s.advanceTm), true),
+              companyDebt: fmtSum(sumSalary(summaryRows, (d) => d.s.companyDebt), true),
+              netPay: fmtSum(sumSalary(summaryRows, (d) => d.s.netPay)),
+              kpiScore: String(sumSalary(summaryRows, (d) => d.row.kpi_score ?? 0)),
+              kpiRank: "",
+              payMethod: "",
+            },
+          })}
           toolbarActions={({ rows: fr, columns: fc }) => (
             <>
               <button
