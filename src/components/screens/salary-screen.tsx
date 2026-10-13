@@ -493,7 +493,7 @@ function DisbursementView({ rows }: { rows: SalaryDisplayRow[] }) {
 }
 
 export function SalaryScreen() {
-  const [period, setPeriod] = useState("2026-06");
+  const [period, setPeriod] = useState("2026-09");
   const [deptFilter, setDeptFilter] = useState<number | "">("");
   const [selected, setSelected] = useState<SalaryDisplayRow | null>(null);
   const [tab, setTab] = useState<"table" | "chi">("table");
