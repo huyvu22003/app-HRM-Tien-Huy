@@ -194,10 +194,10 @@ export const FX_ORDER = [
 ] as const;
 
 export const FX_SRC: Record<(typeof FX_ORDER)[number], string> = {
-  workSalary: "base / 26 × actualDays",
+  workSalary: "base / 26",
   responsibilityAllowance: "resp / 26 × actualDays + phụ cấp",
   overtimeAmount: "TC thường ×150% + CN ×200% + lễ ×300%",
-  totalIncome: "SUM(lương công, TC, phụ cấp, OT, thưởng…)",
+  totalIncome: "SUM(lương theo công, TC, phụ cấp, OT, thưởng…)",
   taxableIncome: "totalIncome − OT miễn thuế (W, Y)",
   insuranceDeduction: "BHXH(8%) + BHYT(1.5%) + BHTN(1%)",
   personalIncomeTax: "biểu lũy tiến 5 bậc 2026",

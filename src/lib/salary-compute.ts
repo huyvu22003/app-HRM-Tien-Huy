@@ -47,6 +47,7 @@ export interface SalaryComputed {
   otNightHours: number;
   dependents: number;
   workSalary: number;
+  dailyBase: number;
   responsibilityActual: number;
   allowanceActual: number;
   attendanceActual: number;
@@ -136,7 +137,7 @@ export function computeSalary(row: ApiSalaryRow): SalaryComputed {
   return {
     base, responsibility, allowance, gasAllowanceMonth, attendanceBonus, totalMonthly,
     actualDays, gasDays, leaveDays, otWeekdayHours, otSundayHours, otHolidayHours, otNightHours, dependents,
-    workSalary, responsibilityActual, allowanceActual, attendanceActual,
+    workSalary, dailyBase, responsibilityActual, allowanceActual, attendanceActual,
     otWeekday, otSunday, otHoliday,
     bonus, mealAllowance, gasAllowanceActual, nightAllowance, leavePay,
     totalIncome, taxableIncome,

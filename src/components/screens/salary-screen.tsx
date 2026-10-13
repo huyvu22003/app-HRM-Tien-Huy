@@ -38,7 +38,7 @@ const SAL_COLUMNS_ALL: ColumnDef<SalaryDisplayRow>[] = [
   { id: "dependents", label: "Người phụ thuộc", align: "right", defaultHidden: true, cell: (d) => String(d.s.dependents ?? 0), exportValue: (d) => d.s.dependents, exportFormat: "int" },
   { id: "insBase", label: "Mức đóng BH", align: "right", defaultHidden: true, cell: (d) => (d.row.ins_salary_base ? formatMoney(d.row.ins_salary_base) : "-"), exportValue: (d) => d.row.ins_salary_base ?? 0, exportFormat: "money" },
   { id: "cong", label: "Công", align: "right", cell: (d) => `${d.s.actualDays}/${STD_DAYS}`, exportValue: (d) => d.s.actualDays, exportFormat: "int" },
-  { id: "workSalary", label: "Lương công", align: "right", cell: (d) => formatMoney(d.s.workSalary), exportValue: (d) => d.s.workSalary, exportFormat: "money" },
+  { id: "workSalary", label: "Lương ngày công", align: "right", cell: (d) => formatMoney(d.s.dailyBase), exportValue: (d) => d.s.dailyBase, exportFormat: "money" },
   // --- Bóc tách thu nhập (mặc định ẩn) ---
   { id: "monthlyTotal", label: "Tổng lương (cứng)", align: "right", defaultHidden: true, cell: (d) => formatMoney(d.s.totalMonthly), exportValue: (d) => d.s.totalMonthly, exportFormat: "money" },
   { id: "baseSalary", label: "Lương CB (tháng)", align: "right", defaultHidden: true, cell: (d) => formatMoney(d.s.base), exportValue: (d) => d.s.base, exportFormat: "money" },
