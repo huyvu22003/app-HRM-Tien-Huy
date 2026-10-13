@@ -85,7 +85,7 @@ export function computeSalary(row: ApiSalaryRow): SalaryComputed {
 
   const actualDays = row.actual_days ?? 0;
   const gasDays = row.gas_days ?? 0;
-  const leaveDays = row.leave_days ?? 0;
+  const leaveDays = row.pn ?? 0;
   const otWeekdayHours = row.ot_weekday_hours ?? 0;
   const otSundayHours = row.ot_sunday_hours ?? 0;
   const otHolidayHours = row.ot_holiday_hours ?? 0;
