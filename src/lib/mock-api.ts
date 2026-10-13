@@ -358,6 +358,9 @@ function mockSalaryRows() {
       bhxh_amount: Math.round(base * 0.08),
       bhyt_amount: Math.round(base * 0.015),
       bhtn_amount: Math.round(base * 0.01),
+      bhxh_manual: null,
+      bhyt_manual: null,
+      bhtn_manual: null,
       kpi_score: 80 + Math.floor(Math.random() * 20),
       kpi_rank: "B",
     };

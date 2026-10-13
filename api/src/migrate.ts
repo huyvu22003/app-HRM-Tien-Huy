@@ -242,6 +242,14 @@ const STEPS: { id: string; run: (env: Env) => Promise<void> }[] = [
       }
     },
   },
+  {
+    id: "023_insurance_manual_overrides",
+    run: async (env) => {
+      await addColumn(env, "insurance", "bhxh_manual", "REAL");
+      await addColumn(env, "insurance", "bhyt_manual", "REAL");
+      await addColumn(env, "insurance", "bhtn_manual", "REAL");
+    },
+  },
 ];
 
 /** Áp các bước migrate còn thiếu (một lần cho mỗi isolate). */

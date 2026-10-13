@@ -897,6 +897,9 @@ export interface ApiSalaryRow {
   bhxh_amount: number | null;
   bhyt_amount: number | null;
   bhtn_amount: number | null;
+  bhxh_manual: number | null;
+  bhyt_manual: number | null;
+  bhtn_manual: number | null;
   kpi_score: number | null;
   kpi_rank: string | null;
 }

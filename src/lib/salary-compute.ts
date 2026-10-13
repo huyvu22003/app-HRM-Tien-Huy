@@ -117,9 +117,9 @@ export function computeSalary(row: ApiSalaryRow): SalaryComputed {
   const taxableIncome = totalIncome;
 
   const insuranceBase = row.ins_salary_base ?? 0;
-  const bhxh = Math.round(insuranceBase * 0.08);
-  const bhyt = Math.round(insuranceBase * 0.015);
-  const bhtn = Math.round(insuranceBase * 0.01);
+  const bhxh = row.bhxh_manual ?? Math.round(insuranceBase * 0.08);
+  const bhyt = row.bhyt_manual ?? Math.round(insuranceBase * 0.015);
+  const bhtn = row.bhtn_manual ?? Math.round(insuranceBase * 0.01);
   const insuranceTotal = bhxh + bhyt + bhtn;
   const unionDues = row.union_dues ?? 50000;
   // Tạm ứng: ưu tiên tổng CK+TM nếu có; nếu chưa nhập thì dùng cột advance cũ.

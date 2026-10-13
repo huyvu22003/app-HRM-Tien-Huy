@@ -29,6 +29,12 @@ const ATT_FIELDS: Record<string, string> = {
   bonus: "bonus",
 };
 
+const INS_FIELDS: Record<string, string> = {
+  bhxh_manual: "bhxh_manual",
+  bhyt_manual: "bhyt_manual",
+  bhtn_manual: "bhtn_manual",
+};
+
 interface SalaryUpdateBody {
   period?: string;
   field?: string;
@@ -55,6 +61,7 @@ export async function getSalary(request: Request, env: Env): Promise<Response> {
             a.meal_allowance, a.night_allowance, a.bonus,
             ins.salary_base as ins_salary_base,
             ins.bhxh_amount, ins.bhyt_amount, ins.bhtn_amount,
+            ins.bhxh_manual, ins.bhyt_manual, ins.bhtn_manual,
             k.score as kpi_score, k.rank as kpi_rank
      FROM employees e
      LEFT JOIN compensation c ON c.employee_id = e.id
@@ -123,6 +130,17 @@ export async function updateSalaryCell(request: Request, env: Env, employeeId: s
     return json({ success: true });
   }
 
+  const insCol = INS_FIELDS[field];
+  if (insCol) {
+    await env.DB.prepare("INSERT OR IGNORE INTO insurance (employee_id) VALUES (?)")
+      .bind(employeeId)
+      .run();
+    await env.DB.prepare(`UPDATE insurance SET ${insCol} = ? WHERE employee_id = ?`)
+      .bind(value, employeeId)
+      .run();
+    return json({ success: true });
+  }
+
   return error("Cột này chưa hỗ trợ sửa thủ công", 400);
 }
 
@@ -154,6 +172,7 @@ export async function getMySalary(request: Request, env: Env, userId: number): P
             a.meal_allowance, a.night_allowance, a.bonus,
             ins.salary_base as ins_salary_base,
             ins.bhxh_amount, ins.bhyt_amount, ins.bhtn_amount,
+            ins.bhxh_manual, ins.bhyt_manual, ins.bhtn_manual,
             k.score as kpi_score, k.rank as kpi_rank
      FROM employees e
      LEFT JOIN compensation c ON c.employee_id = e.id
