@@ -196,6 +196,52 @@ const STEPS: { id: string; run: (env: Env) => Promise<void> }[] = [
       ).run();
     },
   },
+  {
+    id: "022_salary_advances_2026_09",
+    run: async (env) => {
+      await env.DB.prepare("INSERT OR IGNORE INTO compensation (employee_id) SELECT id FROM employees WHERE status = 'Đang làm việc'").run();
+      await env.DB.prepare("UPDATE compensation SET advance = 0, advance_ck = 0, advance_tm = 0 WHERE employee_id IN (SELECT id FROM employees WHERE status = 'Đang làm việc')").run();
+      const advances: Array<[string, number]> = [
+        ["0006", 3000000],
+        ["0007", 3000000],
+        ["0037", 2500000],
+        ["0016", 5000000],
+        ["0038", 4000000],
+        ["0033", 3000000],
+        ["0021", 5000000],
+        ["0067", 1000000],
+        ["0024", 3000000],
+        ["0065", 4000000],
+        ["0073", 3000000],
+        ["0068", 3000000],
+        ["0039", 4000000],
+        ["0057", 1000000],
+        ["0077", 3500000],
+        ["0027", 5000000],
+        ["0028", 3000000],
+        ["0012", 3000000],
+        ["0082", 2000000],
+        ["0078", 3000000],
+        ["0100", 3000000],
+        ["0107", 3000000],
+        ["0169", 2000000],
+        ["0172", 3000000],
+        ["0187", 5000000],
+        ["0202", 5000000],
+        ["0184", 2000000],
+        ["0197", 5000000],
+        ["0173", 2000000],
+        ["0261", 3000000],
+        ["0176", 3000000],
+        ["0258", 3000000],
+      ];
+      for (const [code, amount] of advances) {
+        await env.DB.prepare(
+          `UPDATE compensation SET advance = ?, advance_ck = ?, advance_tm = 0 WHERE employee_id = (SELECT id FROM employees WHERE code = ?)`,
+        ).bind(amount, amount, code).run();
+      }
+    },
+  },
 ];
 
 /** Áp các bước migrate còn thiếu (một lần cho mỗi isolate). */
