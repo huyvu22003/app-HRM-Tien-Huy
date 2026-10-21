@@ -84,6 +84,8 @@ export function computeSalary(row: ApiSalaryRow): SalaryComputed {
   const totalMonthly = base + responsibility + allowance + gasAllowanceMonth + attendanceBonus;
 
   const actualDays = row.actual_days ?? 0;
+  const personalLeaveDays = row.vr ?? 0;
+  const unexcusedLeaveDays = row.kp ?? 0;
   const gasDays = row.gas_days ?? 0;
   const leaveDays = row.pn ?? 0;
   const otWeekdayHours = row.ot_weekday_hours ?? 0;
@@ -98,7 +100,10 @@ export function computeSalary(row: ApiSalaryRow): SalaryComputed {
   const workSalary = Math.round(dailyBase * actualDays);
   const responsibilityActual = Math.round((responsibility / STD_DAYS) * actualDays);
   const allowanceActual = Math.round((allowance / STD_DAYS) * actualDays);
-  const attendanceActual = row.attendance_bonus ?? 0;
+  // Không hưởng chuyên cần nếu nghỉ không phép từ 1 ngày hoặc nghỉ việc riêng từ 2 ngày.
+  const attendanceActual = unexcusedLeaveDays >= 1 || personalLeaveDays >= 2
+    ? 0
+    : attendanceBonus;
   // Tăng ca trả nguyên theo hệ số: thường 150%, chủ nhật 200%, lễ 300%.
   const otWeekday = Math.round(hourlyBase * otWeekdayHours * 1.5);
   const otSunday = Math.round(hourlyBase * otSundayHours * 2.0);
@@ -121,7 +126,8 @@ export function computeSalary(row: ApiSalaryRow): SalaryComputed {
   const bhyt = row.bhyt_manual ?? Math.round(insuranceBase * 0.015);
   const bhtn = row.bhtn_manual ?? Math.round(insuranceBase * 0.01);
   const insuranceTotal = bhxh + bhyt + bhtn;
-  const unionDues = row.union_dues ?? 50000;
+  // Chỉ trừ công đoàn phí khi có từ 13 ngày công thực tế trở lên.
+  const unionDues = actualDays >= 13 ? 50_000 : 0;
   // Tạm ứng: ưu tiên tổng CK+TM nếu có; nếu chưa nhập thì dùng cột advance cũ.
   const advanceCk = row.advance_ck ?? 0;
   const advanceTm = row.advance_tm ?? 0;

@@ -38,7 +38,6 @@ const EDITABLE_SALARY_FIELDS: Record<string, EditableSalaryField> = {
   bhxh: { field: "bhxh_manual", value: (d) => d.s.bhxh, format: "money" },
   bhyt: { field: "bhyt_manual", value: (d) => d.s.bhyt, format: "money" },
   bhtn: { field: "bhtn_manual", value: (d) => d.s.bhtn, format: "money" },
-  unionDues: { field: "union_dues", value: (d) => d.s.unionDues, format: "money" },
   advance: { field: "advance", value: (d) => d.s.advance, format: "money" },
   advanceCk: { field: "advance_ck", value: (d) => d.s.advanceCk, format: "money" },
   advanceTm: { field: "advance_tm", value: (d) => d.s.advanceTm, format: "money" },

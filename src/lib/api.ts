@@ -883,6 +883,8 @@ export interface ApiSalaryRow {
   std_days: number | null;
   actual_days: number | null;
   pn: number | null;
+  vr: number | null;
+  kp: number | null;
   gas_days: number | null;
   leave_days: number | null;
   overtime_hours: number | null;
