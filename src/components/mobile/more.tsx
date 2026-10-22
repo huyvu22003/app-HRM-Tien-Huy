@@ -77,7 +77,7 @@ export function MobileApprovals({ go }: { go: Go }) {
 
 /* ---------------- Phiếu lương ---------------- */
 export function MobilePayslip() {
-  const period = currentPeriod();
+  const [period, setPeriod] = useState(currentPeriod);
   const { data } = useQuery(() => fetchMySalary(period), [period]);
   const row = data?.data ?? null;
   const s = row ? computeSalary(row) : null;
@@ -91,7 +91,7 @@ export function MobilePayslip() {
 
   return (
     <div className="flex h-full flex-col">
-      <MHeader title="Phiếu lương" right={<div className={`${mono} rounded-[10px] border border-[var(--color-border)] px-2.5 py-1.5 text-[13px] font-semibold`}>{period.slice(5)}/{period.slice(0, 4)}</div>} />
+      <MHeader title="Phiếu lương" right={<input aria-label="Chọn kỳ lương" type="month" value={period} max={currentPeriod()} onChange={(e) => setPeriod(e.target.value)} className={`${mono} max-w-[138px] rounded-[10px] border border-[var(--color-border)] bg-white px-2.5 py-1.5 text-[13px] font-semibold`} />} />
       <MBody>
         {!s ? (
           <MCard className="p-8 text-center text-[12.5px] text-[var(--color-text-muted)]">Chưa có phiếu lương kỳ này.</MCard>

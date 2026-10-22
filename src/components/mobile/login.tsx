@@ -6,14 +6,6 @@ import { useAuth } from "@/lib/auth-context";
 import { CyberLoader } from "@/components/ui/cyber-loader";
 import { mono } from "./primitives";
 
-const DEMO = [
-  { phone: "0909000001", name: "BGĐ" },
-  { phone: "0985040797", name: "HR" },
-  { phone: "0909000003", name: "Tổ trưởng" },
-  { phone: "0909000004", name: "Nhân viên" },
-  { phone: "0937454099", name: "IT" },
-];
-
 export function MobileLogin() {
   const { login } = useAuth();
   const [phone, setPhone] = useState("");
@@ -81,14 +73,6 @@ export function MobileLogin() {
             <ScanFace size={15} /> Đăng nhập bằng Face ID
           </div>
 
-          <div className="mt-4 border-t border-[var(--color-border-light)] pt-3">
-            <div className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-[var(--color-text-lighter)]">Tài khoản demo (mật khẩu 123456)</div>
-            <div className="flex flex-wrap gap-1.5">
-              {DEMO.map((d) => (
-                <button key={d.phone} type="button" onClick={() => { setPhone(d.phone); setPassword("123456"); setError(""); }} className="rounded-[20px] border border-[var(--color-border)] px-2.5 py-1 text-[11.5px] font-semibold text-[var(--color-text-muted)]">{d.name}</button>
-              ))}
-            </div>
-          </div>
         </form>
 
         <div className="mt-auto pt-6 text-center text-[11px] text-white/55">© 2026 Tiến Huy Mechanical · Bảo mật &amp; nội bộ</div>

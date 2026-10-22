@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useCallback, useMemo, useState, useRef } from "react";
 import { X, Printer, Download, Pencil, Loader2 } from "lucide-react";
 import { fetchSalary, fetchDepartments, updateSalaryCell, type ApiSalaryRow } from "@/lib/api";
 import { useQuery } from "@/lib/hooks";
@@ -250,10 +250,6 @@ function EditableNumberCell({
   onSave: (value: number) => Promise<void> | void;
 }) {
   const [text, setText] = useState(String(value || ""));
-
-  useEffect(() => {
-    setText(String(value || ""));
-  }, [value]);
 
   const commit = async () => {
     const cleaned = text.trim().replace(/[^\d.-]/g, "");
@@ -592,7 +588,7 @@ export function SalaryScreen() {
 
   // Cột tùy chỉnh dùng chung (đồng bộ theo nhân viên).
   const { customColumns, addColumn, deleteColumn, isCustomColumn } = useCustomColumns<SalaryDisplayRow>((d) => d.row.employee_id);
-  async function handleSaveSalaryCell(row: SalaryDisplayRow, field: string, value: number) {
+  const handleSaveSalaryCell = useCallback(async (row: SalaryDisplayRow, field: string, value: number) => {
     const key = `${row.row.employee_id}:${field}`;
     setSavingCell(key);
     try {
@@ -601,7 +597,7 @@ export function SalaryScreen() {
     } finally {
       setSavingCell(null);
     }
-  }
+  }, [period, refetch]);
 
   const displayColumns = useMemo<ColumnDef<SalaryDisplayRow>[]>(() => {
     const base = SAL_COLUMNS.map((c) => {
@@ -611,6 +607,7 @@ export function SalaryScreen() {
         ...c,
         cell: (d: SalaryDisplayRow) => (
           <EditableNumberCell
+            key={`${d.row.employee_id}:${editable.field}:${editable.value(d)}`}
             value={editable.value(d)}
             format={editable.format}
             saving={savingCell === `${d.row.employee_id}:${editable.field}`}
@@ -620,7 +617,7 @@ export function SalaryScreen() {
       } satisfies ColumnDef<SalaryDisplayRow>;
     });
     return [...base, ...customColumns];
-  }, [customColumns, manualEdit, savingCell, period]);
+  }, [customColumns, manualEdit, savingCell, handleSaveSalaryCell]);
 
   const rows = useMemo<SalaryDisplayRow[]>(() => {
     if (!data?.data) return [];

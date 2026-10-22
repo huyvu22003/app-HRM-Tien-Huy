@@ -3,31 +3,7 @@
 import { useState } from "react";
 import { Lock, Phone, AlertCircle, Users2, Building2, Layers } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
-import { ROLE_META } from "@/lib/data/config";
-import { getInitials, cn } from "@/lib/utils";
 import { CyberLoader } from "@/components/ui/cyber-loader";
-
-const ROLE_BADGE_STYLE: Record<string, string> = {
-  super: "bg-[#e6e9fb] text-[#4a4fc4]",
-  hr: "bg-[var(--color-success-bg)] text-[var(--color-success)]",
-  lead: "bg-[var(--color-warning-bg)] text-[var(--color-warning)]",
-  staff: "bg-[var(--color-page-bg)] text-[var(--color-text-muted)]",
-};
-
-interface DemoAccount {
-  phone: string;
-  password: string;
-  name: string;
-  role: string;
-}
-
-const DEMO_ACCOUNTS: DemoAccount[] = [
-  { phone: "0909000001", password: "123456", name: "Mr. Trung", role: "super" },
-  { phone: "0985040797", password: "123456", name: "Ôn Thị Uy Lam", role: "hr" },
-  { phone: "0909000003", password: "123456", name: "Nguyễn Văn Thiện", role: "lead" },
-  { phone: "0909000004", password: "123456", name: "Chu Nam Anh", role: "staff" },
-  { phone: "0937454099", password: "123456", name: "_Huy (IT)", role: "super" },
-];
 
 export function LoginScreen() {
   const { login } = useAuth();
@@ -50,12 +26,6 @@ export function LoginScreen() {
       setLoading(false);
     }
     // Đăng nhập thành công: giữ splash (loading=true) tới khi app chuyển màn.
-  }
-
-  function fillDemo(acc: DemoAccount) {
-    setPhone(acc.phone);
-    setPassword(acc.password);
-    setError("");
   }
 
   if (loading) {
@@ -161,35 +131,6 @@ export function LoginScreen() {
             </button>
           </form>
 
-          <div className="mt-8">
-            <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-lighter)]">
-              Tài khoản demo
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {DEMO_ACCOUNTS.map((acc, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => fillDemo(acc)}
-                  className="flex flex-col items-start gap-1.5 rounded-[12px] border border-[var(--color-border)] p-3 text-left transition-colors hover:border-[var(--color-accent)] hover:bg-[var(--color-page-bg)]"
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-navy)] text-[10px] font-semibold text-white">
-                      {getInitials(acc.name)}
-                    </div>
-                    <div className="text-[12px] font-medium text-[var(--color-text-primary)]">{acc.name}</div>
-                  </div>
-                  <span
-                    className={cn(
-                      "rounded-[20px] px-2 py-0.5 text-[10px] font-medium",
-                      ROLE_BADGE_STYLE[acc.role] ?? ROLE_BADGE_STYLE.staff
-                    )}
-                  >
-                    {ROLE_META[acc.role as keyof typeof ROLE_META]?.label ?? acc.role}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
     </div>

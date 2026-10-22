@@ -97,14 +97,36 @@ export async function authMiddleware(request: Request, env: Env): Promise<AuthUs
   return verifyToken(token, env.JWT_SECRET);
 }
 
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) bytes[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return bytes;
+}
+
 export async function hashPassword(password: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", textToBytes(password));
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  const iterations = 100_000;
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const key = await crypto.subtle.importKey("raw", textToBytes(password), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations }, key, 256);
+  return `pbkdf2$${iterations}$${bytesToHex(salt)}$${bytesToHex(new Uint8Array(bits))}`;
 }
 
 export async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  const computed = await hashPassword(password);
-  return computed === hash;
+  if (hash.startsWith("pbkdf2$")) {
+    const [, iterationsText, saltHex, expectedHex] = hash.split("$");
+    const iterations = Number(iterationsText);
+    if (!iterations || !saltHex || !expectedHex) return false;
+    const key = await crypto.subtle.importKey("raw", textToBytes(password), "PBKDF2", false, ["deriveBits"]);
+    const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: hexToBytes(saltHex), iterations }, key, 256);
+    return bytesToHex(new Uint8Array(bits)) === expectedHex;
+  }
+
+  // Backward compatibility for existing SHA-256 hashes. Passwords created or
+  // reset through the account-management API use PBKDF2 above.
+  const digest = await crypto.subtle.digest("SHA-256", textToBytes(password));
+  return bytesToHex(new Uint8Array(digest)) === hash;
 }

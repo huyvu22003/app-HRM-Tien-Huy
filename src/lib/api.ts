@@ -1,6 +1,6 @@
 "use client";
 
-import { mockResolve, isDemoMode, enableDemoMode, setDemoUser } from "@/lib/mock-api";
+import { mockResolve, isDemoMode, setDemoUser } from "@/lib/mock-api";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api";
 const TOKEN_KEY = "hrm_tien_huy_token";
@@ -88,11 +88,9 @@ async function request<T>(
 
     return await res.json();
   } catch (err) {
-    const mock = mockResolve(path, options.method || "GET", options.body);
-    if (mock !== null) {
-      enableDemoMode();
-      return mock as T;
-    }
+    // Production must never silently replace a failed API response with demo
+    // data. Demo responses are only served when demo mode was explicitly
+    // enabled before the request (handled at the top of this function).
     throw err;
   } finally {
     clearTimeout(timeout);
@@ -132,35 +130,12 @@ export interface ApiUser {
 }
 
 export async function apiLogin(phone: string, password: string) {
-  try {
-    const res = await api.post<{ token: string; user: ApiUser }>("/auth/login", {
-      phone,
-      password,
-    });
-    setToken(res.token);
-    return res;
-  } catch {
-    const { findAccountByPhone, ACCOUNTS } = await import("@/lib/data/accounts");
-    const acc = findAccountByPhone(phone);
-    if (acc && acc.password === password) {
-      enableDemoMode();
-      const token = "demo-" + Date.now();
-      setToken(token);
-      const accountKeys = Object.keys(ACCOUNTS);
-      const accountIdx = accountKeys.indexOf(phone);
-      const userId = accountIdx >= 0 ? accountIdx + 1 : 1;
-      const demoUser = {
-        id: userId,
-        employee_id: acc.employeeId,
-        phone: acc.phone,
-        role: acc.role as ApiUser["role"],
-        name: acc.name,
-      };
-      setDemoUser(demoUser);
-      return { token, user: demoUser };
-    }
-    throw new ApiError(401, "Số điện thoại hoặc mật khẩu không đúng");
-  }
+  const res = await api.post<{ token: string; user: ApiUser }>("/auth/login", {
+    phone,
+    password,
+  });
+  setToken(res.token);
+  return res;
 }
 
 export async function apiLogout() {
@@ -174,6 +149,42 @@ export async function apiLogout() {
 
 export async function apiMe() {
   return api.get<{ user: ApiUser }>("/auth/me");
+}
+
+// --- Account provisioning ---
+
+export interface ApiAccount {
+  id: number;
+  employee_id: number | null;
+  phone: string;
+  role: "super" | "hr" | "lead" | "staff";
+  active: number;
+  employee_code: string | null;
+  employee_name: string | null;
+  employee_phone: string | null;
+  employee_position: string | null;
+  employee_status: string | null;
+}
+
+export interface ApiUnlinkedEmployee {
+  id: number;
+  code: string;
+  name: string;
+  phone: string | null;
+  position: string | null;
+  status: string;
+}
+
+export function fetchAccounts() {
+  return api.get<{ accounts: ApiAccount[]; employeesWithoutAccount: ApiUnlinkedEmployee[] }>("/accounts");
+}
+
+export function createAccount(data: { employeeId: number; phone: string; password: string; role: ApiAccount["role"] }) {
+  return api.post<{ success: boolean; id: number }>("/accounts", data);
+}
+
+export function updateAccount(id: number, data: { employeeId?: number | null; phone?: string; password?: string; role?: ApiAccount["role"]; active?: boolean }) {
+  return api.put<{ success: boolean }>(`/accounts/${id}`, data);
 }
 
 // --- Employees ---

@@ -5,6 +5,7 @@ import { error, parseIdFromPath } from "./utils";
 import { ensureSchema } from "./migrate";
 
 import { login, logout, me } from "./handlers/auth";
+import { listAccounts, createAccount, updateAccount } from "./handlers/accounts";
 import { listEmployees, getEmployee, createEmployee, updateEmployee, deleteEmployee, importEmployees } from "./handlers/employees";
 import {
   listDepartments,
@@ -86,6 +87,7 @@ const AUTHZ: { m: string; re: RegExp; roles: readonly string[] }[] = [
 // khớp → cho đọc bình thường (nhiều màn hình staff/lead cần). Riêng dữ liệu
 // lương và thông tin thai sản/BHXH thì chỉ super/hr được xem toàn bộ.
 const READ_AUTHZ: { re: RegExp; roles: readonly string[] }[] = [
+  { re: /^\/api\/accounts(\/.*)?$/, roles: R_HR },
   { re: /^\/api\/salary$/, roles: R_HR }, // bảng lương toàn công ty
   { re: /^\/api\/maternity(\/.*)?$/, roles: R_HR }, // theo dõi thai sản + giấy BHXH
   { re: /^\/api\/attendance\/checkup-suggestions$/, roles: R_HR }, // gợi ý khám thai (thông tin thai sản)
@@ -145,6 +147,15 @@ const worker = {
       if (method === "POST" && pathname === "/api/auth/login") return withCors(await login(request, env));
       if (method === "POST" && pathname === "/api/auth/logout") return withCors(await logout(request, env));
       if (method === "GET" && pathname === "/api/auth/me") return withCors(await me(request, env));
+
+      // --- Account provisioning and employee linkage ---
+      if (method === "GET" && pathname === "/api/accounts") return withCors(await listAccounts(request, env));
+      if (method === "POST" && pathname === "/api/accounts") return withCors(await createAccount(request, env));
+      if (method === "PUT" && pathname.startsWith("/api/accounts/")) {
+        const id = parseIdFromPath(pathname, "/api/accounts/");
+        if (!id) return withCors(error("Thiếu id tài khoản", 400));
+        return withCors(await updateAccount(request, env, id));
+      }
 
       // --- Employees ---
       if (method === "POST" && pathname === "/api/org/hierarchy") return withCors(await updateHierarchy(request, env, userId, userRole));

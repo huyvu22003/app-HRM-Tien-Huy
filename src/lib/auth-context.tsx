@@ -20,8 +20,6 @@ import {
   type ApiUser,
 } from "@/lib/api";
 
-const FALLBACK_KEY = "hrm_tien_huy_user";
-
 export interface AuthUser {
   id: number;
   employeeId: number | null;
@@ -87,14 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       .catch(() => {
         clearToken();
-        try {
-          const cached = window.localStorage.getItem(FALLBACK_KEY);
-          if (cached) {
-            setUser(JSON.parse(cached));
-          }
-        } catch {
-          // ignore
-        }
+        setUser(null);
       })
       .finally(() => {
         clearTimeout(safety);
@@ -109,11 +100,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await apiLogin(phone, password);
       const authUser = apiUserToAuthUser(res.user);
       setUser(authUser);
-      try {
-        window.localStorage.setItem(FALLBACK_KEY, JSON.stringify(authUser));
-      } catch {
-        // ignore
-      }
       return { success: true };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Đăng nhập thất bại.";
@@ -124,11 +110,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     apiLogout().catch(() => {});
     setUser(null);
-    try {
-      window.localStorage.removeItem(FALLBACK_KEY);
-    } catch {
-      // ignore
-    }
   }, []);
 
   const value = useMemo<AuthContextValue>(() => {
