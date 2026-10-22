@@ -23,6 +23,7 @@ const ACTIVITY = [
 const ROLE_LABEL: Record<string, string> = { super: "Quản trị", hr: "Nhân sự", lead: "Tổ trưởng", staff: "Nhân viên" };
 
 function AccountAdminPanel() {
+  const { user, role: currentRole } = useAuth();
   const { data, refetch } = useQuery(() => fetchAccounts(), []);
   const [employeeId, setEmployeeId] = useState("");
   const [phone, setPhone] = useState("");
@@ -37,6 +38,10 @@ function AccountAdminPanel() {
     if (account.employee_id) out[account.employee_id] = (out[account.employee_id] ?? 0) + 1;
     return out;
   }, {});
+  const canReset = (account: ApiAccount) => account.id !== user?.id && (
+    (currentRole === "hr" && (account.role === "lead" || account.role === "staff")) ||
+    (currentRole === "super" && account.role !== "super")
+  );
 
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); setMessage("");
@@ -122,7 +127,7 @@ function AccountAdminPanel() {
               </div>
             )}
             {a.employee_id && linkCounts[a.employee_id] > 1 && <button type="button" disabled={busy} onClick={() => unlink(a.id)} className="h-9 rounded-[8px] border border-[var(--color-danger)] px-3 text-[12px] text-[var(--color-danger)] disabled:opacity-50">Bỏ gắn</button>}
-            <button type="button" disabled={busy} onClick={() => resetPassword(a)} className="flex h-9 items-center gap-1 rounded-[8px] border border-[var(--color-border)] px-3 text-[12px] disabled:opacity-50"><RotateCcw size={14} /> Đặt lại MK</button>
+            {canReset(a) && <button type="button" disabled={busy} onClick={() => resetPassword(a)} className="flex h-9 items-center gap-1 rounded-[8px] border border-[var(--color-border)] px-3 text-[12px] disabled:opacity-50"><RotateCcw size={14} /> Đặt lại MK</button>}
           </div>
         ))}
       </div>

@@ -102,8 +102,17 @@ export async function updateAccount(request: Request, env: Env, id: string): Pro
 }
 
 export async function resetAccountPassword(_request: Request, env: Env, id: string, actorUserId: number): Promise<Response> {
-  const account = await env.DB.prepare("SELECT id FROM users WHERE id = ?").bind(id).first();
+  const actor = await env.DB.prepare("SELECT id, role FROM users WHERE id = ?").bind(actorUserId).first<{ id: number; role: string }>();
+  const account = await env.DB.prepare("SELECT id, role FROM users WHERE id = ?").bind(id).first<{ id: number; role: string }>();
   if (!account) return error("Không tìm thấy tài khoản", 404);
+  if (!actor) return error("Không tìm thấy tài khoản quản trị", 401);
+  if (actor.id === account.id) return error("Không thể tự đặt lại mật khẩu bằng chức năng quản trị. Hãy dùng Đổi mật khẩu.", 403);
+  if (actor.role === "hr" && !["lead", "staff"].includes(account.role)) {
+    return error("HR chỉ được đặt lại mật khẩu cho tổ trưởng và nhân viên.", 403);
+  }
+  if (actor.role === "super" && account.role === "super") {
+    return error("Tài khoản quản trị cấp cao phải được phục hồi qua quy trình Admin an toàn.", 403);
+  }
   const temporaryPassword = generateTemporaryPassword();
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
   const passwordHash = await hashPassword(temporaryPassword);
