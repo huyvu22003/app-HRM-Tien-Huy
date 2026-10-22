@@ -15,6 +15,7 @@ import {
   apiLogin,
   apiLogout,
   apiMe,
+  apiChangePassword,
   getToken,
   clearToken,
   type ApiUser,
@@ -30,6 +31,7 @@ export interface AuthUser {
   code: string;
   email: string;
   photoUrl: string | null;
+  mustChangePassword: boolean;
 }
 
 interface AuthContextValue {
@@ -39,6 +41,7 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (phone: string, password: string) => Promise<{ success: boolean; message?: string }>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
 }
 
@@ -55,6 +58,7 @@ function apiUserToAuthUser(u: ApiUser): AuthUser {
     code: "",
     email: "",
     photoUrl: u.photo_url ?? null,
+    mustChangePassword: Boolean(u.must_change_password ?? u.mustChangePassword),
   };
 }
 
@@ -112,6 +116,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    try {
+      await apiChangePassword(currentPassword, newPassword);
+      setUser((current) => current ? { ...current, mustChangePassword: false } : current);
+      return { success: true };
+    } catch (err: unknown) {
+      return { success: false, message: err instanceof Error ? err.message : "Không đổi được mật khẩu." };
+    }
+  }, []);
+
   const value = useMemo<AuthContextValue>(() => {
     const role = user?.role ?? null;
     return {
@@ -121,9 +135,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: !!user,
       isLoading,
       login,
+      changePassword,
       logout,
     };
-  }, [user, isLoading, login, logout]);
+  }, [user, isLoading, login, changePassword, logout]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

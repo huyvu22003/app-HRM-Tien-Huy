@@ -1,5 +1,5 @@
 import type { Env } from "../middleware/auth";
-import { createToken, verifyPassword, authMiddleware } from "../middleware/auth";
+import { createToken, hashPassword, verifyPassword, authMiddleware } from "../middleware/auth";
 import { json, error, readJson } from "../utils";
 
 interface LoginBody {
@@ -14,7 +14,7 @@ export async function login(request: Request, env: Env): Promise<Response> {
   }
 
   const user = await env.DB.prepare(
-    "SELECT id, employee_id, phone, password_hash, role, active FROM users WHERE phone = ?"
+    "SELECT id, employee_id, phone, password_hash, role, active, COALESCE(must_change_password, 0) AS must_change_password, COALESCE(token_version, 0) AS token_version, temporary_password_expires_at FROM users WHERE phone = ?"
   )
     .bind(body.phone)
     .first<{
@@ -24,6 +24,9 @@ export async function login(request: Request, env: Env): Promise<Response> {
       password_hash: string;
       role: string;
       active: number;
+      must_change_password: number;
+      token_version: number;
+      temporary_password_expires_at: string | null;
     }>();
 
   if (!user || !user.active) {
@@ -35,7 +38,11 @@ export async function login(request: Request, env: Env): Promise<Response> {
     return error("Số điện thoại hoặc mật khẩu không đúng", 401);
   }
 
-  const token = await createToken(user.id, user.role, env.JWT_SECRET);
+  if (user.must_change_password && user.temporary_password_expires_at && user.temporary_password_expires_at < new Date().toISOString()) {
+    return error("Mật khẩu tạm đã hết hạn. Vui lòng liên hệ HR để đặt lại.", 401);
+  }
+
+  const token = await createToken(user.id, user.role, env.JWT_SECRET, user.token_version);
 
   await env.DB.prepare(
     "INSERT INTO audit_log (user_id, action, entity, entity_id) VALUES (?, 'login', 'users', ?)"
@@ -50,6 +57,7 @@ export async function login(request: Request, env: Env): Promise<Response> {
       employeeId: user.employee_id,
       phone: user.phone,
       role: user.role,
+      mustChangePassword: Boolean(user.must_change_password),
     },
   });
 }
@@ -72,7 +80,7 @@ export async function me(request: Request, env: Env): Promise<Response> {
   if (!auth) return error("Unauthorized", 401);
 
   const user = await env.DB.prepare(
-    `SELECT u.id, u.employee_id, u.phone, u.role, e.name, e.department_id, e.position, e.photo_url
+    `SELECT u.id, u.employee_id, u.phone, u.role, u.must_change_password, e.name, e.department_id, e.position, e.photo_url
      FROM users u LEFT JOIN employees e ON e.id = u.employee_id
      WHERE u.id = ?`
   )
@@ -82,4 +90,28 @@ export async function me(request: Request, env: Env): Promise<Response> {
   if (!user) return error("Không tìm thấy người dùng", 404);
 
   return json({ user });
+}
+
+export async function changePassword(request: Request, env: Env): Promise<Response> {
+  const auth = await authMiddleware(request, env);
+  if (!auth) return error("Unauthorized", 401);
+  const body = await readJson<{ currentPassword?: string; newPassword?: string }>(request);
+  if (!body.currentPassword || !body.newPassword) return error("Thiếu mật khẩu hiện tại hoặc mật khẩu mới", 400);
+  if (body.newPassword.length < 8) return error("Mật khẩu mới phải có ít nhất 8 ký tự", 400);
+  if (body.currentPassword === body.newPassword) return error("Mật khẩu mới phải khác mật khẩu hiện tại", 400);
+
+  const user = await env.DB.prepare("SELECT id, role, password_hash, COALESCE(token_version, 0) AS token_version FROM users WHERE id = ?")
+    .bind(auth.userId).first<{ id: number; role: string; password_hash: string; token_version: number }>();
+  if (!user || !(await verifyPassword(body.currentPassword, user.password_hash))) return error("Mật khẩu hiện tại không đúng", 401);
+
+  const passwordHash = await hashPassword(body.newPassword);
+  const nextVersion = user.token_version + 1;
+  await env.DB.prepare(
+    `UPDATE users SET password_hash = ?, must_change_password = 0, temporary_password_expires_at = NULL,
+     password_changed_at = datetime('now'), token_version = ?, updated_at = datetime('now') WHERE id = ?`,
+  ).bind(passwordHash, nextVersion, user.id).run();
+  await env.DB.prepare("INSERT INTO audit_log (user_id, action, entity, entity_id) VALUES (?, 'change_password', 'users', ?)")
+    .bind(user.id, String(user.id)).run();
+  const token = await createToken(user.id, user.role, env.JWT_SECRET, nextVersion);
+  return json({ success: true, token });
 }

@@ -4,8 +4,8 @@ import { corsHeaders, handlePreflight } from "./middleware/cors";
 import { error, parseIdFromPath } from "./utils";
 import { ensureSchema } from "./migrate";
 
-import { login, logout, me } from "./handlers/auth";
-import { listAccounts, createAccount, updateAccount } from "./handlers/accounts";
+import { login, logout, me, changePassword } from "./handlers/auth";
+import { listAccounts, createAccount, updateAccount, resetAccountPassword } from "./handlers/accounts";
 import { listEmployees, getEmployee, createEmployee, updateEmployee, deleteEmployee, importEmployees } from "./handlers/employees";
 import {
   listDepartments,
@@ -68,6 +68,7 @@ const R_ALL = ["super", "hr", "lead", "staff"] as const;
 // chỉ super/hr (an toàn mặc định cho mọi route ghi mới thêm sau này).
 const AUTHZ: { m: string; re: RegExp; roles: readonly string[] }[] = [
   { m: "POST", re: /^\/api\/auth\/logout$/, roles: R_ALL },
+  { m: "POST", re: /^\/api\/auth\/change-password$/, roles: R_ALL },
   { m: "POST", re: /^\/api\/leave\/requests$/, roles: R_ALL }, // nộp đơn nghỉ: tự phục vụ
   { m: "POST", re: /^\/api\/attendance\/checkin$/, roles: R_ALL }, // chấm công selfie: tự phục vụ
   { m: "POST", re: /^\/api\/reports$/, roles: R_ALL }, // nộp báo cáo ngày: tự phục vụ
@@ -138,6 +139,9 @@ const worker = {
           if (!auth) return withCors(error("Unauthorized", 401));
           userId = auth.userId;
           userRole = auth.role;
+          if (auth.mustChangePassword && !["/api/auth/me", "/api/auth/logout", "/api/auth/change-password"].includes(pathname)) {
+            return withCors(error("Bạn phải đổi mật khẩu trước khi tiếp tục.", 428));
+          }
           const denied = authorize(method, pathname, userRole);
           if (denied) return withCors(denied);
         }
@@ -147,10 +151,16 @@ const worker = {
       if (method === "POST" && pathname === "/api/auth/login") return withCors(await login(request, env));
       if (method === "POST" && pathname === "/api/auth/logout") return withCors(await logout(request, env));
       if (method === "GET" && pathname === "/api/auth/me") return withCors(await me(request, env));
+      if (method === "POST" && pathname === "/api/auth/change-password") return withCors(await changePassword(request, env));
 
       // --- Account provisioning and employee linkage ---
       if (method === "GET" && pathname === "/api/accounts") return withCors(await listAccounts(request, env));
       if (method === "POST" && pathname === "/api/accounts") return withCors(await createAccount(request, env));
+      if (method === "POST" && /^\/api\/accounts\/\d+\/reset-password$/.test(pathname)) {
+        const id = parseIdFromPath(pathname, "/api/accounts/");
+        if (!id) return withCors(error("Thiếu id tài khoản", 400));
+        return withCors(await resetAccountPassword(request, env, id, userId));
+      }
       if (method === "PUT" && pathname.startsWith("/api/accounts/")) {
         const id = parseIdFromPath(pathname, "/api/accounts/");
         if (!id) return withCors(error("Thiếu id tài khoản", 400));

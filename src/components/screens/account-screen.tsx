@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { KeyRound, ShieldCheck, Monitor, History, LogOut, UserRoundCog, Link2, Plus } from "lucide-react";
+import { KeyRound, ShieldCheck, Monitor, History, LogOut, UserRoundCog, Link2, Plus, RotateCcw } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { getInitials } from "@/lib/utils";
 import { useQuery } from "@/lib/hooks";
-import { createAccount, fetchAccounts, updateAccount, type ApiAccount } from "@/lib/api";
+import { createAccount, fetchAccounts, resetAccountPassword, updateAccount, type ApiAccount } from "@/lib/api";
 
 const ROLE_SCOPE: Record<string, string> = {
   super: "Toàn quyền cấu hình hệ thống, phân quyền và công thức lương.",
@@ -26,11 +26,11 @@ function AccountAdminPanel() {
   const { data, refetch } = useQuery(() => fetchAccounts(), []);
   const [employeeId, setEmployeeId] = useState("");
   const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("");
   const [role, setRole] = useState<ApiAccount["role"]>("staff");
   const [linkTarget, setLinkTarget] = useState<Record<number, string>>({});
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [temporaryCredential, setTemporaryCredential] = useState<{ phone: string; password: string; expiresAt: string } | null>(null);
   const accounts = data?.accounts ?? [];
   const unlinked = data?.employeesWithoutAccount ?? [];
   const linkCounts = accounts.reduce<Record<number, number>>((out, account) => {
@@ -41,9 +41,10 @@ function AccountAdminPanel() {
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); setMessage("");
     try {
-      await createAccount({ employeeId: Number(employeeId), phone, password, role });
-      setEmployeeId(""); setPhone(""); setPassword(""); setRole("staff");
-      setMessage("Đã tạo và gắn tài khoản."); refetch();
+      const created = await createAccount({ employeeId: Number(employeeId), phone, role });
+      setTemporaryCredential({ phone, password: created.temporaryPassword, expiresAt: created.expiresAt });
+      setEmployeeId(""); setPhone(""); setRole("staff");
+      setMessage("Đã tạo tài khoản. Mật khẩu tạm chỉ nên cung cấp riêng cho đúng nhân viên."); refetch();
     } catch (err) { setMessage(err instanceof Error ? err.message : "Không tạo được tài khoản."); }
     finally { setBusy(false); }
   }
@@ -65,24 +66,43 @@ function AccountAdminPanel() {
     finally { setBusy(false); }
   }
 
+  async function resetPassword(account: ApiAccount) {
+    if (!window.confirm(`Đặt lại mật khẩu cho tài khoản ${account.phone}? Các phiên đăng nhập cũ sẽ mất hiệu lực.`)) return;
+    setBusy(true); setMessage(""); setTemporaryCredential(null);
+    try {
+      const reset = await resetAccountPassword(account.id);
+      setTemporaryCredential({ phone: account.phone, password: reset.temporaryPassword, expiresAt: reset.expiresAt });
+      setMessage("Đã đặt lại mật khẩu. Mật khẩu tạm hết hạn sau 30 phút và bắt buộc đổi khi đăng nhập."); refetch();
+    } catch (err) { setMessage(err instanceof Error ? err.message : "Không đặt lại được mật khẩu."); }
+    finally { setBusy(false); }
+  }
+
   return (
     <div className="rounded-[14px] border border-[var(--color-border)] bg-white p-[18px]">
       <div className="mb-1 flex items-center gap-2 text-[13px] font-semibold"><UserRoundCog size={17} className="text-[var(--color-accent)]" /> Đồng bộ tài khoản nhân viên</div>
       <div className="mb-4 text-[12px] text-[var(--color-text-muted)]">{accounts.length} tài khoản · {unlinked.length} nhân viên chưa có tài khoản</div>
 
-      <form onSubmit={submit} className="grid gap-2 rounded-[12px] bg-[var(--color-page-bg)] p-3 md:grid-cols-[1.5fr_1fr_1fr_1fr_auto]">
+      <form onSubmit={submit} className="grid gap-2 rounded-[12px] bg-[var(--color-page-bg)] p-3 md:grid-cols-[1.5fr_1fr_1fr_auto]">
         <select required value={employeeId} onChange={(e) => { const id = e.target.value; setEmployeeId(id); const employee = unlinked.find((x) => x.id === Number(id)); if (employee?.phone) setPhone(employee.phone); }} className="h-10 rounded-[8px] border border-[var(--color-border)] bg-white px-2 text-[12px]">
           <option value="">Chọn nhân viên chưa có tài khoản</option>
           {unlinked.map((e) => <option key={e.id} value={e.id}>{e.name} · {e.code}</option>)}
         </select>
         <input required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Số điện thoại" className="h-10 rounded-[8px] border border-[var(--color-border)] bg-white px-3 text-[12px]" />
-        <input required minLength={8} type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mật khẩu tạm ≥ 8 ký tự" className="h-10 rounded-[8px] border border-[var(--color-border)] bg-white px-3 text-[12px]" />
         <select value={role} onChange={(e) => setRole(e.target.value as ApiAccount["role"])} className="h-10 rounded-[8px] border border-[var(--color-border)] bg-white px-2 text-[12px]">
           <option value="staff">Nhân viên</option><option value="lead">Tổ trưởng</option><option value="hr">Nhân sự</option><option value="super">Quản trị</option>
         </select>
         <button disabled={busy} className="flex h-10 items-center justify-center gap-1 rounded-[8px] bg-[var(--color-accent)] px-3 text-[12px] font-semibold text-white disabled:opacity-50"><Plus size={14} /> Tạo</button>
       </form>
       {message && <div className="mt-2 text-[12px] text-[var(--color-text-muted)]">{message}</div>}
+      {temporaryCredential && (
+        <div className="mt-3 rounded-[10px] border border-[var(--color-warning)] bg-[var(--color-warning-bg)] p-3 text-[12px]">
+          <div className="font-semibold text-[var(--color-text-primary)]">Thông tin cấp một lần</div>
+          <div className="mt-1">Tài khoản: <b>{temporaryCredential.phone}</b></div>
+          <div>Mật khẩu tạm: <b className="font-[family-name:var(--font-mono)] text-[14px]">{temporaryCredential.password}</b></div>
+          <div className="mt-1 text-[11px] text-[var(--color-text-muted)]">Hết hạn: {new Date(temporaryCredential.expiresAt).toLocaleString("vi-VN")}. Hãy chuyển riêng cho đúng nhân viên và đóng thông báo sau khi ghi nhận.</div>
+          <button type="button" onClick={() => setTemporaryCredential(null)} className="mt-2 rounded-[7px] border border-[var(--color-border)] bg-white px-2.5 py-1 text-[11px]">Đã ghi nhận</button>
+        </div>
+      )}
 
       <div className="mt-4 divide-y divide-[var(--color-border-light)]">
         {accounts.map((a) => (
@@ -102,6 +122,7 @@ function AccountAdminPanel() {
               </div>
             )}
             {a.employee_id && linkCounts[a.employee_id] > 1 && <button type="button" disabled={busy} onClick={() => unlink(a.id)} className="h-9 rounded-[8px] border border-[var(--color-danger)] px-3 text-[12px] text-[var(--color-danger)] disabled:opacity-50">Bỏ gắn</button>}
+            <button type="button" disabled={busy} onClick={() => resetPassword(a)} className="flex h-9 items-center gap-1 rounded-[8px] border border-[var(--color-border)] px-3 text-[12px] disabled:opacity-50"><RotateCcw size={14} /> Đặt lại MK</button>
           </div>
         ))}
       </div>
@@ -110,7 +131,21 @@ function AccountAdminPanel() {
 }
 
 export function AccountScreen() {
-  const { user, role, roleMeta, logout } = useAuth();
+  const { user, role, roleMeta, changePassword, logout } = useAuth();
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordMessage, setPasswordMessage] = useState("");
+
+  async function submitPassword(e: React.FormEvent) {
+    e.preventDefault(); setPasswordMessage("");
+    if (newPassword.length < 8) { setPasswordMessage("Mật khẩu mới phải có ít nhất 8 ký tự."); return; }
+    if (newPassword !== confirmPassword) { setPasswordMessage("Xác nhận mật khẩu chưa khớp."); return; }
+    const result = await changePassword(currentPassword, newPassword);
+    if (!result.success) { setPasswordMessage(result.message ?? "Không đổi được mật khẩu."); return; }
+    setCurrentPassword(""); setNewPassword(""); setConfirmPassword(""); setShowPasswordForm(false); setPasswordMessage("Đã đổi mật khẩu thành công.");
+  }
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[300px_1fr]">
@@ -166,10 +201,12 @@ export function AccountScreen() {
           <div className="flex flex-col divide-y divide-[var(--color-border-light)]">
             <div className="flex items-center justify-between py-2.5">
               <span className="text-[12.5px] text-[var(--color-text-muted)]">Mật khẩu đăng nhập</span>
-              <button className="rounded-[8px] border border-[var(--color-border)] px-3 py-1 text-[12px] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]">
+              <button onClick={() => setShowPasswordForm((value) => !value)} className="rounded-[8px] border border-[var(--color-border)] px-3 py-1 text-[12px] text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]">
                 Đổi mật khẩu
               </button>
             </div>
+            {showPasswordForm && <form onSubmit={submitPassword} className="grid gap-2 py-3 md:grid-cols-3"><input required type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Mật khẩu hiện tại" className="h-10 rounded-[8px] border border-[var(--color-border)] px-3 text-[12px]" /><input required minLength={8} type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Mật khẩu mới" className="h-10 rounded-[8px] border border-[var(--color-border)] px-3 text-[12px]" /><input required minLength={8} type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Nhập lại mật khẩu mới" className="h-10 rounded-[8px] border border-[var(--color-border)] px-3 text-[12px]" /><button className="h-9 rounded-[8px] bg-[var(--color-accent)] px-3 text-[12px] font-semibold text-white md:col-span-3">Lưu mật khẩu mới</button></form>}
+            {passwordMessage && <div className="py-2 text-[12px] text-[var(--color-text-muted)]">{passwordMessage}</div>}
             <div className="flex items-center justify-between py-2.5">
               <span className="flex items-center gap-1.5 text-[12.5px] text-[var(--color-text-muted)]">
                 <ShieldCheck size={14} /> Xác thực 2 lớp (2FA)

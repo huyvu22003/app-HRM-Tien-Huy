@@ -16,6 +16,8 @@ export interface AuthUser {
   userId: number;
   role: string;
   exp: number;
+  tokenVersion: number;
+  mustChangePassword?: boolean;
 }
 
 function base64UrlEncode(bytes: ArrayBuffer | Uint8Array): string {
@@ -52,11 +54,12 @@ export async function createToken(
   userId: number,
   role: string,
   secret: string,
+  tokenVersion = 0,
   expiresInSeconds = 60 * 60 * 24 * 7
 ): Promise<string> {
   const header = { alg: "HS256", typ: "JWT" };
   const now = Math.floor(Date.now() / 1000);
-  const payload: AuthUser = { userId, role, exp: now + expiresInSeconds };
+  const payload: AuthUser = { userId, role, tokenVersion, exp: now + expiresInSeconds };
 
   const encodedHeader = base64UrlEncode(textToBytes(JSON.stringify(header)));
   const encodedPayload = base64UrlEncode(textToBytes(JSON.stringify(payload)));
@@ -94,7 +97,13 @@ export async function authMiddleware(request: Request, env: Env): Promise<AuthUs
   if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
   const token = authHeader.slice("Bearer ".length).trim();
   if (!token) return null;
-  return verifyToken(token, env.JWT_SECRET);
+  const payload = await verifyToken(token, env.JWT_SECRET);
+  if (!payload) return null;
+  const user = await env.DB.prepare(
+    "SELECT role, active, COALESCE(token_version, 0) AS token_version, COALESCE(must_change_password, 0) AS must_change_password FROM users WHERE id = ?",
+  ).bind(payload.userId).first<{ role: string; active: number; token_version: number; must_change_password: number }>();
+  if (!user?.active || user.role !== payload.role || user.token_version !== (payload.tokenVersion ?? 0)) return null;
+  return { ...payload, mustChangePassword: Boolean(user.must_change_password) };
 }
 
 function bytesToHex(bytes: Uint8Array): string {

@@ -27,9 +27,10 @@ import { ConfigScreen } from "@/components/screens/config-screen";
 import { FormulaScreen } from "@/components/screens/formula-screen";
 import { AuditScreen } from "@/components/screens/audit-screen";
 import { AccountScreen } from "@/components/screens/account-screen";
+import { ChangePasswordScreen } from "@/components/screens/change-password-screen";
 
 export default function Home() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
   const isMobile = useIsMobile();
   const [screen, setScreen] = useState("framework");
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | undefined>(undefined);
@@ -52,6 +53,10 @@ export default function Home() {
 
   if (!isAuthenticated) {
     return isMobile ? <MobileLogin /> : <LoginScreen />;
+  }
+
+  if (user?.mustChangePassword) {
+    return <ChangePasswordScreen />;
   }
 
   // Trên điện thoại: ứng dụng di động 5 tab (chấm công selfie, nghỉ phép, lương…).

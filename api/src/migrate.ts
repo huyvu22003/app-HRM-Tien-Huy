@@ -250,6 +250,23 @@ const STEPS: { id: string; run: (env: Env) => Promise<void> }[] = [
       await addColumn(env, "insurance", "bhtn_manual", "REAL");
     },
   },
+  {
+    id: "024_password_lifecycle",
+    run: async (env) => {
+      await addColumn(env, "users", "must_change_password", "INTEGER DEFAULT 0");
+      await addColumn(env, "users", "password_changed_at", "TEXT");
+      await addColumn(env, "users", "token_version", "INTEGER DEFAULT 0");
+      await addColumn(env, "users", "temporary_password_expires_at", "TEXT");
+      // Chỉ buộc đổi với tài khoản còn dùng đúng mật khẩu mặc định cũ.
+      await env.DB.prepare(
+        `UPDATE users
+         SET must_change_password = 1,
+             token_version = COALESCE(token_version, 0) + 1,
+             updated_at = datetime('now')
+         WHERE password_hash = '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92'`,
+      ).run();
+    },
+  },
 ];
 
 /** Áp các bước migrate còn thiếu (một lần cho mỗi isolate). */

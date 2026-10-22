@@ -120,6 +120,8 @@ export interface ApiUser {
   department_id?: number;
   position?: string;
   photo_url?: string | null;
+  must_change_password?: number | boolean;
+  mustChangePassword?: boolean;
 }
 
 export async function apiLogin(phone: string, password: string) {
@@ -143,6 +145,12 @@ export async function apiMe() {
   return api.get<{ user: ApiUser }>("/auth/me");
 }
 
+export async function apiChangePassword(currentPassword: string, newPassword: string) {
+  const res = await api.post<{ success: boolean; token: string }>("/auth/change-password", { currentPassword, newPassword });
+  setToken(res.token);
+  return res;
+}
+
 // --- Account provisioning ---
 
 export interface ApiAccount {
@@ -151,6 +159,9 @@ export interface ApiAccount {
   phone: string;
   role: "super" | "hr" | "lead" | "staff";
   active: number;
+  must_change_password: number;
+  password_changed_at: string | null;
+  temporary_password_expires_at: string | null;
   employee_code: string | null;
   employee_name: string | null;
   employee_phone: string | null;
@@ -171,12 +182,16 @@ export function fetchAccounts() {
   return api.get<{ accounts: ApiAccount[]; employeesWithoutAccount: ApiUnlinkedEmployee[] }>("/accounts");
 }
 
-export function createAccount(data: { employeeId: number; phone: string; password: string; role: ApiAccount["role"] }) {
-  return api.post<{ success: boolean; id: number }>("/accounts", data);
+export function createAccount(data: { employeeId: number; phone: string; role: ApiAccount["role"] }) {
+  return api.post<{ success: boolean; id: number; temporaryPassword: string; expiresAt: string }>("/accounts", data);
 }
 
 export function updateAccount(id: number, data: { employeeId?: number | null; phone?: string; password?: string; role?: ApiAccount["role"]; active?: boolean }) {
   return api.put<{ success: boolean }>(`/accounts/${id}`, data);
+}
+
+export function resetAccountPassword(id: number) {
+  return api.post<{ success: boolean; temporaryPassword: string; expiresAt: string }>(`/accounts/${id}/reset-password`);
 }
 
 // --- Employees ---
