@@ -1,7 +1,5 @@
 "use client";
 
-import { mockResolve, isDemoMode, setDemoUser } from "@/lib/mock-api";
-
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api";
 const TOKEN_KEY = "hrm_tien_huy_token";
 
@@ -43,11 +41,6 @@ async function request<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
-  if (isDemoMode()) {
-    const mock = mockResolve(path, options.method || "GET", options.body);
-    if (mock !== null) return mock as T;
-  }
-
   const token = getToken();
   const headers: Record<string, string> = {
     ...(options.headers as Record<string, string>),
@@ -143,7 +136,6 @@ export async function apiLogout() {
     await api.post("/auth/logout");
   } finally {
     clearToken();
-    setDemoUser(null);
   }
 }
 
@@ -586,7 +578,6 @@ export function fetchCheckins(date: string) {
 
 /** Tải ảnh chấm công (route yêu cầu đăng nhập) → trả object URL để hiển thị. */
 export async function loadCheckinPhoto(key: string): Promise<string | null> {
-  if (isDemoMode()) return null;
   const token = getToken();
   const res = await fetch(`${API_BASE}/checkin-photos/${encodeURIComponent(key)}`, {
     headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -622,9 +613,6 @@ export function saveCheckin(data: {
   workplace?: string;
   photo?: string | null;
 }) {
-  if (isDemoMode()) {
-    return Promise.resolve({ success: true, data: null } as { success: boolean; data: ApiCheckin | null });
-  }
   return api.post<{ success: boolean; data: ApiCheckin | null }>("/attendance/checkin", data);
 }
 
@@ -799,7 +787,6 @@ export function saveMaternityCheckups(
  * Gửi bytes thô kèm tên gốc; server trả { key, name } để lưu vào hồ sơ khi bấm Lưu.
  */
 export async function uploadCheckupDoc(file: File): Promise<{ key: string; name: string }> {
-  if (isDemoMode()) return { key: `demo-${Date.now()}-${file.name}`, name: file.name };
   const token = getToken();
   const res = await fetch(`${API_BASE}/maternity/checkup-doc?name=${encodeURIComponent(file.name)}`, {
     method: "POST",
@@ -818,7 +805,6 @@ export async function uploadCheckupDoc(file: File): Promise<{ key: string; name:
 
 /** Mở giấy BHXH đã tải lên (route yêu cầu đăng nhập → tải blob kèm token rồi mở tab mới). */
 export async function openCheckupDoc(key: string, name?: string | null): Promise<void> {
-  if (isDemoMode() || key.startsWith("demo-")) return; // demo: không có tệp thật để mở
   const token = getToken();
   const res = await fetch(`${API_BASE}/maternity/checkup-doc/${encodeURIComponent(key)}`, {
     headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },

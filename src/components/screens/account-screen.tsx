@@ -33,6 +33,10 @@ function AccountAdminPanel() {
   const [message, setMessage] = useState("");
   const accounts = data?.accounts ?? [];
   const unlinked = data?.employeesWithoutAccount ?? [];
+  const linkCounts = accounts.reduce<Record<number, number>>((out, account) => {
+    if (account.employee_id) out[account.employee_id] = (out[account.employee_id] ?? 0) + 1;
+    return out;
+  }, {});
 
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); setMessage("");
@@ -50,6 +54,14 @@ function AccountAdminPanel() {
     setBusy(true); setMessage("");
     try { await updateAccount(accountId, { employeeId: target }); setMessage("Đã cập nhật liên kết tài khoản."); refetch(); }
     catch (err) { setMessage(err instanceof Error ? err.message : "Không cập nhật được liên kết."); }
+    finally { setBusy(false); }
+  }
+
+  async function unlink(accountId: number) {
+    if (!window.confirm("Bỏ liên kết tài khoản này khỏi hồ sơ nhân viên? Tài khoản vẫn còn nhưng sẽ không xem được dữ liệu cá nhân.")) return;
+    setBusy(true); setMessage("");
+    try { await updateAccount(accountId, { employeeId: null }); setMessage("Đã bỏ liên kết trùng."); refetch(); }
+    catch (err) { setMessage(err instanceof Error ? err.message : "Không bỏ được liên kết."); }
     finally { setBusy(false); }
   }
 
@@ -78,6 +90,7 @@ function AccountAdminPanel() {
             <div className="min-w-0 flex-1">
               <div className="truncate text-[12.5px] font-semibold">{a.employee_name ?? "Chưa gắn nhân viên"}</div>
               <div className="text-[11.5px] text-[var(--color-text-muted)]">{a.phone} · {ROLE_LABEL[a.role] ?? a.role} · {a.active ? "Đang hoạt động" : "Đã khóa"}</div>
+              {a.employee_id && linkCounts[a.employee_id] > 1 && <div className="mt-1 text-[11px] font-semibold text-[var(--color-danger)]">Cảnh báo: hồ sơ này đang gắn với nhiều tài khoản</div>}
             </div>
             {!a.employee_id && (
               <div className="flex gap-2">
@@ -88,6 +101,7 @@ function AccountAdminPanel() {
                 <button type="button" disabled={busy || !linkTarget[a.id]} onClick={() => link(a.id)} className="flex h-9 items-center gap-1 rounded-[8px] border border-[var(--color-border)] px-3 text-[12px] disabled:opacity-50"><Link2 size={14} /> Gắn</button>
               </div>
             )}
+            {a.employee_id && linkCounts[a.employee_id] > 1 && <button type="button" disabled={busy} onClick={() => unlink(a.id)} className="h-9 rounded-[8px] border border-[var(--color-danger)] px-3 text-[12px] text-[var(--color-danger)] disabled:opacity-50">Bỏ gắn</button>}
           </div>
         ))}
       </div>
