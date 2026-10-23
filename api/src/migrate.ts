@@ -267,6 +267,27 @@ const STEPS: { id: string; run: (env: Env) => Promise<void> }[] = [
       ).run();
     },
   },
+  {
+    id: "025_remove_demo_accounts",
+    run: async (env) => {
+      const demoUsers = "SELECT id FROM users WHERE phone IN ('0909000001', '0909000003', '0909000004')";
+      // Giữ lịch sử nghiệp vụ nhưng bỏ liên kết tới các tài khoản demo trước khi xóa.
+      await env.DB.exec(`
+        UPDATE leave_requests SET created_by = NULL WHERE created_by IN (${demoUsers});
+        UPDATE leave_requests SET approved_l1_by = NULL WHERE approved_l1_by IN (${demoUsers});
+        UPDATE leave_requests SET approved_l2_by = NULL WHERE approved_l2_by IN (${demoUsers});
+        UPDATE kpi_scores SET signed_l1_by = NULL WHERE signed_l1_by IN (${demoUsers});
+        UPDATE kpi_scores SET signed_l2_by = NULL WHERE signed_l2_by IN (${demoUsers});
+        UPDATE period_close SET signed_l1_by = NULL WHERE signed_l1_by IN (${demoUsers});
+        UPDATE period_close SET signed_l2_by = NULL WHERE signed_l2_by IN (${demoUsers});
+        UPDATE notifications SET user_id = NULL WHERE user_id IN (${demoUsers});
+        UPDATE audit_log SET user_id = NULL WHERE user_id IN (${demoUsers});
+        UPDATE rewards SET proposed_by = NULL WHERE proposed_by IN (${demoUsers});
+        UPDATE rewards SET approved_by = NULL WHERE approved_by IN (${demoUsers});
+        DELETE FROM users WHERE phone IN ('0909000001', '0909000003', '0909000004');
+      `);
+    },
+  },
 ];
 
 /** Áp các bước migrate còn thiếu (một lần cho mỗi isolate). */
