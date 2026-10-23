@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   AlertTriangle, Check, CheckCircle2, ClipboardCheck, Clock3, LayoutDashboard,
-  Loader2, Plus, RotateCcw, Search, ShieldCheck, UserCog, Users, X,
+  Loader2, Plus, RotateCcw, Search, ShieldCheck, UserCog, Users, Wallet, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@/lib/hooks";
@@ -12,8 +12,9 @@ import {
   resetAccountPassword, updateLeaveRequest, type ApiAccount, type ApiLeaveRequest,
 } from "@/lib/api";
 import { MBody, MBadge, MCard, MHeader, mono } from "./primitives";
+import { MobilePayslip } from "./more";
 
-type HrTab = "overview" | "employees" | "attendance" | "approvals" | "accounts";
+type HrTab = "overview" | "employees" | "attendance" | "approvals" | "accounts" | "salary";
 type ManagementMobileMode = "hr" | "director";
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -91,12 +92,12 @@ function Accounts() {
 const TABS: { key: HrTab; label: string; icon: typeof Users }[] = [
   { key: "overview", label: "Tổng quan", icon: LayoutDashboard }, { key: "employees", label: "Nhân sự", icon: Users },
   { key: "attendance", label: "Chấm công", icon: Clock3 }, { key: "approvals", label: "Duyệt", icon: ClipboardCheck },
-  { key: "accounts", label: "Tài khoản", icon: UserCog },
+  { key: "accounts", label: "Tài khoản", icon: UserCog }, { key: "salary", label: "Lương tôi", icon: Wallet },
 ];
 
 export function HrMobileApp({ mode = "hr" }: { mode?: ManagementMobileMode }) {
   const [tab, setTab] = useState<HrTab>("overview");
-  const tabs = mode === "director" ? TABS.filter((item) => item.key !== "accounts") : TABS;
-  const content = tab === "overview" ? <Overview mode={mode} /> : tab === "employees" ? <Employees /> : tab === "attendance" ? <Attendance /> : tab === "approvals" ? <Approvals /> : <Accounts />;
+  const tabs = mode === "director" ? TABS.filter((item) => item.key !== "accounts" && item.key !== "salary") : TABS;
+  const content = tab === "overview" ? <Overview mode={mode} /> : tab === "employees" ? <Employees /> : tab === "attendance" ? <Attendance /> : tab === "approvals" ? <Approvals /> : tab === "salary" ? <MobilePayslip /> : <Accounts />;
   return <div className="flex h-[100dvh] flex-col overflow-hidden bg-[var(--color-page-bg)]"><div key={tab} className="flex min-h-0 flex-1 flex-col">{content}</div><nav className="flex flex-none border-t border-[var(--color-border)] bg-white/95 px-1 pt-2" style={{ paddingBottom: "calc(env(safe-area-inset-bottom,0px) + 8px)" }}>{tabs.map((item) => { const active = item.key === tab; return <button key={item.key} onClick={() => setTab(item.key)} className="flex flex-1 flex-col items-center gap-1 py-1"><item.icon size={21} className={cn(active ? "text-[var(--color-accent)]" : "text-[var(--color-text-lighter)]")} /><span className={cn("text-[9.5px] font-semibold", active ? "text-[var(--color-accent)]" : "text-[var(--color-text-lighter)]")}>{item.label}</span></button>; })}</nav></div>;
 }
