@@ -73,7 +73,7 @@ const EMPTY_FORM: FormState = { content: "", quantity: "", ng_count: "0", note: 
 
 export function ReportScreen() {
   const { user } = useAuth();
-  const canVerify = user?.role === "super" || user?.role === "hr" || user?.role === "lead";
+  const canVerify = user?.role === "super" || user?.role === "director" || user?.role === "hr" || user?.role === "lead";
   const isStaff = user?.role === "staff";
 
   const [selectedDate, setSelectedDate] = useState(fmtDate(new Date()));

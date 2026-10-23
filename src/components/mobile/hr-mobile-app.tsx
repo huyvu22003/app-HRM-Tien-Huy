@@ -14,13 +14,14 @@ import {
 import { MBody, MBadge, MCard, MHeader, mono } from "./primitives";
 
 type HrTab = "overview" | "employees" | "attendance" | "approvals" | "accounts";
+type ManagementMobileMode = "hr" | "director";
 const today = () => new Date().toISOString().slice(0, 10);
 
-function Overview() {
+function Overview({ mode }: { mode: ManagementMobileMode }) {
   const { data: employees } = useQuery(() => fetchAllEmployees(), []);
   const { data: checkins } = useQuery(() => fetchCheckins(today()), []);
   const { data: leaves } = useQuery(() => fetchLeaveRequests(), []);
-  const { data: accounts } = useQuery(() => fetchAccounts(), []);
+  const { data: accounts } = useQuery(() => mode === "hr" ? fetchAccounts() : Promise.resolve({ accounts: [], employeesWithoutAccount: [] }), [mode]);
   const active = (employees?.data ?? []).filter((e) => e.status === "Đang làm việc").length;
   const present = (checkins?.data ?? []).filter((c) => c.time_in).length;
   const pending = (leaves?.data ?? []).filter((l) => l.status === "approved_l1").length;
@@ -31,7 +32,7 @@ function Overview() {
     ["Chờ HR duyệt", pending, ClipboardCheck, "var(--color-warning)"],
     ["Chưa có tài khoản", noAccount, UserCog, "var(--color-danger)"],
   ] as const;
-  return <div className="flex h-full flex-col"><MHeader title="HR Mobile" subtitle="Tổng quan vận hành hôm nay" /><MBody>
+  return <div className="flex h-full flex-col"><MHeader title={mode === "director" ? "Giám đốc Mobile" : "HR Mobile"} subtitle="Tổng quan vận hành hôm nay" /><MBody>
     <div className="grid grid-cols-2 gap-3">{stats.map(([label, value, Icon, color]) => <MCard key={label} className="p-4"><Icon size={20} style={{ color }} /><div className={`${mono} mt-2 text-[25px] font-bold`}>{value}</div><div className="text-[11.5px] text-[var(--color-text-muted)]">{label}</div></MCard>)}</div>
     <MCard className="mt-4 p-4"><div className="text-[13.5px] font-bold">Cần xử lý</div><div className="mt-3 flex flex-col gap-2">
       {pending > 0 && <div className="flex items-center gap-2 rounded-[10px] bg-[var(--color-warning-bg)] p-3 text-[12px]"><ClipboardCheck size={17} className="text-[var(--color-warning)]" /> {pending} đơn đã qua tổ trưởng, chờ HR duyệt.</div>}
@@ -93,8 +94,9 @@ const TABS: { key: HrTab; label: string; icon: typeof Users }[] = [
   { key: "accounts", label: "Tài khoản", icon: UserCog },
 ];
 
-export function HrMobileApp() {
+export function HrMobileApp({ mode = "hr" }: { mode?: ManagementMobileMode }) {
   const [tab, setTab] = useState<HrTab>("overview");
-  const content = tab === "overview" ? <Overview /> : tab === "employees" ? <Employees /> : tab === "attendance" ? <Attendance /> : tab === "approvals" ? <Approvals /> : <Accounts />;
-  return <div className="flex h-[100dvh] flex-col overflow-hidden bg-[var(--color-page-bg)]"><div key={tab} className="flex min-h-0 flex-1 flex-col">{content}</div><nav className="flex flex-none border-t border-[var(--color-border)] bg-white/95 px-1 pt-2" style={{ paddingBottom: "calc(env(safe-area-inset-bottom,0px) + 8px)" }}>{TABS.map((item) => { const active = item.key === tab; return <button key={item.key} onClick={() => setTab(item.key)} className="flex flex-1 flex-col items-center gap-1 py-1"><item.icon size={21} className={cn(active ? "text-[var(--color-accent)]" : "text-[var(--color-text-lighter)]")} /><span className={cn("text-[9.5px] font-semibold", active ? "text-[var(--color-accent)]" : "text-[var(--color-text-lighter)]")}>{item.label}</span></button>; })}</nav></div>;
+  const tabs = mode === "director" ? TABS.filter((item) => item.key !== "accounts") : TABS;
+  const content = tab === "overview" ? <Overview mode={mode} /> : tab === "employees" ? <Employees /> : tab === "attendance" ? <Attendance /> : tab === "approvals" ? <Approvals /> : <Accounts />;
+  return <div className="flex h-[100dvh] flex-col overflow-hidden bg-[var(--color-page-bg)]"><div key={tab} className="flex min-h-0 flex-1 flex-col">{content}</div><nav className="flex flex-none border-t border-[var(--color-border)] bg-white/95 px-1 pt-2" style={{ paddingBottom: "calc(env(safe-area-inset-bottom,0px) + 8px)" }}>{tabs.map((item) => { const active = item.key === tab; return <button key={item.key} onClick={() => setTab(item.key)} className="flex flex-1 flex-col items-center gap-1 py-1"><item.icon size={21} className={cn(active ? "text-[var(--color-accent)]" : "text-[var(--color-text-lighter)]")} /><span className={cn("text-[9.5px] font-semibold", active ? "text-[var(--color-accent)]" : "text-[var(--color-text-lighter)]")}>{item.label}</span></button>; })}</nav></div>;
 }

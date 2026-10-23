@@ -28,7 +28,7 @@ function isRecent(at: string | null): boolean {
 
 export async function getNotifications(_request: Request, env: Env, userId: number, role: string): Promise<Response> {
   const out: Notif[] = [];
-  const isManager = role === "super" || role === "hr" || role === "lead";
+  const isManager = role === "super" || role === "director" || role === "hr" || role === "lead";
 
   if (isManager) {
     const { results } = await env.DB.prepare(

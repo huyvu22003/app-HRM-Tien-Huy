@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { inferAccountRole } from "./accounts";
+import { effectiveRole } from "../middleware/auth";
 
 describe("inferAccountRole", () => {
   it("assigns HR by department", () => {
@@ -13,5 +14,12 @@ describe("inferAccountRole", () => {
 
   it("defaults regular employees to staff", () => {
     expect(inferAccountRole({ department_name: "Kho", position: "Nhân viên", level: "Bậc 2" })).toBe("staff");
+  });
+});
+
+describe("effectiveRole", () => {
+  it("maps special director accounts without elevating regular leads", () => {
+    expect(effectiveRole("lead", "director")).toBe("director");
+    expect(effectiveRole("lead", "employee")).toBe("lead");
   });
 });

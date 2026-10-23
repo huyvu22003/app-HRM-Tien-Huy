@@ -32,6 +32,7 @@ export function MobileApp() {
   const { user } = useAuth();
   const [screen, setScreen] = useState<MobileScreen>("home");
   if (user?.role === "hr") return <HrMobileApp />;
+  if (user?.role === "director") return <HrMobileApp mode="director" />;
   const go: Go = (s) => setScreen(s);
   const showTabs = TAB_SCREENS.includes(screen);
   const activeTab = TAB_OF[screen];

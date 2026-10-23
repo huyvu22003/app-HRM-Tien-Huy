@@ -1,4 +1,4 @@
-export type Role = "super" | "hr" | "lead" | "staff";
+export type Role = "super" | "director" | "hr" | "lead" | "staff";
 
 export interface Account {
   phone: string;

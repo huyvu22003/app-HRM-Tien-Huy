@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { KeyRound, ShieldCheck, Monitor, History, LogOut, UserRoundCog, Link2, Plus, RotateCcw, UsersRound, Download } from "lucide-react";
+import { KeyRound, ShieldCheck, Monitor, History, LogOut, UserRoundCog, Link2, Plus, RotateCcw, UsersRound, Download, Crown } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { getInitials } from "@/lib/utils";
 import { useQuery } from "@/lib/hooks";
-import { createAccount, fetchAccounts, resetAccountPassword, syncEmployeeAccounts, updateAccount, type ApiAccount, type ApiProvisionedAccount, type ApiSkippedAccount, type ApiUnlinkedEmployee } from "@/lib/api";
+import { createAccount, createSpecialAccount, fetchAccounts, resetAccountPassword, syncEmployeeAccounts, updateAccount, type ApiAccount, type ApiProvisionedAccount, type ApiSkippedAccount, type ApiUnlinkedEmployee } from "@/lib/api";
 
 const ROLE_SCOPE: Record<string, string> = {
   super: "Toàn quyền cấu hình hệ thống, phân quyền và công thức lương.",
+  director: "Xem dữ liệu điều hành toàn công ty và thực hiện phê duyệt.",
   hr: "Quản lý hồ sơ nhân sự, chấm công, phép và lương toàn công ty.",
   lead: "Xem và duyệt phép, chấm công cho tổ/bộ phận phụ trách.",
   staff: "Xem thông tin cá nhân và gửi đơn nghỉ phép.",
@@ -20,7 +21,7 @@ const ACTIVITY = [
   { action: "Cập nhật hồ sơ cá nhân", time: "12/06/2026" },
 ];
 
-const ROLE_LABEL: Record<string, string> = { super: "Quản trị", hr: "Nhân sự", lead: "Tổ trưởng", staff: "Nhân viên" };
+const ROLE_LABEL: Record<string, string> = { super: "Quản trị", director: "Giám đốc", hr: "Nhân sự", lead: "Tổ trưởng", staff: "Nhân viên" };
 
 function inferEmployeeRole(employee: Pick<ApiUnlinkedEmployee, "department_name" | "position" | "level">): ApiAccount["role"] {
   const department = (employee.department_name ?? "").toLocaleLowerCase("vi");
@@ -66,6 +67,10 @@ export function AccountAdminPanel() {
   const [temporaryCredential, setTemporaryCredential] = useState<{ phone: string; password: string; expiresAt: string } | null>(null);
   const [bulkCredentials, setBulkCredentials] = useState<ApiProvisionedAccount[]>([]);
   const [bulkSkipped, setBulkSkipped] = useState<ApiSkippedAccount[]>([]);
+  const [showSpecialForm, setShowSpecialForm] = useState(false);
+  const [specialName, setSpecialName] = useState("");
+  const [specialPhone, setSpecialPhone] = useState("");
+  const [specialTitle, setSpecialTitle] = useState("Giám đốc");
   const accounts = data?.accounts ?? [];
   const unlinked = data?.employeesWithoutAccount ?? [];
   const linkCounts = accounts.reduce<Record<number, number>>((out, account) => {
@@ -147,13 +152,33 @@ export function AccountAdminPanel() {
     } finally { setBusy(false); }
   }
 
+  async function submitSpecialAccount(e: React.FormEvent) {
+    e.preventDefault(); setBusy(true); setMessage(""); setTemporaryCredential(null);
+    try {
+      const created = await createSpecialAccount({ name: specialName, phone: specialPhone, title: specialTitle });
+      setTemporaryCredential({ phone: specialPhone.replace(/\s+/g, ""), password: created.temporaryPassword, expiresAt: created.expiresAt });
+      setSpecialName(""); setSpecialPhone(""); setSpecialTitle("Giám đốc"); setShowSpecialForm(false);
+      setMessage("Đã tạo tài khoản Giám đốc. Tài khoản không tham gia chấm công, phép hoặc bảng lương.");
+      await refetch();
+    } catch (err) { setMessage(err instanceof Error ? err.message : "Không tạo được tài khoản Giám đốc."); }
+    finally { setBusy(false); }
+  }
+
   return (
     <div className="rounded-[14px] border border-[var(--color-border)] bg-white p-[18px]">
       <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-[13px] font-semibold"><UserRoundCog size={17} className="text-[var(--color-accent)]" /> Đồng bộ tài khoản nhân viên</div>
-        {currentRole === "super" && <button type="button" disabled={busy || unlinked.length === 0} onClick={syncAllAccounts} className="flex h-9 items-center gap-1.5 rounded-[8px] bg-[var(--color-accent)] px-3 text-[12px] font-semibold text-white disabled:opacity-50"><UsersRound size={15} /> Đồng bộ tất cả</button>}
+        {currentRole === "super" && <div className="flex flex-wrap gap-2"><button type="button" disabled={busy} onClick={() => setShowSpecialForm((value) => !value)} className="flex h-9 items-center gap-1.5 rounded-[8px] border border-[var(--color-accent)] bg-white px-3 text-[12px] font-semibold text-[var(--color-accent)] disabled:opacity-50"><Crown size={15} /> Tạo TK Giám đốc</button><button type="button" disabled={busy || unlinked.length === 0} onClick={syncAllAccounts} className="flex h-9 items-center gap-1.5 rounded-[8px] bg-[var(--color-accent)] px-3 text-[12px] font-semibold text-white disabled:opacity-50"><UsersRound size={15} /> Đồng bộ tất cả</button></div>}
       </div>
       <div className="mb-4 text-[12px] text-[var(--color-text-muted)]">{accounts.length} tài khoản · {unlinked.length} nhân viên chưa có tài khoản</div>
+
+      {showSpecialForm && currentRole === "super" && <form onSubmit={submitSpecialAccount} className="mb-3 grid gap-2 rounded-[12px] border border-[#ddd6fe] bg-[#f5f3ff] p-3 md:grid-cols-[1.3fr_1fr_1fr_auto]">
+        <input required value={specialName} onChange={(e) => setSpecialName(e.target.value)} placeholder="Họ tên Giám đốc" className="h-10 rounded-[8px] border border-[var(--color-border)] bg-white px-3 text-[12px]" />
+        <input required inputMode="tel" value={specialPhone} onChange={(e) => setSpecialPhone(e.target.value)} placeholder="Số điện thoại" className="h-10 rounded-[8px] border border-[var(--color-border)] bg-white px-3 text-[12px]" />
+        <input required value={specialTitle} onChange={(e) => setSpecialTitle(e.target.value)} placeholder="Chức danh" className="h-10 rounded-[8px] border border-[var(--color-border)] bg-white px-3 text-[12px]" />
+        <button disabled={busy} className="flex h-10 items-center justify-center gap-1 rounded-[8px] bg-[#7c3aed] px-3 text-[12px] font-semibold text-white disabled:opacity-50"><Plus size={14} /> Tạo mới</button>
+        <div className="text-[11px] text-[var(--color-text-muted)] md:col-span-4">Tài khoản đặc biệt chỉ xem dữ liệu điều hành và phê duyệt; không gắn hồ sơ nhân viên, lương, phép hoặc chấm công.</div>
+      </form>}
 
       <form onSubmit={submit} className="grid gap-2 rounded-[12px] bg-[var(--color-page-bg)] p-3 md:grid-cols-[1.5fr_1fr_1fr_auto]">
         <select required value={employeeId} onChange={(e) => { const id = e.target.value; setEmployeeId(id); const employee = unlinked.find((x) => x.id === Number(id)); setPhone(employee?.phone ?? ""); if (employee) { const inferred = inferEmployeeRole(employee); setRole(currentRole === "hr" && inferred === "hr" ? "staff" : inferred); } }} className="h-10 rounded-[8px] border border-[var(--color-border)] bg-white px-2 text-[12px]">
@@ -192,11 +217,11 @@ export function AccountAdminPanel() {
         {accounts.map((a) => (
           <div key={a.id} className="flex flex-col gap-2 py-3 md:flex-row md:items-center">
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[12.5px] font-semibold">{a.employee_name ?? "Chưa gắn nhân viên"}</div>
+              <div className="truncate text-[12.5px] font-semibold">{a.employee_name ?? a.display_name ?? "Chưa gắn nhân viên"}</div>
               <div className="text-[11.5px] text-[var(--color-text-muted)]">{a.phone} · {ROLE_LABEL[a.role] ?? a.role} · {a.active ? "Đang hoạt động" : "Đã khóa"}</div>
               {a.employee_id && linkCounts[a.employee_id] > 1 && <div className="mt-1 text-[11px] font-semibold text-[var(--color-danger)]">Cảnh báo: hồ sơ này đang gắn với nhiều tài khoản</div>}
             </div>
-            {!a.employee_id && (
+            {!a.employee_id && a.account_type !== "director" && (
               <div className="flex gap-2">
                 <select value={linkTarget[a.id] ?? ""} onChange={(e) => setLinkTarget((s) => ({ ...s, [a.id]: e.target.value }))} className="h-9 min-w-[220px] rounded-[8px] border border-[var(--color-border)] px-2 text-[12px]">
                   <option value="">Chọn hồ sơ để gắn</option>

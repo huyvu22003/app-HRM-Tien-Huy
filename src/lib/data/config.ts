@@ -31,6 +31,15 @@ export const ROLE_META: Record<Role, RoleMeta> = {
       "settings",
     ],
   },
+  director: {
+    label: "Giám đốc",
+    short: "Director",
+    color: "#7c3aed",
+    scope: "all",
+    canEdit: false,
+    canManage: true,
+    nav: ["dashboard", "employees", "attendance", "leave", "reports"],
+  },
   hr: {
     label: "Nhân sự",
     short: "HR",
@@ -154,6 +163,14 @@ export const PERM_ROLE_DEFAULT: Record<Role, Record<string, string[]>> = {
     payroll: ["view", "edit", "approve", "export"],
     insurance: ["view", "edit", "export"],
     settings: ["view", "edit"],
+  },
+  director: {
+    employees: ["view", "export"],
+    attendance: ["view", "approve"],
+    leave: ["view", "approve", "reject"],
+    payroll: [],
+    insurance: [],
+    settings: [],
   },
   hr: {
     employees: ["view", "create", "edit", "export"],

@@ -5,7 +5,7 @@ import { error, parseIdFromPath } from "./utils";
 import { ensureSchema } from "./migrate";
 
 import { login, logout, me, changePassword } from "./handlers/auth";
-import { listAccounts, createAccount, updateAccount, resetAccountPassword, syncEmployeeAccounts } from "./handlers/accounts";
+import { listAccounts, createAccount, createSpecialAccount, updateAccount, resetAccountPassword, syncEmployeeAccounts } from "./handlers/accounts";
 import { listEmployees, getEmployee, createEmployee, updateEmployee, deleteEmployee, importEmployees } from "./handlers/employees";
 import {
   listDepartments,
@@ -61,8 +61,8 @@ function isPublicRoute(method: string, pathname: string): boolean {
 // --- Phân quyền theo vai trò (chặn ở API, không chỉ ẩn ở giao diện) ---
 const R_SUPER = ["super"] as const;
 const R_HR = ["super", "hr"] as const;
-const R_MANAGER = ["super", "hr", "lead"] as const;
-const R_ALL = ["super", "hr", "lead", "staff"] as const;
+const R_MANAGER = ["super", "director", "hr", "lead"] as const;
+const R_ALL = ["super", "director", "hr", "lead", "staff"] as const;
 
 // Quy tắc cho các thao tác THAY ĐỔI dữ liệu. Không khớp quy tắc nào → mặc định
 // chỉ super/hr (an toàn mặc định cho mọi route ghi mới thêm sau này).
@@ -83,6 +83,7 @@ const AUTHZ: { m: string; re: RegExp; roles: readonly string[] }[] = [
   { m: "PUT", re: /^\/api\/config$/, roles: R_SUPER },
   { m: "PUT", re: /^\/api\/permissions$/, roles: R_SUPER },
   { m: "POST", re: /^\/api\/accounts\/sync$/, roles: R_SUPER },
+  { m: "POST", re: /^\/api\/accounts\/special$/, roles: R_SUPER },
 ];
 
 // Gác ĐỌC dữ liệu nhạy cảm ở backend (không chỉ ẩn trên giao diện). Route không
@@ -157,6 +158,7 @@ const worker = {
       // --- Account provisioning and employee linkage ---
       if (method === "GET" && pathname === "/api/accounts") return withCors(await listAccounts(request, env));
       if (method === "POST" && pathname === "/api/accounts/sync") return withCors(await syncEmployeeAccounts(env, userId));
+      if (method === "POST" && pathname === "/api/accounts/special") return withCors(await createSpecialAccount(request, env, userId));
       if (method === "POST" && pathname === "/api/accounts") return withCors(await createAccount(request, env, userRole));
       if (method === "POST" && /^\/api\/accounts\/\d+\/reset-password$/.test(pathname)) {
         const id = parseIdFromPath(pathname, "/api/accounts/");

@@ -20,6 +20,10 @@ export interface AuthUser {
   mustChangePassword?: boolean;
 }
 
+export function effectiveRole(role: string, accountType?: string | null): string {
+  return accountType === "director" ? "director" : role;
+}
+
 function base64UrlEncode(bytes: ArrayBuffer | Uint8Array): string {
   const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
   let str = "";
@@ -100,9 +104,10 @@ export async function authMiddleware(request: Request, env: Env): Promise<AuthUs
   const payload = await verifyToken(token, env.JWT_SECRET);
   if (!payload) return null;
   const user = await env.DB.prepare(
-    "SELECT role, active, COALESCE(token_version, 0) AS token_version, COALESCE(must_change_password, 0) AS must_change_password FROM users WHERE id = ?",
-  ).bind(payload.userId).first<{ role: string; active: number; token_version: number; must_change_password: number }>();
-  if (!user?.active || user.role !== payload.role || user.token_version !== (payload.tokenVersion ?? 0)) return null;
+    "SELECT role, account_type, active, COALESCE(token_version, 0) AS token_version, COALESCE(must_change_password, 0) AS must_change_password FROM users WHERE id = ?",
+  ).bind(payload.userId).first<{ role: string; account_type: string | null; active: number; token_version: number; must_change_password: number }>();
+  const role = user ? effectiveRole(user.role, user.account_type) : "";
+  if (!user?.active || role !== payload.role || user.token_version !== (payload.tokenVersion ?? 0)) return null;
   return { ...payload, mustChangePassword: Boolean(user.must_change_password) };
 }
 

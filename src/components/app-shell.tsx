@@ -84,6 +84,7 @@ const ROLE_SCREENS: Record<string, string[]> = {
     "audit",
     "account-management",
   ],
+  director: ["dashboard", "employees", "org", "attendance", "checkin-log", "leave", "report", "kpi", "recognition"],
   hr: [
     "framework",
     "dashboard",

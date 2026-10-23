@@ -99,7 +99,7 @@ export function KpiScreen() {
     return `${m}/${y}`;
   })();
 
-  const canSign = user?.role === "super" || user?.role === "hr" || user?.role === "lead";
+  const canSign = user?.role === "super" || user?.role === "director" || user?.role === "hr" || user?.role === "lead";
   const canEditDg = user?.role === "super" || user?.role === "hr" || user?.role === "lead";
 
   const startEdit = useCallback((r: ApiKpi) => {
@@ -214,7 +214,7 @@ export function KpiScreen() {
         cell: (r) =>
           r.signed_l2 ? (
             <CheckCircle2 size={15} className="mx-auto text-[var(--color-success)]" />
-          ) : r.signed_l1 && canSign && (user?.role === "super" || user?.role === "hr") ? (
+          ) : r.signed_l1 && canSign && (user?.role === "super" || user?.role === "director" || user?.role === "hr") ? (
             <button onClick={(e) => { e.stopPropagation(); handleSign(r.id, 2); }} className="rounded bg-[var(--color-primary)] px-1.5 py-0.5 text-[10px] text-white hover:opacity-80">Ký</button>
           ) : (
             <Clock size={15} className="mx-auto text-[var(--color-text-lighter)]" />

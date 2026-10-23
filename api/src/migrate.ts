@@ -310,6 +310,14 @@ const STEPS: { id: string; run: (env: Env) => Promise<void> }[] = [
       `);
     },
   },
+  {
+    id: "027_special_account_profiles",
+    run: async (env) => {
+      await addColumn(env, "users", "account_type", "TEXT DEFAULT 'employee'");
+      await addColumn(env, "users", "display_name", "TEXT");
+      await addColumn(env, "users", "title", "TEXT");
+    },
+  },
 ];
 
 /** Áp các bước migrate còn thiếu (một lần cho mỗi isolate). */

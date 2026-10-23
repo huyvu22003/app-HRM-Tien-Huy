@@ -1,5 +1,5 @@
 import type { Env } from "../middleware/auth";
-import { hashPassword } from "../middleware/auth";
+import { effectiveRole, hashPassword } from "../middleware/auth";
 import { error, json, readJson } from "../utils";
 
 type AccountBody = {
@@ -8,6 +8,12 @@ type AccountBody = {
   password?: string;
   role?: "super" | "hr" | "lead" | "staff";
   active?: boolean;
+};
+
+type SpecialAccountBody = {
+  name?: string;
+  phone?: string;
+  title?: string;
 };
 
 type AccountRole = "super" | "hr" | "lead" | "staff";
@@ -48,7 +54,9 @@ function isValidEmployeePhone(phone: string): boolean {
 
 export async function listAccounts(_request: Request, env: Env): Promise<Response> {
   const accounts = await env.DB.prepare(
-    `SELECT u.id, u.employee_id, u.phone, u.role, u.active, u.must_change_password,
+    `SELECT u.id, u.employee_id, u.phone,
+            CASE WHEN u.account_type = 'director' THEN 'director' ELSE u.role END AS role,
+            u.account_type, u.display_name, u.title, u.active, u.must_change_password,
             u.password_changed_at, u.temporary_password_expires_at, u.created_at, u.updated_at,
             e.code AS employee_code, e.name AS employee_name, e.phone AS employee_phone,
             e.position AS employee_position, e.status AS employee_status
@@ -66,6 +74,29 @@ export async function listAccounts(_request: Request, env: Env): Promise<Respons
      ORDER BY e.name`,
   ).all();
   return json({ accounts: accounts.results, employeesWithoutAccount: unlinkedEmployees.results });
+}
+
+export async function createSpecialAccount(request: Request, env: Env, actorUserId: number): Promise<Response> {
+  const body = await readJson<SpecialAccountBody>(request);
+  const name = body.name?.trim();
+  const phone = normalizePhone(body.phone ?? null);
+  const title = body.title?.trim() || "Giám đốc";
+  if (!name || !phone) return error("Thiếu họ tên hoặc số điện thoại", 400);
+  if (!isValidEmployeePhone(phone)) return error("Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 0", 400);
+  const duplicate = await env.DB.prepare("SELECT id FROM users WHERE phone = ?").bind(phone).first();
+  if (duplicate) return error("Số điện thoại đã được sử dụng", 409);
+
+  const temporaryPassword = generateTemporaryPassword();
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const passwordHash = await hashPassword(temporaryPassword);
+  const result = await env.DB.prepare(
+    `INSERT INTO users (employee_id, phone, password_hash, role, account_type, display_name, title, active, must_change_password, temporary_password_expires_at)
+     VALUES (NULL, ?, ?, 'lead', 'director', ?, ?, 1, 1, ?)`,
+  ).bind(phone, passwordHash, name, title, expiresAt).run();
+  await env.DB.prepare(
+    "INSERT INTO audit_log (user_id, action, entity, entity_id, after_data) VALUES (?, 'create_director_account', 'users', ?, ?)",
+  ).bind(actorUserId, String(result.meta.last_row_id), JSON.stringify({ name, phone, title })).run();
+  return json({ success: true, id: result.meta.last_row_id, temporaryPassword, expiresAt }, 201);
 }
 
 export async function syncEmployeeAccounts(env: Env, actorUserId: number): Promise<Response> {
@@ -154,10 +185,10 @@ export async function createAccount(request: Request, env: Env, actorRole: strin
 
 export async function updateAccount(request: Request, env: Env, id: string, actorRole: string): Promise<Response> {
   const body = await readJson<AccountBody>(request);
-  const current = await env.DB.prepare("SELECT id, role FROM users WHERE id = ?").bind(id).first<{ id: number; role: string }>();
+  const current = await env.DB.prepare("SELECT id, role, account_type FROM users WHERE id = ?").bind(id).first<{ id: number; role: string; account_type: string | null }>();
   if (!current) return error("Không tìm thấy tài khoản", 404);
   if (body.role && !ROLES.has(body.role)) return error("Vai trò không hợp lệ", 400);
-  if (actorRole === "hr" && (!["lead", "staff"].includes(current.role) || (body.role && !["lead", "staff"].includes(body.role)))) {
+  if (actorRole === "hr" && (!["lead", "staff"].includes(effectiveRole(current.role, current.account_type)) || (body.role && !["lead", "staff"].includes(body.role)))) {
     return error("HR chỉ được quản trị tài khoản tổ trưởng hoặc nhân viên", 403);
   }
   if (body.password !== undefined && body.password.length < 8) return error("Mật khẩu phải có ít nhất 8 ký tự", 400);
@@ -197,15 +228,17 @@ export async function updateAccount(request: Request, env: Env, id: string, acto
 }
 
 export async function resetAccountPassword(_request: Request, env: Env, id: string, actorUserId: number): Promise<Response> {
-  const actor = await env.DB.prepare("SELECT id, role FROM users WHERE id = ?").bind(actorUserId).first<{ id: number; role: string }>();
-  const account = await env.DB.prepare("SELECT id, role FROM users WHERE id = ?").bind(id).first<{ id: number; role: string }>();
+  const actor = await env.DB.prepare("SELECT id, role, account_type FROM users WHERE id = ?").bind(actorUserId).first<{ id: number; role: string; account_type: string | null }>();
+  const account = await env.DB.prepare("SELECT id, role, account_type FROM users WHERE id = ?").bind(id).first<{ id: number; role: string; account_type: string | null }>();
   if (!account) return error("Không tìm thấy tài khoản", 404);
   if (!actor) return error("Không tìm thấy tài khoản quản trị", 401);
   if (actor.id === account.id) return error("Không thể tự đặt lại mật khẩu bằng chức năng quản trị. Hãy dùng Đổi mật khẩu.", 403);
-  if (actor.role === "hr" && !["lead", "staff"].includes(account.role)) {
+  const actorRole = effectiveRole(actor.role, actor.account_type);
+  const accountRole = effectiveRole(account.role, account.account_type);
+  if (actorRole === "hr" && !["lead", "staff"].includes(accountRole)) {
     return error("HR chỉ được đặt lại mật khẩu cho tổ trưởng và nhân viên.", 403);
   }
-  if (actor.role === "super" && account.role === "super") {
+  if (actorRole === "super" && accountRole === "super") {
     return error("Tài khoản quản trị cấp cao phải được phục hồi qua quy trình Admin an toàn.", 403);
   }
   const temporaryPassword = generateTemporaryPassword();

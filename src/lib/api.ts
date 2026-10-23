@@ -115,7 +115,7 @@ export interface ApiUser {
   employee_id?: number | null;
   employeeId?: number | null;
   phone: string;
-  role: "super" | "hr" | "lead" | "staff";
+  role: "super" | "director" | "hr" | "lead" | "staff";
   name?: string;
   department_id?: number;
   position?: string;
@@ -157,7 +157,10 @@ export interface ApiAccount {
   id: number;
   employee_id: number | null;
   phone: string;
-  role: "super" | "hr" | "lead" | "staff";
+  role: "super" | "director" | "hr" | "lead" | "staff";
+  account_type?: string | null;
+  display_name?: string | null;
+  title?: string | null;
   active: number;
   must_change_password: number;
   password_changed_at: string | null;
@@ -203,6 +206,10 @@ export function fetchAccounts() {
 
 export function createAccount(data: { employeeId: number; phone: string; role: ApiAccount["role"] }) {
   return api.post<{ success: boolean; id: number; temporaryPassword: string; expiresAt: string }>("/accounts", data);
+}
+
+export function createSpecialAccount(data: { name: string; phone: string; title: string }) {
+  return api.post<{ success: boolean; id: number; temporaryPassword: string; expiresAt: string }>("/accounts/special", data);
 }
 
 export function syncEmployeeAccounts() {
