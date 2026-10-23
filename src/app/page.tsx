@@ -26,7 +26,7 @@ import { PermissionsScreen } from "@/components/screens/permissions-screen";
 import { ConfigScreen } from "@/components/screens/config-screen";
 import { FormulaScreen } from "@/components/screens/formula-screen";
 import { AuditScreen } from "@/components/screens/audit-screen";
-import { AccountScreen } from "@/components/screens/account-screen";
+import { AccountAdminPanel, AccountScreen } from "@/components/screens/account-screen";
 import { ChangePasswordScreen } from "@/components/screens/change-password-screen";
 
 export default function Home() {
@@ -102,6 +102,8 @@ export default function Home() {
         return <FormulaScreen onNavigate={navigate} />;
       case "audit":
         return <AuditScreen />;
+      case "account-management":
+        return <AccountAdminPanel />;
       case "account":
         return <AccountScreen />;
       default:

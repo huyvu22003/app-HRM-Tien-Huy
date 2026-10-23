@@ -22,7 +22,7 @@ const ACTIVITY = [
 
 const ROLE_LABEL: Record<string, string> = { super: "Quản trị", hr: "Nhân sự", lead: "Tổ trưởng", staff: "Nhân viên" };
 
-function AccountAdminPanel() {
+export function AccountAdminPanel() {
   const { user, role: currentRole } = useAuth();
   const { data, refetch } = useQuery(() => fetchAccounts(), []);
   const [employeeId, setEmployeeId] = useState("");
@@ -198,7 +198,6 @@ export function AccountScreen() {
       </div>
 
       <div className="flex flex-col gap-4">
-        {(role === "super" || role === "hr") && <AccountAdminPanel />}
         <div className="rounded-[14px] border border-[var(--color-border)] bg-white p-[18px]">
           <div className="mb-3 flex items-center gap-2 text-[13px] font-semibold text-[var(--color-text-primary)]">
             <KeyRound size={16} className="text-[var(--color-accent)]" /> Bảo mật

@@ -19,6 +19,7 @@ import {
   Settings,
   Calculator,
   ScrollText,
+  UserRoundCog,
   Search,
   Bell,
   ChevronDown,
@@ -55,6 +56,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: "config", label: "Cấu hình", group: "QUẢN TRỊ", icon: Settings },
   { key: "formula", label: "Công thức lương", group: "QUẢN TRỊ", icon: Calculator },
   { key: "audit", label: "Audit log", group: "QUẢN TRỊ", icon: ScrollText },
+  { key: "account-management", label: "Quản trị tài khoản", group: "QUẢN TRỊ", icon: UserRoundCog },
 ];
 
 const GROUP_ORDER = ["TỔNG QUAN", "NHÂN SỰ", "VẬN HÀNH", "HIỆU SUẤT", "PHÁT TRIỂN", "QUẢN TRỊ"];
@@ -80,6 +82,7 @@ const ROLE_SCREENS: Record<string, string[]> = {
     "config",
     "formula",
     "audit",
+    "account-management",
   ],
   hr: [
     "framework",
@@ -95,6 +98,7 @@ const ROLE_SCREENS: Record<string, string[]> = {
     "recognition",
     "payroll",
     "training",
+    "account-management",
   ],
   lead: ["framework", "dashboard", "employees", "org", "attendance", "checkin-log", "leave", "report", "kpi"],
   staff: ["framework", "dashboard", "attendance", "leave", "report"],
@@ -124,6 +128,7 @@ const PAGE_META: Record<string, { title: string; subtitle: string }> = {
   config: { title: "Cấu hình", subtitle: "Cấu hình hệ thống & quy tắc" },
   formula: { title: "Công thức lương", subtitle: "Chuỗi tính lương & thuế TNCN" },
   audit: { title: "Audit log", subtitle: "Nhật ký thao tác hệ thống" },
+  "account-management": { title: "Quản trị tài khoản", subtitle: "Cấp, liên kết và phục hồi tài khoản nhân viên" },
   account: { title: "Tài khoản của tôi", subtitle: "Thông tin & bảo mật tài khoản" },
   "employee-detail": { title: "Hồ sơ nhân viên", subtitle: "Thông tin chi tiết nhân sự" },
 };
