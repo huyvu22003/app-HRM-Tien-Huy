@@ -175,7 +175,26 @@ export interface ApiUnlinkedEmployee {
   name: string;
   phone: string | null;
   position: string | null;
+  level: string | null;
+  department_name: string | null;
   status: string;
+}
+
+export interface ApiProvisionedAccount {
+  employeeId: number;
+  employeeCode: string;
+  employeeName: string;
+  phone: string;
+  role: ApiAccount["role"];
+  temporaryPassword: string;
+  expiresAt: string;
+}
+
+export interface ApiSkippedAccount {
+  employeeId: number;
+  employeeCode: string;
+  employeeName: string;
+  reason: string;
 }
 
 export function fetchAccounts() {
@@ -184,6 +203,10 @@ export function fetchAccounts() {
 
 export function createAccount(data: { employeeId: number; phone: string; role: ApiAccount["role"] }) {
   return api.post<{ success: boolean; id: number; temporaryPassword: string; expiresAt: string }>("/accounts", data);
+}
+
+export function syncEmployeeAccounts() {
+  return api.post<{ success: boolean; created: ApiProvisionedAccount[]; skipped: ApiSkippedAccount[]; remaining: number }>("/accounts/sync");
 }
 
 export function updateAccount(id: number, data: { employeeId?: number | null; phone?: string; password?: string; role?: ApiAccount["role"]; active?: boolean }) {

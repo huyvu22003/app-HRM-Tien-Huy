@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { KeyRound, ShieldCheck, Monitor, History, LogOut, UserRoundCog, Link2, Plus, RotateCcw } from "lucide-react";
+import { KeyRound, ShieldCheck, Monitor, History, LogOut, UserRoundCog, Link2, Plus, RotateCcw, UsersRound, Download } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { getInitials } from "@/lib/utils";
 import { useQuery } from "@/lib/hooks";
-import { createAccount, fetchAccounts, resetAccountPassword, updateAccount, type ApiAccount } from "@/lib/api";
+import { createAccount, fetchAccounts, resetAccountPassword, syncEmployeeAccounts, updateAccount, type ApiAccount, type ApiProvisionedAccount, type ApiSkippedAccount, type ApiUnlinkedEmployee } from "@/lib/api";
 
 const ROLE_SCOPE: Record<string, string> = {
   super: "Toàn quyền cấu hình hệ thống, phân quyền và công thức lương.",
@@ -22,6 +22,38 @@ const ACTIVITY = [
 
 const ROLE_LABEL: Record<string, string> = { super: "Quản trị", hr: "Nhân sự", lead: "Tổ trưởng", staff: "Nhân viên" };
 
+function inferEmployeeRole(employee: Pick<ApiUnlinkedEmployee, "department_name" | "position" | "level">): ApiAccount["role"] {
+  const department = (employee.department_name ?? "").toLocaleLowerCase("vi");
+  const management = `${employee.position ?? ""} ${employee.level ?? ""}`.toLocaleLowerCase("vi");
+  if (/nhân\s*sự|nhan\s*su/.test(department)) return "hr";
+  if (/(giám đốc|phó giám đốc|trưởng phòng|phó phòng|quản lý|xưởng trưởng|tổ trưởng|tổ phó|trưởng nhóm)/.test(management)) return "lead";
+  return "staff";
+}
+
+function downloadProvisionedAccounts(accounts: ApiProvisionedAccount[]) {
+  const escape = (value: string) => `"${value.replace(/"/g, '""')}"`;
+  const rows = [
+    ["Mã nhân viên", "Họ tên", "Số điện thoại", "Quyền", "Mật khẩu tạm", "Hết hạn"],
+    ...accounts.map((account) => [
+      account.employeeCode,
+      account.employeeName,
+      account.phone,
+      ROLE_LABEL[account.role] ?? account.role,
+      account.temporaryPassword,
+      new Date(account.expiresAt).toLocaleString("vi-VN"),
+    ]),
+  ];
+  const blob = new Blob(["\uFEFF" + rows.map((row) => row.map(escape).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `tai-khoan-nhan-vien-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function AccountAdminPanel() {
   const { user, role: currentRole } = useAuth();
   const { data, refetch } = useQuery(() => fetchAccounts(), []);
@@ -32,6 +64,8 @@ export function AccountAdminPanel() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [temporaryCredential, setTemporaryCredential] = useState<{ phone: string; password: string; expiresAt: string } | null>(null);
+  const [bulkCredentials, setBulkCredentials] = useState<ApiProvisionedAccount[]>([]);
+  const [bulkSkipped, setBulkSkipped] = useState<ApiSkippedAccount[]>([]);
   const accounts = data?.accounts ?? [];
   const unlinked = data?.employeesWithoutAccount ?? [];
   const linkCounts = accounts.reduce<Record<number, number>>((out, account) => {
@@ -82,19 +116,53 @@ export function AccountAdminPanel() {
     finally { setBusy(false); }
   }
 
+  async function syncAllAccounts() {
+    const eligible = unlinked.filter((employee) => employee.status === "Đang làm việc" && /^0\d{9}$/.test((employee.phone ?? "").replace(/\s+/g, "")));
+    const roleCounts = eligible.reduce<Record<string, number>>((counts, employee) => {
+      const inferredRole = inferEmployeeRole(employee);
+      counts[inferredRole] = (counts[inferredRole] ?? 0) + 1;
+      return counts;
+    }, {});
+    const summary = `HR: ${roleCounts.hr ?? 0}, Tổ trưởng/Quản lý: ${roleCounts.lead ?? 0}, Nhân viên: ${roleCounts.staff ?? 0}`;
+    if (!window.confirm(`Tạo tài khoản cho tối đa ${eligible.length} nhân viên đang làm việc?\n${summary}\n\nMỗi người nhận mật khẩu tạm riêng và phải đổi khi đăng nhập lần đầu.`)) return;
+
+    setBusy(true); setMessage(""); setTemporaryCredential(null); setBulkCredentials([]); setBulkSkipped([]);
+    const created: ApiProvisionedAccount[] = [];
+    const skipped = new Map<number, ApiSkippedAccount>();
+    try {
+      let remaining = 0;
+      do {
+        const result = await syncEmployeeAccounts();
+        created.push(...result.created);
+        result.skipped.forEach((item) => skipped.set(item.employeeId, item));
+        remaining = result.remaining;
+        if (remaining > 0 && result.created.length === 0) break;
+      } while (remaining > 0);
+      setBulkCredentials(created);
+      setBulkSkipped(Array.from(skipped.values()));
+      setMessage(`Đã tạo ${created.length} tài khoản. ${skipped.size} hồ sơ được bỏ qua để kiểm tra lại số điện thoại.`);
+      await refetch();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Không đồng bộ được tài khoản hàng loạt.");
+    } finally { setBusy(false); }
+  }
+
   return (
     <div className="rounded-[14px] border border-[var(--color-border)] bg-white p-[18px]">
-      <div className="mb-1 flex items-center gap-2 text-[13px] font-semibold"><UserRoundCog size={17} className="text-[var(--color-accent)]" /> Đồng bộ tài khoản nhân viên</div>
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-[13px] font-semibold"><UserRoundCog size={17} className="text-[var(--color-accent)]" /> Đồng bộ tài khoản nhân viên</div>
+        {currentRole === "super" && <button type="button" disabled={busy || unlinked.length === 0} onClick={syncAllAccounts} className="flex h-9 items-center gap-1.5 rounded-[8px] bg-[var(--color-accent)] px-3 text-[12px] font-semibold text-white disabled:opacity-50"><UsersRound size={15} /> Đồng bộ tất cả</button>}
+      </div>
       <div className="mb-4 text-[12px] text-[var(--color-text-muted)]">{accounts.length} tài khoản · {unlinked.length} nhân viên chưa có tài khoản</div>
 
       <form onSubmit={submit} className="grid gap-2 rounded-[12px] bg-[var(--color-page-bg)] p-3 md:grid-cols-[1.5fr_1fr_1fr_auto]">
-        <select required value={employeeId} onChange={(e) => { const id = e.target.value; setEmployeeId(id); const employee = unlinked.find((x) => x.id === Number(id)); if (employee?.phone) setPhone(employee.phone); }} className="h-10 rounded-[8px] border border-[var(--color-border)] bg-white px-2 text-[12px]">
+        <select required value={employeeId} onChange={(e) => { const id = e.target.value; setEmployeeId(id); const employee = unlinked.find((x) => x.id === Number(id)); setPhone(employee?.phone ?? ""); if (employee) { const inferred = inferEmployeeRole(employee); setRole(currentRole === "hr" && inferred === "hr" ? "staff" : inferred); } }} className="h-10 rounded-[8px] border border-[var(--color-border)] bg-white px-2 text-[12px]">
           <option value="">Chọn nhân viên chưa có tài khoản</option>
           {unlinked.map((e) => <option key={e.id} value={e.id}>{e.name} · {e.code}</option>)}
         </select>
         <input required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Số điện thoại" className="h-10 rounded-[8px] border border-[var(--color-border)] bg-white px-3 text-[12px]" />
         <select value={role} onChange={(e) => setRole(e.target.value as ApiAccount["role"])} className="h-10 rounded-[8px] border border-[var(--color-border)] bg-white px-2 text-[12px]">
-          <option value="staff">Nhân viên</option><option value="lead">Tổ trưởng</option><option value="hr">Nhân sự</option><option value="super">Quản trị</option>
+          <option value="staff">Nhân viên</option><option value="lead">Tổ trưởng</option>{currentRole === "super" && <><option value="hr">Nhân sự</option><option value="super">Quản trị</option></>}
         </select>
         <button disabled={busy} className="flex h-10 items-center justify-center gap-1 rounded-[8px] bg-[var(--color-accent)] px-3 text-[12px] font-semibold text-white disabled:opacity-50"><Plus size={14} /> Tạo</button>
       </form>
@@ -108,6 +176,17 @@ export function AccountAdminPanel() {
           <button type="button" onClick={() => setTemporaryCredential(null)} className="mt-2 rounded-[7px] border border-[var(--color-border)] bg-white px-2.5 py-1 text-[11px]">Đã ghi nhận</button>
         </div>
       )}
+      {bulkCredentials.length > 0 && (
+        <div className="mt-3 rounded-[10px] border border-[var(--color-warning)] bg-[var(--color-warning-bg)] p-3 text-[12px]">
+          <div className="font-semibold text-[var(--color-text-primary)]">Đã tạo {bulkCredentials.length} tài khoản — thông tin cấp một lần</div>
+          <div className="mt-1 text-[11px] text-[var(--color-text-muted)]">Tải file và bàn giao riêng cho từng nhân viên. Mật khẩu tạm không được lưu lại trên hệ thống dưới dạng đọc được.</div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button type="button" onClick={() => downloadProvisionedAccounts(bulkCredentials)} className="flex items-center gap-1 rounded-[7px] bg-[var(--color-accent)] px-2.5 py-1.5 text-[11px] font-semibold text-white"><Download size={13} /> Tải danh sách CSV</button>
+            <button type="button" onClick={() => setBulkCredentials([])} className="rounded-[7px] border border-[var(--color-border)] bg-white px-2.5 py-1 text-[11px]">Đã lưu an toàn, đóng</button>
+          </div>
+        </div>
+      )}
+      {bulkSkipped.length > 0 && <div className="mt-2 text-[11px] text-[var(--color-danger)]">{bulkSkipped.length} hồ sơ chưa được tạo do thiếu/trùng số điện thoại. Hãy đối soát rồi tạo riêng.</div>}
 
       <div className="mt-4 divide-y divide-[var(--color-border-light)]">
         {accounts.map((a) => (

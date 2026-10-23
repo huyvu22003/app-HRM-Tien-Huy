@@ -5,7 +5,7 @@ import { error, parseIdFromPath } from "./utils";
 import { ensureSchema } from "./migrate";
 
 import { login, logout, me, changePassword } from "./handlers/auth";
-import { listAccounts, createAccount, updateAccount, resetAccountPassword } from "./handlers/accounts";
+import { listAccounts, createAccount, updateAccount, resetAccountPassword, syncEmployeeAccounts } from "./handlers/accounts";
 import { listEmployees, getEmployee, createEmployee, updateEmployee, deleteEmployee, importEmployees } from "./handlers/employees";
 import {
   listDepartments,
@@ -82,6 +82,7 @@ const AUTHZ: { m: string; re: RegExp; roles: readonly string[] }[] = [
   { m: "POST", re: /^\/api\/improvement-plans$/, roles: R_MANAGER },
   { m: "PUT", re: /^\/api\/config$/, roles: R_SUPER },
   { m: "PUT", re: /^\/api\/permissions$/, roles: R_SUPER },
+  { m: "POST", re: /^\/api\/accounts\/sync$/, roles: R_SUPER },
 ];
 
 // Gác ĐỌC dữ liệu nhạy cảm ở backend (không chỉ ẩn trên giao diện). Route không
@@ -155,7 +156,8 @@ const worker = {
 
       // --- Account provisioning and employee linkage ---
       if (method === "GET" && pathname === "/api/accounts") return withCors(await listAccounts(request, env));
-      if (method === "POST" && pathname === "/api/accounts") return withCors(await createAccount(request, env));
+      if (method === "POST" && pathname === "/api/accounts/sync") return withCors(await syncEmployeeAccounts(env, userId));
+      if (method === "POST" && pathname === "/api/accounts") return withCors(await createAccount(request, env, userRole));
       if (method === "POST" && /^\/api\/accounts\/\d+\/reset-password$/.test(pathname)) {
         const id = parseIdFromPath(pathname, "/api/accounts/");
         if (!id) return withCors(error("Thiếu id tài khoản", 400));
@@ -164,7 +166,7 @@ const worker = {
       if (method === "PUT" && pathname.startsWith("/api/accounts/")) {
         const id = parseIdFromPath(pathname, "/api/accounts/");
         if (!id) return withCors(error("Thiếu id tài khoản", 400));
-        return withCors(await updateAccount(request, env, id));
+        return withCors(await updateAccount(request, env, id, userRole));
       }
 
       // --- Employees ---
