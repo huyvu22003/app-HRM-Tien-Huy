@@ -14,6 +14,7 @@ import { MCard, MHeader, MButton, MBadge, MBody, mono } from "./primitives";
 import { type Go, todayLabel } from "./nav";
 
 const WORKPLACE = "Xưởng Cơ khí Tiến Huy — Xưởng A";
+const FACE_CHECKIN_ENABLED = false;
 
 type Geo = { lat: number; lng: number; acc: number } | null;
 type Step = "capture" | "confirm" | "done";
@@ -25,6 +26,33 @@ function fmtCoord(lat: number, lng: number) {
 }
 
 export function MobileCheckIn({ go }: { go: Go }) {
+  if (!FACE_CHECKIN_ENABLED) {
+    return (
+      <div className="flex h-full flex-col">
+        <MHeader title="Chấm công khuôn mặt" subtitle={todayLabel()} right={<MBadge tone="warning">Đang phát triển</MBadge>} />
+        <MBody>
+          <MCard className="flex flex-col items-center px-6 py-10 text-center">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[var(--color-warning-bg)]">
+              <ScanFace size={40} className="text-[var(--color-warning)]" />
+            </div>
+            <div className="mt-5 text-[18px] font-extrabold text-[var(--color-text-primary)]">Tính năng đang phát triển</div>
+            <div className="mt-2 max-w-[290px] text-[13px] leading-relaxed text-[var(--color-text-muted)]">
+              Chấm công bằng khuôn mặt đang được hoàn thiện và tạm khóa thao tác. Hệ thống sẽ thông báo khi tính năng sẵn sàng.
+            </div>
+            <div className="mt-5 flex items-start gap-2 rounded-[12px] bg-[var(--color-page-bg)] p-3 text-left text-[12px] leading-relaxed text-[var(--color-text-muted)]">
+              <Info size={17} className="mt-0.5 flex-none text-[var(--color-accent)]" />
+              Camera, vị trí và API ghi nhận chấm công sẽ không được kích hoạt trong thời gian tạm khóa.
+            </div>
+            <MButton className="mt-6 w-full" onClick={() => go("home")}>Về trang chủ</MButton>
+          </MCard>
+        </MBody>
+      </div>
+    );
+  }
+  return <MobileCheckInEnabled go={go} />;
+}
+
+function MobileCheckInEnabled({ go }: { go: Go }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [step, setStep] = useState<Step>("capture");

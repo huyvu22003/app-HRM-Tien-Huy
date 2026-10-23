@@ -91,7 +91,7 @@ export function MobileHome({ go }: { go: Go }) {
               <div className="flex h-[42px] w-[42px] items-center justify-center rounded-[12px] bg-white/90"><ScanFace size={24} className="text-[var(--color-navy)]" /></div>
               <div className="flex-1">
                 <div className="text-[14px] font-bold">Chấm công bằng selfie</div>
-                <div className="text-[11.5px] text-white/80">Xác thực khuôn mặt &amp; vị trí xưởng</div>
+                <div className="text-[11.5px] text-white/80">Tính năng đang phát triển · tạm khóa thao tác</div>
               </div>
               <ChevronRight size={20} className="text-white/85" />
             </div>
