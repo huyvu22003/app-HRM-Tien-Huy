@@ -288,6 +288,28 @@ const STEPS: { id: string; run: (env: Env) => Promise<void> }[] = [
       `);
     },
   },
+  {
+    id: "026_remove_duplicate_hr_account",
+    run: async (env) => {
+      const canonicalHr = "SELECT id FROM users WHERE phone = '0903373178'";
+      const duplicateHr = "SELECT id FROM users WHERE phone = '0985040797'";
+      const canonicalExists = "EXISTS (SELECT 1 FROM users WHERE phone = '0903373178')";
+      await env.DB.exec(`
+        UPDATE leave_requests SET created_by = (${canonicalHr}) WHERE created_by IN (${duplicateHr}) AND ${canonicalExists};
+        UPDATE leave_requests SET approved_l1_by = (${canonicalHr}) WHERE approved_l1_by IN (${duplicateHr}) AND ${canonicalExists};
+        UPDATE leave_requests SET approved_l2_by = (${canonicalHr}) WHERE approved_l2_by IN (${duplicateHr}) AND ${canonicalExists};
+        UPDATE kpi_scores SET signed_l1_by = (${canonicalHr}) WHERE signed_l1_by IN (${duplicateHr}) AND ${canonicalExists};
+        UPDATE kpi_scores SET signed_l2_by = (${canonicalHr}) WHERE signed_l2_by IN (${duplicateHr}) AND ${canonicalExists};
+        UPDATE period_close SET signed_l1_by = (${canonicalHr}) WHERE signed_l1_by IN (${duplicateHr}) AND ${canonicalExists};
+        UPDATE period_close SET signed_l2_by = (${canonicalHr}) WHERE signed_l2_by IN (${duplicateHr}) AND ${canonicalExists};
+        UPDATE notifications SET user_id = (${canonicalHr}) WHERE user_id IN (${duplicateHr}) AND ${canonicalExists};
+        UPDATE audit_log SET user_id = (${canonicalHr}) WHERE user_id IN (${duplicateHr}) AND ${canonicalExists};
+        UPDATE rewards SET proposed_by = (${canonicalHr}) WHERE proposed_by IN (${duplicateHr}) AND ${canonicalExists};
+        UPDATE rewards SET approved_by = (${canonicalHr}) WHERE approved_by IN (${duplicateHr}) AND ${canonicalExists};
+        DELETE FROM users WHERE phone = '0985040797' AND ${canonicalExists};
+      `);
+    },
+  },
 ];
 
 /** Áp các bước migrate còn thiếu (một lần cho mỗi isolate). */
