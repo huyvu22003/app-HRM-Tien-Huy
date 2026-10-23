@@ -8,6 +8,8 @@ import { MobileHome } from "./home";
 import { MobileCheckIn } from "./attendance";
 import { MobileLeave, MobileCreateLeave } from "./leave";
 import { MobilePayslip, MobileApprovals, MobileReport, MobileKpi, MobileNotifications, MobileProfile } from "./more";
+import { useAuth } from "@/lib/auth-context";
+import { HrMobileApp } from "./hr-mobile-app";
 
 const TABS: { key: MobileScreen; label: string; icon: typeof House }[] = [
   { key: "home", label: "Trang chủ", icon: House },
@@ -27,7 +29,9 @@ const TAB_OF: Record<MobileScreen, MobileScreen> = {
 };
 
 export function MobileApp() {
+  const { user } = useAuth();
   const [screen, setScreen] = useState<MobileScreen>("home");
+  if (user?.role === "hr") return <HrMobileApp />;
   const go: Go = (s) => setScreen(s);
   const showTabs = TAB_SCREENS.includes(screen);
   const activeTab = TAB_OF[screen];
