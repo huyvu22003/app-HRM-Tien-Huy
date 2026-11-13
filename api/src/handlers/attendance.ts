@@ -2,21 +2,36 @@ import type { Env } from "../middleware/auth";
 import { json, error, readJson, getParams } from "../utils";
 import { replaceOvertimeDaily, type OtDay } from "./overtime";
 
-export async function listAttendance(request: Request, env: Env): Promise<Response> {
+export async function listAttendance(
+  request: Request,
+  env: Env,
+  userId = 0,
+  userRole = "",
+): Promise<Response> {
   const url = new URL(request.url);
   const params = getParams(url);
   const period = params.period;
   if (!period) return error("Thiếu tham số period (VD: 2026-06)", 400);
 
-  const { results } = await env.DB.prepare(
+  let employeeId: number | null = null;
+  if (userRole === "staff") {
+    const account = await env.DB.prepare("SELECT employee_id FROM users WHERE id = ?")
+      .bind(userId)
+      .first<{ employee_id: number | null }>();
+    employeeId = account?.employee_id ?? null;
+    if (!employeeId) return error("Tài khoản chưa gắn nhân viên", 404);
+  }
+
+  const statement = env.DB.prepare(
     `SELECT a.*, e.name as employee_name, e.code as employee_code
      FROM attendance a
      JOIN employees e ON e.id = a.employee_id
-     WHERE a.period = ?
+     WHERE a.period = ?${employeeId ? " AND a.employee_id = ?" : ""}
      ORDER BY e.code`
-  )
-    .bind(period)
-    .all();
+  );
+  const { results } = employeeId
+    ? await statement.bind(period, employeeId).all()
+    : await statement.bind(period).all();
 
   return json({ data: results, period });
 }

@@ -14,6 +14,7 @@ import { EmployeesScreen } from "@/components/screens/employees-screen";
 import { EmployeeDetailScreen } from "@/components/screens/employee-detail-screen";
 import { OrgScreen } from "@/components/screens/org-screen";
 import { AttendanceScreen } from "@/components/screens/attendance-screen";
+import { MyAttendanceScreen } from "@/components/screens/my-attendance-screen";
 import { CheckinLogScreen } from "@/components/screens/checkin-log-screen";
 import { LeaveScreen } from "@/components/screens/leave-screen";
 import { SalaryScreen } from "@/components/screens/salary-screen";
@@ -78,7 +79,7 @@ export default function Home() {
       case "org":
         return <OrgScreen onNavigate={navigate} />;
       case "attendance":
-        return <AttendanceScreen />;
+        return user?.role === "staff" ? <MyAttendanceScreen /> : <AttendanceScreen />;
       case "checkin-log":
         return <CheckinLogScreen />;
       case "leave":

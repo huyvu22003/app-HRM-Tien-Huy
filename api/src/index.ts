@@ -93,6 +93,7 @@ const READ_AUTHZ: { re: RegExp; roles: readonly string[] }[] = [
   { re: /^\/api\/accounts(\/.*)?$/, roles: R_HR },
   { re: /^\/api\/salary$/, roles: R_HR }, // bảng lương toàn công ty
   { re: /^\/api\/maternity(\/.*)?$/, roles: R_HR }, // theo dõi thai sản + giấy BHXH
+  { re: /^\/api\/attendance\/leave-suggestions$/, roles: R_HR }, // dữ liệu nghỉ toàn công ty để HR đồng bộ
   { re: /^\/api\/attendance\/checkup-suggestions$/, roles: R_HR }, // gợi ý khám thai (thông tin thai sản)
   { re: /^\/api\/checkins$/, roles: R_MANAGER }, // nhật ký chấm công selfie (vị trí + ảnh)
   { re: /^\/api\/checkin-photos\//, roles: R_MANAGER }, // ảnh chấm công selfie
@@ -250,7 +251,7 @@ const worker = {
         return withCors(await serveCheckinPhoto(request, env, key));
       }
       if (method === "POST" && pathname === "/api/attendance/import") return withCors(await importAttendance(request, env));
-      if (method === "GET" && pathname === "/api/attendance") return withCors(await listAttendance(request, env));
+      if (method === "GET" && pathname === "/api/attendance") return withCors(await listAttendance(request, env, userId, userRole));
       if (method === "PUT" && pathname.startsWith("/api/attendance/")) {
         const id = parseIdFromPath(pathname, "/api/attendance/");
         if (!id) return withCors(error("Thiếu id chấm công", 400));
