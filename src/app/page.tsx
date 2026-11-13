@@ -17,6 +17,7 @@ import { AttendanceScreen } from "@/components/screens/attendance-screen";
 import { CheckinLogScreen } from "@/components/screens/checkin-log-screen";
 import { LeaveScreen } from "@/components/screens/leave-screen";
 import { SalaryScreen } from "@/components/screens/salary-screen";
+import { MobilePayslip } from "@/components/mobile/more";
 import { ReportScreen } from "@/components/screens/report-screen";
 import { KpiScreen } from "@/components/screens/kpi-screen";
 import { RecognitionScreen } from "@/components/screens/recognition-screen";
@@ -83,7 +84,7 @@ export default function Home() {
       case "leave":
         return <LeaveScreen />;
       case "salary":
-        return <SalaryScreen />;
+        return user?.role === "staff" ? <MobilePayslip /> : <SalaryScreen />;
       case "report":
         return <ReportScreen />;
       case "kpi":

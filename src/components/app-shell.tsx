@@ -102,7 +102,7 @@ const ROLE_SCREENS: Record<string, string[]> = {
     "account-management",
   ],
   lead: ["framework", "dashboard", "employees", "org", "attendance", "checkin-log", "leave", "report", "kpi"],
-  staff: ["framework", "dashboard", "attendance", "leave", "report"],
+  staff: ["framework", "dashboard", "attendance", "leave", "salary", "report"],
 };
 
 const NOTIFICATIONS = [
