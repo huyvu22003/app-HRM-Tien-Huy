@@ -7,8 +7,8 @@ const HOURS_PER_DAY = 8;
 const PERSONAL_DEDUCTION = 15_500_000;
 const DEPENDENT_DEDUCTION = 6_200_000;
 
-// TẠM NGẮT thuế TNCN và KPI khỏi bảng lương.
-// - Thuế TNCN vẫn nằm trong công thức (khoản trừ) nhưng trả 0 cho tới khi bật lại.
+// Tạm ngắt công thức tự tính thuế TNCN và KPI khỏi bảng lương.
+// - TNCN do HR nhập trực tiếp vẫn được trừ; chỉ phần tự tính trả 0 tới khi bật lại.
 // - KPI không cộng vào thu nhập lương.
 // Bật lại thuế: đổi cờ này thành true.
 export const SALARY_PIT_ENABLED = false;
@@ -135,10 +135,10 @@ export function computeSalary(row: ApiSalaryRow): SalaryComputed {
   const companyDebt = row.company_debt ?? 0;
 
   const taxableAfterDeductions = taxableIncome - insuranceTotal - PERSONAL_DEDUCTION - dependents * DEPENDENT_DEDUCTION;
-  // Thuế TNCN tạm ngắt (trả 0 tới khi bật lại SALARY_PIT_ENABLED).
-  const pit = SALARY_PIT_ENABLED ? computePIT(taxableAfterDeductions) : 0;
+  // Ưu tiên số TNCN HR nhập trên bảng lương. Nếu chưa nhập, dùng công thức khi được bật.
+  const pit = row.pit_manual ?? (SALARY_PIT_ENABLED ? computePIT(taxableAfterDeductions) : 0);
 
-  // Thực trả = Gross − BHXH − BHYT − BHTN − ĐPCĐ − Tạm ứng − Trừ nợ − Thuế TNCN.
+  // Thực trả = Gross − BHXH − BHYT − BHTN − ĐPCĐ − Tạm ứng − Nợ khác − TNCN.
   const netPay = totalIncome - insuranceTotal - unionDues - advance - companyDebt - pit;
 
   return {

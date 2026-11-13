@@ -318,6 +318,12 @@ const STEPS: { id: string; run: (env: Env) => Promise<void> }[] = [
       await addColumn(env, "users", "title", "TEXT");
     },
   },
+  {
+    id: "028_salary_manual_pit",
+    run: async (env) => {
+      await addColumn(env, "compensation", "pit_manual", "REAL DEFAULT 0");
+    },
+  },
 ];
 
 /** Áp các bước migrate còn thiếu (một lần cho mỗi isolate). */

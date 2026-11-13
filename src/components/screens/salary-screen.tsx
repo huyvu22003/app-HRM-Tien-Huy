@@ -9,7 +9,7 @@ import { formatMoney, cn } from "@/lib/utils";
 import { type ColumnDef } from "@/lib/table-prefs";
 import { DataTable } from "@/components/ui/data-table";
 import { exportStyledExcel } from "@/lib/excel-export";
-import { STD_DAYS, SALARY_PIT_ENABLED, computeSalary, type SalaryComputed } from "@/lib/salary-compute";
+import { STD_DAYS, computeSalary, type SalaryComputed } from "@/lib/salary-compute";
 
 type SalaryDisplayRow = { row: ApiSalaryRow; s: SalaryComputed };
 
@@ -42,6 +42,7 @@ const EDITABLE_SALARY_FIELDS: Record<string, EditableSalaryField> = {
   advanceCk: { field: "advance_ck", value: (d) => d.s.advanceCk, format: "money" },
   advanceTm: { field: "advance_tm", value: (d) => d.s.advanceTm, format: "money" },
   companyDebt: { field: "company_debt", value: (d) => d.s.companyDebt, format: "money" },
+  pit: { field: "pit_manual", value: (d) => d.s.pit, format: "money" },
 };
 
 function totalOtOf(s: SalaryComputed): number {
@@ -106,11 +107,11 @@ const SAL_COLUMNS_ALL: ColumnDef<SalaryDisplayRow>[] = [
   { id: "bhyt", label: "BHYT", align: "right", defaultHidden: true, cell: (d) => (d.s.bhyt > 0 ? `-${formatMoney(d.s.bhyt)}` : "-"), exportValue: (d) => -d.s.bhyt, exportFormat: "money" },
   { id: "bhtn", label: "BHTN", align: "right", defaultHidden: true, cell: (d) => (d.s.bhtn > 0 ? `-${formatMoney(d.s.bhtn)}` : "-"), exportValue: (d) => -d.s.bhtn, exportFormat: "money" },
   { id: "unionDues", label: "CĐ phí", align: "right", defaultHidden: true, cell: (d) => (d.s.unionDues > 0 ? `-${formatMoney(d.s.unionDues)}` : "-"), exportValue: (d) => -d.s.unionDues, exportFormat: "money" },
-  { id: "pit", label: "Thuế", align: "right", cell: (d) => (d.s.pit > 0 ? `-${formatMoney(d.s.pit)}` : "0"), exportValue: (d) => -d.s.pit, exportFormat: "money" },
+  { id: "pit", label: "TNCN", align: "right", cell: (d) => (d.s.pit > 0 ? `-${formatMoney(d.s.pit)}` : "-"), exportValue: (d) => -d.s.pit, exportFormat: "money" },
   { id: "advance", label: "Tạm ứng", align: "right", cell: (d) => (d.s.advance > 0 ? `-${formatMoney(d.s.advance)}` : "-"), exportValue: (d) => -d.s.advance, exportFormat: "money" },
   { id: "advanceCk", label: "Tạm ứng CK", align: "right", defaultHidden: true, cell: (d) => (d.s.advanceCk > 0 ? `-${formatMoney(d.s.advanceCk)}` : "-"), exportValue: (d) => -d.s.advanceCk, exportFormat: "money" },
   { id: "advanceTm", label: "Tạm ứng TM", align: "right", defaultHidden: true, cell: (d) => (d.s.advanceTm > 0 ? `-${formatMoney(d.s.advanceTm)}` : "-"), exportValue: (d) => -d.s.advanceTm, exportFormat: "money" },
-  { id: "companyDebt", label: "Trừ nợ", align: "right", cell: (d) => (d.s.companyDebt > 0 ? `-${formatMoney(d.s.companyDebt)}` : "-"), exportValue: (d) => -d.s.companyDebt, exportFormat: "money" },
+  { id: "companyDebt", label: "Nợ khác", align: "right", cell: (d) => (d.s.companyDebt > 0 ? `-${formatMoney(d.s.companyDebt)}` : "-"), exportValue: (d) => -d.s.companyDebt, exportFormat: "money" },
   { id: "netPay", label: "Thực nhận", align: "right", cell: (d) => formatMoney(d.s.netPay), exportValue: (d) => d.s.netPay, exportFormat: "money" },
   { id: "kpiRank", label: "Hạng KPI", align: "center", defaultHidden: true, cell: (d) => d.row.kpi_rank ?? "-", exportValue: (d) => d.row.kpi_rank ?? "" },
   { id: "kpiScore", label: "Điểm KPI", align: "right", defaultHidden: true, cell: (d) => (d.row.kpi_score != null ? d.row.kpi_score.toFixed(1) : "-"), exportValue: (d) => d.row.kpi_score ?? 0 },
@@ -137,8 +138,7 @@ const SAL_COLUMNS_ALL: ColumnDef<SalaryDisplayRow>[] = [
   },
 ];
 
-// Ẩn cột Thuế khi đang tạm ngắt thuế TNCN.
-const SAL_COLUMNS = SAL_COLUMNS_ALL.filter((c) => SALARY_PIT_ENABLED || c.id !== "pit");
+const SAL_COLUMNS = SAL_COLUMNS_ALL;
 
 function PayslipModal({ data, period, onClose }: { data: SalaryDisplayRow; period: string; onClose: () => void }) {
   const { row, s } = data;
@@ -209,8 +209,8 @@ function PayslipModal({ data, period, onClose }: { data: SalaryDisplayRow; perio
               {s.advanceCk > 0 && <Row label="Tạm ứng (CK)" value={s.advanceCk} />}
               {s.advanceTm > 0 && <Row label="Tạm ứng (TM)" value={s.advanceTm} />}
               {s.advance > 0 && s.advanceCk + s.advanceTm === 0 && <Row label="Tạm ứng" value={s.advance} />}
-              {s.companyDebt > 0 && <Row label="Trừ nợ công ty" value={s.companyDebt} />}
-              {s.pit > 0 && <Row label="Thuế TNCN" value={s.pit} />}
+              <Row label="TNCN" value={s.pit} />
+              <Row label="Nợ khác" value={s.companyDebt} />
               <Row label="Tổng cộng (2)" value={s.insuranceTotal + s.unionDues + s.advance + s.companyDebt + s.pit} bold />
             </div>
           </div>
@@ -323,8 +323,8 @@ function PrintPayslips({ rows, period }: { rows: SalaryDisplayRow[]; period: str
           s.advanceCk > 0 ? ["Tạm ứng (CK)", s.advanceCk] : null,
           s.advanceTm > 0 ? ["Tạm ứng (TM)", s.advanceTm] : null,
           s.advance > 0 && s.advanceCk + s.advanceTm === 0 ? ["Tạm ứng", s.advance] : null,
-          s.companyDebt > 0 ? ["Trừ nợ công ty", s.companyDebt] : null,
-          s.pit > 0 ? ["Thuế TNCN", s.pit] : null,
+          ["TNCN", s.pit],
+          ["Nợ khác", s.companyDebt],
         ].filter(Boolean) as [string, number][];
 
         const workRows = [
@@ -728,9 +728,7 @@ export function SalaryScreen() {
           {[
             { label: "Tổng thu nhập", value: formatMoney(totals.totalIncome), color: "text-[var(--color-text-primary)]" },
             { label: "Tổng BHXH/YT/TN", value: formatMoney(totals.totalIns), color: "text-[var(--color-danger)]" },
-            ...(SALARY_PIT_ENABLED
-              ? [{ label: "Tổng thuế TNCN", value: formatMoney(totals.totalTax), color: "text-[var(--color-danger)]" }]
-              : []),
+            { label: "Tổng TNCN", value: formatMoney(totals.totalTax), color: "text-[var(--color-danger)]" },
             { label: "Tổng thực nhận", value: formatMoney(totals.totalNet), color: "text-[var(--color-success)]" },
           ].map((s) => (
             <div key={s.label} className="rounded-[12px] border border-[var(--color-border)] bg-white px-3 py-2.5">

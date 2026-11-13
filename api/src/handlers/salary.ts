@@ -13,6 +13,7 @@ const COMP_FIELDS: Record<string, string> = {
   advance_ck: "advance_ck",
   advance_tm: "advance_tm",
   company_debt: "company_debt",
+  pit_manual: "pit_manual",
 };
 
 const ATT_FIELDS: Record<string, string> = {
@@ -54,7 +55,7 @@ export async function getSalary(request: Request, env: Env): Promise<Response> {
             c.base_salary, c.allowance, c.responsibility_salary,
             c.gas_allowance, c.attendance_bonus, c.union_dues,
             c.dependents, c.kpi_bonus, c.hot_bonus, c.advance,
-            c.advance_ck, c.advance_tm, c.company_debt,
+            c.advance_ck, c.advance_tm, c.company_debt, c.pit_manual,
             a.std_days, a.actual_days, a.pn, a.vr, a.kp, a.gas_days, a.leave_days,
             a.overtime_hours, a.ot_weekday_hours, a.ot_sunday_hours,
             a.ot_holiday_hours, a.ot_night_hours,
@@ -165,7 +166,7 @@ export async function getMySalary(request: Request, env: Env, userId: number): P
             c.base_salary, c.allowance, c.responsibility_salary,
             c.gas_allowance, c.attendance_bonus, c.union_dues,
             c.dependents, c.kpi_bonus, c.hot_bonus, c.advance,
-            c.advance_ck, c.advance_tm, c.company_debt,
+            c.advance_ck, c.advance_tm, c.company_debt, c.pit_manual,
             a.std_days, a.actual_days, a.pn, a.vr, a.kp, a.gas_days, a.leave_days,
             a.overtime_hours, a.ot_weekday_hours, a.ot_sunday_hours,
             a.ot_holiday_hours, a.ot_night_hours,

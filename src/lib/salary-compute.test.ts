@@ -21,6 +21,7 @@ const salaryRow = (overrides: Partial<ApiSalaryRow> = {}) => ({
   advance_ck: 0,
   advance_tm: 0,
   company_debt: 0,
+  pit_manual: 0,
   pay_method: null,
   merge_into: null,
   bank: null,
@@ -65,5 +66,12 @@ describe("computeSalary attendance and union rules", () => {
   it("removes attendance bonus from 2 personal leave days", () => {
     expect(computeSalary(salaryRow({ vr: 1.99 })).attendanceActual).toBe(400_000);
     expect(computeSalary(salaryRow({ vr: 2 })).attendanceActual).toBe(0);
+  });
+
+  it("deducts manually entered personal income tax and other debt", () => {
+    const salary = computeSalary(salaryRow({ pit_manual: 125_000, company_debt: 300_000 }));
+    expect(salary.pit).toBe(125_000);
+    expect(salary.companyDebt).toBe(300_000);
+    expect(salary.netPay).toBe(salary.totalIncome - salary.insuranceTotal - salary.unionDues - salary.advance - 425_000);
   });
 });

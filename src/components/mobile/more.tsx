@@ -81,13 +81,38 @@ export function MobilePayslip() {
   const { data } = useQuery(() => fetchMySalary(period), [period]);
   const row = data?.data ?? null;
   const s = row ? computeSalary(row) : null;
-  const income: [string, number][] = (s ? ([
-    ["Lương theo công", s.workSalary], ["Phụ cấp", s.allowanceActual + s.gasAllowanceActual], ["Trách nhiệm", s.responsibilityActual],
-    ["Tăng ca", s.otWeekday + s.otSunday + s.otHoliday], ["Cơm + phụ cấp khác", s.mealAllowance + s.nightAllowance + s.attendanceActual + s.bonus + s.leavePay],
-  ] as [string, number][]) : []).filter(([, v]) => v > 0);
-  const deduct: [string, number][] = (s ? ([
-    ["BHXH, BHYT, BHTN", s.insuranceTotal], ["Kinh phí công đoàn", s.unionDues], ["Tạm ứng", s.advance], ["Trừ nợ công ty", s.companyDebt], ["Thuế TNCN", s.pit],
-  ] as [string, number][]) : []).filter(([, v]) => v > 0);
+  const salaryInfo: [string, number][] = s ? [
+    ["Lương cơ bản", s.base], ["Trách nhiệm", s.responsibility], ["Phụ cấp", s.allowance],
+    ["Chuyên cần", s.attendanceBonus], ["Hỗ trợ xăng xe", s.gasAllowanceMonth], ["Tổng lương", s.totalMonthly],
+  ] : [];
+  const workInfo: [string, number][] = s ? [
+    ["Ngày làm thực tế", s.actualDays], ["Giờ TC ngày thường", s.otWeekdayHours],
+    ["Giờ TC chủ nhật", s.otSundayHours], ["Giờ TC ngày lễ", s.otHolidayHours],
+    ["Phép năm (ngày)", s.leaveDays], ["Ngày xăng xe", s.gasDays], ["Số người phụ thuộc", s.dependents],
+  ] : [];
+  const income: [string, number][] = s ? [
+    ["Lương ngày công", s.workSalary], ["Trách nhiệm", s.responsibilityActual], ["Phụ cấp", s.allowanceActual],
+    ["Chuyên cần", s.attendanceActual], ["Tăng ca ngày thường", s.otWeekday], ["Tăng ca chủ nhật", s.otSunday],
+    ["Tăng ca ngày lễ", s.otHoliday], ["Thưởng", s.bonus], ["Phụ cấp cơm", s.mealAllowance],
+    ["Phụ cấp xăng xe", s.gasAllowanceActual], ["Phụ cấp ca đêm", s.nightAllowance], ["Lương phép năm", s.leavePay],
+    ["Tổng cộng (1)", s.totalIncome],
+  ] : [];
+  const deduct: [string, number][] = s ? [
+    ["Trừ BHXH (8%)", s.bhxh], ["Trừ BHYT (1,5%)", s.bhyt], ["Trừ BHTN (1%)", s.bhtn],
+    ["Tiền ĐPCĐ", s.unionDues], ["Tạm ứng (CK)", s.advanceCk], ["Tạm ứng (TM)", s.advanceTm],
+    ["TNCN", s.pit], ["Nợ khác", s.companyDebt],
+    ["Tổng cộng (2)", s.insuranceTotal + s.unionDues + s.advance + s.companyDebt + s.pit],
+  ] : [];
+
+  const detailRows = (items: [string, number][], raw = false) => items.map(([label, value], index) => {
+    const isTotal = index === items.length - 1 && label.startsWith("Tổng");
+    return (
+      <div key={label} className={`flex justify-between gap-4 py-1.5 ${isTotal ? "mt-1 border-t border-[var(--color-border)] pt-2 font-bold" : ""}`}>
+        <span className="text-[13px] text-[var(--color-text-muted)]">{label}</span>
+        <span className={`${mono} shrink-0 text-[13px] font-semibold`}>{raw ? value : value.toLocaleString("vi-VN")}</span>
+      </div>
+    );
+  });
 
   return (
     <div className="flex h-full flex-col">
@@ -97,6 +122,10 @@ export function MobilePayslip() {
           <MCard className="p-8 text-center text-[12.5px] text-[var(--color-text-muted)]">Chưa có phiếu lương kỳ này.</MCard>
         ) : (
           <div className="flex flex-col gap-3.5">
+            <div className="px-1 text-[13px] text-[var(--color-text-muted)]">
+              <div className="font-semibold text-[var(--color-text-primary)]">Phiếu lương — {row?.name}</div>
+              <div>Kỳ {period.slice(5)}/{period.slice(0, 4)} · {row?.department_name ?? ""} · Mã NV: {row?.code}</div>
+            </div>
             <div className="rounded-[20px] p-5 text-white shadow-[0_12px_24px_rgba(15,47,90,0.25)]" style={{ background: "linear-gradient(135deg,#0f2f5a,#1e6fd0)" }}>
               <div className="text-[12.5px] text-white/78">Thực nhận kỳ {period.slice(5)}/{period.slice(0, 4)}</div>
               <div className={`${mono} mt-1.5 text-[32px] font-bold`}>{formatMoney(s.netPay)}</div>
@@ -105,20 +134,24 @@ export function MobilePayslip() {
                 <div><div className="text-[11px] text-white/70">Khấu trừ</div><div className={`${mono} mt-0.5 text-[14px] font-semibold`}>{(s.insuranceTotal + s.unionDues + s.advance + s.companyDebt + s.pit).toLocaleString("vi-VN")}</div></div>
               </div>
             </div>
-            <MCard className="p-4">
-              <div className="mb-3 flex items-center gap-1.5 text-[13px] font-bold text-[var(--color-success)]"><TrendingUp size={16} /> Thu nhập</div>
-              {income.map(([l, v], i) => (
-                <div key={l} className={`flex justify-between py-2 ${i < income.length - 1 ? "border-b border-[var(--color-border-light)]" : ""}`}><span className="text-[13px] text-[var(--color-text-muted)]">{l}</span><span className={`${mono} text-[13px] font-semibold`}>{v.toLocaleString("vi-VN")}</span></div>
-              ))}
-            </MCard>
-            {deduct.length > 0 && (
+            <div className="grid gap-3.5 md:grid-cols-2">
               <MCard className="p-4">
-                <div className="mb-3 flex items-center gap-1.5 text-[13px] font-bold text-[var(--color-danger)]"><TrendingDown size={16} /> Khấu trừ</div>
-                {deduct.map(([l, v], i) => (
-                  <div key={l} className={`flex justify-between py-2 ${i < deduct.length - 1 ? "border-b border-[var(--color-border-light)]" : ""}`}><span className="text-[13px] text-[var(--color-text-muted)]">{l}</span><span className={`${mono} text-[13px] font-semibold`}>-{v.toLocaleString("vi-VN")}</span></div>
-                ))}
+                <div className="mb-2 text-[12px] font-bold uppercase text-[var(--color-accent)]">I. Thông tin lương</div>
+                {detailRows(salaryInfo)}
               </MCard>
-            )}
+              <MCard className="p-4">
+                <div className="mb-2 text-[12px] font-bold uppercase text-[var(--color-accent)]">II. Ngày công</div>
+                {detailRows(workInfo, true)}
+              </MCard>
+              <MCard className="p-4">
+                <div className="mb-2 flex items-center gap-1.5 text-[12px] font-bold uppercase text-[var(--color-success)]"><TrendingUp size={15} /> III. Thu nhập trong tháng</div>
+                {detailRows(income)}
+              </MCard>
+              <MCard className="p-4">
+                <div className="mb-2 flex items-center gap-1.5 text-[12px] font-bold uppercase text-[var(--color-danger)]"><TrendingDown size={15} /> IV. Các khoản trừ</div>
+                {detailRows(deduct)}
+              </MCard>
+            </div>
             <MButton tone="ghost" className="text-[var(--color-accent)]" onClick={() => window.print()}><Download size={18} /> Tải phiếu lương (PDF)</MButton>
           </div>
         )}
