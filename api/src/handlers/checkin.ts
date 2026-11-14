@@ -1,10 +1,25 @@
 import type { Env } from "../middleware/auth";
 import { json, error, readJson } from "../utils";
 
+const SELFIE_ENABLED_EMPLOYEE_CODES = new Set(["0187"]);
+
+interface CheckinEmployee {
+  id: number;
+  code: string;
+}
+
+export function isSelfieEnabledEmployeeCode(code: string | null | undefined): boolean {
+  return SELFIE_ENABLED_EMPLOYEE_CODES.has(String(code ?? "").trim());
+}
+
 /** Nhân viên gắn với tài khoản đăng nhập. */
-async function employeeIdOf(env: Env, userId: number): Promise<number | null> {
-  const u = await env.DB.prepare("SELECT employee_id FROM users WHERE id = ?").bind(userId).first<{ employee_id: number | null }>();
-  return u?.employee_id ?? null;
+async function employeeOf(env: Env, userId: number): Promise<CheckinEmployee | null> {
+  return env.DB.prepare(
+    `SELECT e.id, e.code
+     FROM users u
+     JOIN employees e ON e.id = u.employee_id
+     WHERE u.id = ? AND u.active = 1 AND e.status = 'Đang làm việc'`,
+  ).bind(userId).first<CheckinEmployee>();
 }
 
 interface CheckinRow {
@@ -15,7 +30,12 @@ interface CheckinRow {
 }
 
 function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 }
 
 /** Giải mã data URL base64 → bytes để lưu R2. */
@@ -30,12 +50,12 @@ function dataUrlToBytes(dataUrl: string): { bytes: ArrayBuffer; type: string } |
 
 /** GET /api/attendance/checkin/today — trạng thái chấm công hôm nay của người đăng nhập. */
 export async function getTodayCheckin(_request: Request, env: Env, userId: number): Promise<Response> {
-  const empId = await employeeIdOf(env, userId);
-  if (!empId) return json({ data: null });
+  const employee = await employeeOf(env, userId);
+  if (!employee || !isSelfieEnabledEmployeeCode(employee.code)) return json({ data: null, enabled: false });
   const row = await env.DB.prepare("SELECT * FROM checkins WHERE employee_id = ? AND date = ?")
-    .bind(empId, todayStr())
+    .bind(employee.id, todayStr())
     .first<CheckinRow>();
-  return json({ data: row ?? null });
+  return json({ data: row ?? null, enabled: true });
 }
 
 interface CheckinBody {
@@ -51,10 +71,19 @@ interface CheckinBody {
  * Ảnh lưu R2 (nếu bật); nếu R2 chưa bật vẫn ghi nhận giờ + toạ độ.
  */
 export async function saveCheckin(request: Request, env: Env, userId: number): Promise<Response> {
-  const empId = await employeeIdOf(env, userId);
-  if (!empId) return error("Tài khoản chưa gắn nhân viên", 404);
+  const employee = await employeeOf(env, userId);
+  if (!employee) return error("Tài khoản chưa gắn nhân viên đang làm việc", 404);
+  if (!isSelfieEnabledEmployeeCode(employee.code)) return error("Tài khoản chưa được kích hoạt chấm công selfie", 403);
+  const empId = employee.id;
 
   const body = await readJson<CheckinBody>(request);
+  if (typeof body.lat !== "number" || !Number.isFinite(body.lat)
+    || typeof body.lng !== "number" || !Number.isFinite(body.lng)) {
+    return error("Phải bật định vị GPS để chấm công", 400);
+  }
+  if (!body.photo || !/^data:image\/(jpeg|jpg|png);base64,/i.test(body.photo)) {
+    return error("Phải chụp ảnh selfie để chấm công", 400);
+  }
   const type = body.type === "out" ? "out" : "in";
   const now = new Date();
   const time = body.time || `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
@@ -83,7 +112,7 @@ export async function saveCheckin(request: Request, env: Env, userId: number): P
         empId, date,
         type === "in" ? time : null,
         type === "out" ? time : null,
-        body.lat ?? null, body.lng ?? null, body.accuracy ?? null,
+        body.lat, body.lng, body.accuracy ?? null,
         type === "in" ? photoKey : null,
         type === "out" ? photoKey : null,
         body.workplace ?? null,
@@ -91,11 +120,11 @@ export async function saveCheckin(request: Request, env: Env, userId: number): P
       .run();
   } else if (type === "in") {
     await env.DB.prepare("UPDATE checkins SET time_in = ?, lat = ?, lng = ?, accuracy = ?, photo_key = COALESCE(?, photo_key), workplace = ? WHERE id = ?")
-      .bind(time, body.lat ?? existing.lat, body.lng ?? existing.lng, body.accuracy ?? existing.accuracy, photoKey, body.workplace ?? existing.workplace, existing.id)
+      .bind(time, body.lat, body.lng, body.accuracy ?? existing.accuracy, photoKey, body.workplace ?? existing.workplace, existing.id)
       .run();
   } else {
-    await env.DB.prepare("UPDATE checkins SET time_out = ?, photo_out_key = COALESCE(?, photo_out_key) WHERE id = ?")
-      .bind(time, photoKey, existing.id)
+    await env.DB.prepare("UPDATE checkins SET time_out = ?, lat = ?, lng = ?, accuracy = ?, photo_out_key = COALESCE(?, photo_out_key), workplace = ? WHERE id = ?")
+      .bind(time, body.lat, body.lng, body.accuracy ?? existing.accuracy, photoKey, body.workplace ?? existing.workplace, existing.id)
       .run();
   }
 

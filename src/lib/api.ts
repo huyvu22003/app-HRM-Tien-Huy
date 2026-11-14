@@ -605,7 +605,7 @@ export interface ApiCheckin {
 
 /** Trạng thái chấm công hôm nay của người đăng nhập. */
 export function fetchTodayCheckin() {
-  return api.get<{ data: ApiCheckin | null }>("/attendance/checkin/today");
+  return api.get<{ data: ApiCheckin | null; enabled: boolean }>("/attendance/checkin/today");
 }
 
 export interface ApiCheckinRecord extends ApiCheckin {
