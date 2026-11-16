@@ -284,12 +284,12 @@ const worker = {
       }
 
       // --- Leave ---
-      if (method === "GET" && pathname === "/api/leave/requests") return withCors(await listLeaveRequests(request, env));
-      if (method === "POST" && pathname === "/api/leave/requests") return withCors(await createLeaveRequest(request, env, userId));
+      if (method === "GET" && pathname === "/api/leave/requests") return withCors(await listLeaveRequests(request, env, userId, userRole));
+      if (method === "POST" && pathname === "/api/leave/requests") return withCors(await createLeaveRequest(request, env, userId, userRole));
       if (method === "PUT" && pathname.startsWith("/api/leave/requests/")) {
         const id = parseIdFromPath(pathname, "/api/leave/requests/");
         if (!id) return withCors(error("Thiếu id đơn nghỉ phép", 400));
-        return withCors(await updateLeaveRequest(request, env, id, userId));
+        return withCors(await updateLeaveRequest(request, env, id, userId, userRole));
       }
       if (method === "GET" && pathname.startsWith("/api/leave/balance/")) {
         const employeeId = parseIdFromPath(pathname, "/api/leave/balance/");

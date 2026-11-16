@@ -648,7 +648,7 @@ export interface ApiNotification {
 
 /** Thông báo của người đăng nhập (suy từ dữ liệu thật, theo vai trò). */
 export function fetchNotifications() {
-  return api.get<{ data: ApiNotification[]; unread: number }>("/notifications");
+  return api.get<{ data: ApiNotification[]; unread: number; pendingLeaveCount: number }>("/notifications");
 }
 
 /** Ghi nhận chấm công vào/ra kèm ảnh selfie + toạ độ. */
@@ -739,6 +739,9 @@ export interface ApiLeaveRequest {
   status: string;
   current_step: number;
   created_at: string;
+  can_approve?: boolean;
+  approval_step?: 1 | 2 | null;
+  is_own?: boolean;
 }
 
 export interface ApiLeaveBalance {

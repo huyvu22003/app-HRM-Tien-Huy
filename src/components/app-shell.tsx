@@ -29,6 +29,8 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { fetchNotifications } from "@/lib/api";
+import { useQuery } from "@/lib/hooks";
 import { getInitials, cn } from "@/lib/utils";
 
 type NavItem = {
@@ -105,13 +107,6 @@ const ROLE_SCREENS: Record<string, string[]> = {
   staff: ["framework", "dashboard", "attendance", "leave", "salary", "report"],
 };
 
-const NOTIFICATIONS = [
-  { id: 1, title: "Đơn phép chờ duyệt", desc: "Nguyễn Văn Thiện xin nghỉ phép 2 ngày", time: "10 phút trước" },
-  { id: 2, title: "Chấm công lệch", desc: "3 nhân viên có công lệch chuẩn tháng 06", time: "1 giờ trước" },
-  { id: 3, title: "KPI tháng 06 đã chốt", desc: "Kết quả xếp hạng đã sẵn sàng xem", time: "3 giờ trước" },
-  { id: 4, title: "Nhân viên mới", desc: "Đã thêm hồ sơ nhân viên Chu Nam Anh", time: "Hôm qua" },
-];
-
 const PAGE_META: Record<string, { title: string; subtitle: string }> = {
   framework: { title: "Sơ đồ khung hệ thống", subtitle: "Kiến trúc tổng thể & lộ trình triển khai" },
   dashboard: { title: "Dashboard BGĐ", subtitle: "Tổng quan nhân sự & vận hành" },
@@ -147,6 +142,8 @@ export function AppShell({
   const [notifOpen, setNotifOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { data: notificationData } = useQuery(() => fetchNotifications(), [role]);
+  const pendingLeaveCount = notificationData?.pendingLeaveCount ?? 0;
 
   const handleNavigate = useCallback((screen: string) => {
     setSidebarOpen(false);
@@ -210,7 +207,12 @@ export function AppShell({
                         )}
                       >
                         <Icon size={16} className={active ? "text-white" : "text-[#8ba0b8]"} />
-                        {item.label}
+                        <span className="flex-1">{item.label}</span>
+                        {item.key === "leave" && pendingLeaveCount > 0 && (
+                          <span className="flex min-w-5 items-center justify-center gap-1 rounded-full bg-[var(--color-danger)] px-1.5 py-0.5 text-[10px] font-semibold text-white" title={`${pendingLeaveCount} đơn nghỉ đang chờ duyệt`}>
+                            <Bell size={10} /> {pendingLeaveCount > 99 ? "99+" : pendingLeaveCount}
+                          </span>
+                        )}
                       </button>
                     );
                   })}
@@ -267,7 +269,7 @@ export function AppShell({
                 className="relative flex h-9 w-9 items-center justify-center rounded-[8px] text-[var(--color-text-muted)] hover:bg-[var(--color-page-bg)]"
               >
                 <Bell size={17} />
-                <span className="absolute right-1.5 top-1.5 h-[7px] w-[7px] rounded-full bg-[var(--color-danger)]" />
+                {((notificationData?.unread ?? 0) > 0 || pendingLeaveCount > 0) && <span className="absolute right-1.5 top-1.5 h-[7px] w-[7px] rounded-full bg-[var(--color-danger)]" />}
               </button>
               {notifOpen && (
                 <div className="absolute right-0 top-11 z-20 w-80 rounded-[14px] border border-[var(--color-border)] bg-white shadow-lg">
@@ -275,15 +277,18 @@ export function AppShell({
                     Thông báo
                   </div>
                   <div className="max-h-80 overflow-y-auto">
-                    {NOTIFICATIONS.map((n) => (
-                      <div
+                    {(notificationData?.data ?? []).length === 0 ? (
+                      <div className="px-4 py-6 text-center text-[12px] text-[var(--color-text-light)]">Không có thông báo mới.</div>
+                    ) : (notificationData?.data ?? []).map((n) => (
+                      <button
                         key={n.id}
-                        className="border-b border-[var(--color-border-light)] px-4 py-3 last:border-0 hover:bg-[var(--color-page-bg)]"
+                        onClick={() => { if (n.kind === "leave_pending") handleNavigate("leave"); setNotifOpen(false); }}
+                        className="block w-full border-b border-[var(--color-border-light)] px-4 py-3 text-left last:border-0 hover:bg-[var(--color-page-bg)]"
                       >
                         <div className="text-[13px] font-medium text-[var(--color-text-secondary)]">{n.title}</div>
-                        <div className="text-[12px] text-[var(--color-text-light)]">{n.desc}</div>
-                        <div className="mt-1 text-[11px] text-[var(--color-text-lighter)]">{n.time}</div>
-                      </div>
+                        <div className="text-[12px] text-[var(--color-text-light)]">{n.body}</div>
+                        <div className="mt-1 text-[11px] text-[var(--color-text-lighter)]">{new Date(n.at).toLocaleString("vi-VN")}</div>
+                      </button>
                     ))}
                   </div>
                 </div>

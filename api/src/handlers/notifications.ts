@@ -29,13 +29,20 @@ function isRecent(at: string | null): boolean {
 export async function getNotifications(_request: Request, env: Env, userId: number, role: string): Promise<Response> {
   const out: Notif[] = [];
   const isManager = role === "super" || role === "director" || role === "hr" || role === "lead";
+  const acc = await env.DB.prepare("SELECT employee_id FROM users WHERE id = ?").bind(userId).first<{ employee_id: number | null }>();
+  const empId = acc?.employee_id ?? null;
+  let pendingLeaveCount = 0;
 
   if (isManager) {
+    const leadScope = role === "lead";
+    if (!leadScope || empId) {
     const { results } = await env.DB.prepare(
       `SELECT lr.id, lr.type_code, lr.days, lr.created_at, e.name AS employee_name
        FROM leave_requests lr JOIN employees e ON e.id = lr.employee_id
-       WHERE lr.status = 'pending' ORDER BY lr.created_at DESC LIMIT 15`,
-    ).all<{ id: number; type_code: string; days: number; created_at: string; employee_name: string }>();
+       WHERE ${leadScope ? "lr.status = 'pending' AND e.manager_employee_id = ?" : "lr.status IN ('pending', 'approved_l1')"}
+       ORDER BY lr.created_at DESC LIMIT 30`,
+    ).bind(...(leadScope ? [empId] : [])).all<{ id: number; type_code: string; days: number; created_at: string; employee_name: string }>();
+    pendingLeaveCount = results.length;
     for (const r of results) {
       out.push({
         id: `lp-${r.id}`, kind: "leave_pending", tone: "warning",
@@ -44,10 +51,8 @@ export async function getNotifications(_request: Request, env: Env, userId: numb
         at: r.created_at, unread: isRecent(r.created_at),
       });
     }
+    }
   }
-
-  const acc = await env.DB.prepare("SELECT employee_id FROM users WHERE id = ?").bind(userId).first<{ employee_id: number | null }>();
-  const empId = acc?.employee_id ?? null;
 
   if (empId) {
     const { results } = await env.DB.prepare(
@@ -86,5 +91,9 @@ export async function getNotifications(_request: Request, env: Env, userId: numb
   }
 
   out.sort((a, b) => (new Date(b.at).getTime() || 0) - (new Date(a.at).getTime() || 0));
-  return json({ data: out.slice(0, 30), unread: out.filter((n) => n.unread).length });
+  return json({
+    data: out.slice(0, 30),
+    unread: out.filter((n) => n.unread).length,
+    pendingLeaveCount,
+  });
 }

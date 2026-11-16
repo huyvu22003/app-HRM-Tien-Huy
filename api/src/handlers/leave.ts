@@ -1,11 +1,46 @@
 import type { Env } from "../middleware/auth";
 import { json, error, readJson, getParams } from "../utils";
 
-export async function listLeaveRequests(request: Request, env: Env): Promise<Response> {
+export function getLeaveApprovalStep(
+  role: string,
+  actorEmployeeId: number | null,
+  managerEmployeeId: number | null,
+  status: string,
+): 1 | 2 | null {
+  if (role === "lead" && actorEmployeeId !== null && managerEmployeeId === actorEmployeeId && status === "pending") {
+    return 1;
+  }
+  if (["super", "director", "hr"].includes(role) && (status === "pending" || status === "approved_l1")) {
+    return 2;
+  }
+  return null;
+}
+
+export async function listLeaveRequests(
+  request: Request,
+  env: Env,
+  userId: number,
+  role: string,
+): Promise<Response> {
   const url = new URL(request.url);
   const params = getParams(url);
   const conditions: string[] = [];
   const args: unknown[] = [];
+
+  const account = await env.DB.prepare("SELECT employee_id FROM users WHERE id = ?")
+    .bind(userId)
+    .first<{ employee_id: number | null }>();
+  const actorEmployeeId = account?.employee_id ?? null;
+
+  if (role === "staff") {
+    if (!actorEmployeeId) return json({ data: [] });
+    conditions.push("lr.employee_id = ?");
+    args.push(actorEmployeeId);
+  } else if (role === "lead") {
+    if (!actorEmployeeId) return json({ data: [] });
+    conditions.push("(lr.employee_id = ? OR e.manager_employee_id = ?)");
+    args.push(actorEmployeeId, actorEmployeeId);
+  }
 
   if (params.employeeId) {
     conditions.push("lr.employee_id = ?");
@@ -19,7 +54,8 @@ export async function listLeaveRequests(request: Request, env: Env): Promise<Res
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
   const { results } = await env.DB.prepare(
-    `SELECT lr.*, e.name as employee_name, e.code as employee_code
+    `SELECT lr.*, e.name as employee_name, e.code as employee_code,
+            e.manager_employee_id
      FROM leave_requests lr
      JOIN employees e ON e.id = lr.employee_id
      ${where}
@@ -28,7 +64,20 @@ export async function listLeaveRequests(request: Request, env: Env): Promise<Res
     .bind(...args)
     .all();
 
-  return json({ data: results });
+  const data = (results as Array<Record<string, unknown>>).map((row) => {
+    const status = String(row.status ?? "");
+    const employeeId = Number(row.employee_id);
+    const managerEmployeeId = row.manager_employee_id == null ? null : Number(row.manager_employee_id);
+    const approvalStep = getLeaveApprovalStep(role, actorEmployeeId, managerEmployeeId, status);
+    return {
+      ...row,
+      can_approve: approvalStep !== null,
+      approval_step: approvalStep,
+      is_own: actorEmployeeId === employeeId,
+    };
+  });
+
+  return json({ data });
 }
 
 interface LeaveRequestBody {
@@ -40,10 +89,19 @@ interface LeaveRequestBody {
   reason?: string;
 }
 
-export async function createLeaveRequest(request: Request, env: Env, userId: number): Promise<Response> {
+export async function createLeaveRequest(request: Request, env: Env, userId: number, role: string): Promise<Response> {
   const body = await readJson<LeaveRequestBody>(request);
   if (!body.employeeId || !body.typeCode || !body.fromDate || !body.toDate || body.days === undefined) {
     return error("Thiếu thông tin đơn nghỉ phép", 400);
+  }
+
+  if (role === "staff" || role === "lead") {
+    const account = await env.DB.prepare("SELECT employee_id FROM users WHERE id = ?")
+      .bind(userId)
+      .first<{ employee_id: number | null }>();
+    if (!account?.employee_id || account.employee_id !== body.employeeId) {
+      return error("Bạn chỉ được tạo đơn nghỉ cho chính mình.", 403);
+    }
   }
 
   const result = await env.DB.prepare(
@@ -72,16 +130,34 @@ export async function updateLeaveRequest(
   request: Request,
   env: Env,
   id: string,
-  userId: number
+  userId: number,
+  role: string,
 ): Promise<Response> {
   const body = await readJson<LeaveApprovalBody>(request);
-  const leave = await env.DB.prepare("SELECT * FROM leave_requests WHERE id = ?").bind(id).first<{
+  const leave = await env.DB.prepare(
+    `SELECT lr.*, e.manager_employee_id
+     FROM leave_requests lr JOIN employees e ON e.id = lr.employee_id
+     WHERE lr.id = ?`,
+  ).bind(id).first<{
     employee_id: number;
+    manager_employee_id: number | null;
     days: number;
     from_date: string;
     status: string;
   }>();
   if (!leave) return error("Không tìm thấy đơn nghỉ phép", 404);
+
+  const account = await env.DB.prepare("SELECT employee_id FROM users WHERE id = ?")
+    .bind(userId)
+    .first<{ employee_id: number | null }>();
+  const actorEmployeeId = account?.employee_id ?? null;
+  const approvalStep = getLeaveApprovalStep(role, actorEmployeeId, leave.manager_employee_id, leave.status);
+  if (!approvalStep) {
+    return error("Bạn không có quyền duyệt đơn nghỉ này.", 403);
+  }
+  if (leave.status === "approved" || leave.status === "rejected") {
+    return error("Đơn nghỉ này đã được xử lý.", 409);
+  }
 
   if (body.action === "reject") {
     await env.DB.prepare("UPDATE leave_requests SET status = 'rejected' WHERE id = ?").bind(id).run();
@@ -95,8 +171,7 @@ export async function updateLeaveRequest(
   }
 
   if (body.action === "approve") {
-    const step = body.step ?? 1;
-    if (step === 1) {
+    if (approvalStep === 1) {
       await env.DB.prepare(
         "UPDATE leave_requests SET status = 'approved_l1', current_step = 2, approved_l1_by = ?, approved_l1_at = datetime('now') WHERE id = ?"
       )

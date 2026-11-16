@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Plus, X, CheckCircle2, Clock, XCircle, Loader2 } from "lucide-react";
-import { fetchLeaveRequests, createLeaveRequest, fetchLeaveBalance, type ApiLeaveRequest } from "@/lib/api";
+import { fetchLeaveRequests, createLeaveRequest, fetchLeaveBalance, updateLeaveRequest, type ApiLeaveRequest } from "@/lib/api";
 import { useQuery } from "@/lib/hooks";
 import { useAuth } from "@/lib/auth-context";
 import { cn, formatDate } from "@/lib/utils";
@@ -33,7 +33,7 @@ const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
 function getStatusDisplay(status: string) {
   switch (status) {
     case "approved": return { label: "Đã duyệt", color: "approved" as const };
-    case "approved_l1": return { label: "Duyệt TT", color: "approved" as const };
+    case "approved_l1": return { label: "Chờ HR/BGĐ", color: "pending" as const };
     case "approved_l2": return { label: "Duyệt HR", color: "approved" as const };
     case "rejected": return { label: "Từ chối", color: "rejected" as const };
     default: return { label: "Chờ duyệt", color: "pending" as const };
@@ -43,7 +43,7 @@ const isLeadApproved = (s: string) => s === "approved_l1" || s === "approved_l2"
 const isHrApproved = (s: string) => s === "approved_l2" || s === "approved";
 function matchesFilter(status: string, filter: StatusFilter) {
   if (filter === "all") return true;
-  if (filter === "pending") return status === "pending";
+  if (filter === "pending") return status === "pending" || status === "approved_l1";
   if (filter === "approved") return isLeadApproved(status);
   if (filter === "rejected") return status === "rejected";
   return true;
@@ -72,6 +72,7 @@ export function LeaveScreen() {
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [processingId, setProcessingId] = useState<number | null>(null);
 
   // Thai sản chứa dữ liệu sức khỏe/BHXH — chỉ HR/super xem (đồng bộ với chặn ở API).
   const canSeeMaternity = user?.role === "super" || user?.role === "hr";
@@ -124,6 +125,20 @@ export function LeaveScreen() {
     }
   }
 
+  async function decide(request: ApiLeaveRequest, action: "approve" | "reject") {
+    if (!request.can_approve || !request.approval_step) return;
+    setErr(null);
+    setProcessingId(request.id);
+    try {
+      await updateLeaveRequest(request.id, { action, step: request.approval_step });
+      await refetch();
+    } catch (e) {
+      setErr((e as Error).message || "Không xử lý được đơn nghỉ phép.");
+    } finally {
+      setProcessingId(null);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {/* Tabs */}
@@ -170,6 +185,8 @@ export function LeaveScreen() {
             ))}
           </div>
 
+          {err && !modalOpen && <div className="rounded-[8px] bg-[var(--color-danger-bg)] px-3 py-2 text-[12px] text-[var(--color-danger)]">{err}</div>}
+
           <div className="overflow-x-auto rounded-[14px] border border-[var(--color-border)] bg-white">
             {isLoading ? (
               <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-[var(--color-text-muted)]"><Loader2 size={16} className="animate-spin" /> Đang tải dữ liệu...</div>
@@ -184,11 +201,12 @@ export function LeaveScreen() {
                     <th className="px-4 py-3 font-medium">Duyệt tổ trưởng</th>
                     <th className="px-4 py-3 font-medium">Duyệt HR</th>
                     <th className="px-4 py-3 font-medium">Trạng thái</th>
+                    <th className="px-4 py-3 font-medium">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.length === 0 ? (
-                    <tr><td colSpan={7} className="px-4 py-8 text-center text-[var(--color-text-muted)]">Không có đơn nghỉ phép nào.</td></tr>
+                    <tr><td colSpan={8} className="px-4 py-8 text-center text-[var(--color-text-muted)]">Không có đơn nghỉ phép nào.</td></tr>
                   ) : (
                     filtered.map((r) => {
                       const display = getStatusDisplay(r.status);
@@ -207,6 +225,16 @@ export function LeaveScreen() {
                               {display.color === "rejected" && <XCircle size={11} />}
                               {display.label}
                             </span>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            {r.can_approve && r.approval_step ? (
+                              <div className="flex gap-1.5">
+                                <button onClick={() => decide(r, "approve")} disabled={processingId === r.id} className="rounded-[7px] bg-[var(--color-success)] px-2.5 py-1 text-[11px] font-medium text-white disabled:opacity-60">
+                                  {processingId === r.id ? "Đang xử lý…" : r.approval_step === 1 ? "Duyệt tổ trưởng" : "Duyệt phép"}
+                                </button>
+                                <button onClick={() => decide(r, "reject")} disabled={processingId === r.id} className="rounded-[7px] border border-[var(--color-danger)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-danger)] disabled:opacity-60">Từ chối</button>
+                              </div>
+                            ) : <span className="text-[11px] text-[var(--color-text-lighter)]">—</span>}
                           </td>
                         </tr>
                       );
