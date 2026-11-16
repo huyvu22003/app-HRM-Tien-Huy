@@ -18,6 +18,8 @@ const eslintConfig = defineConfig([
     ".next/**",
     "out/**",
     "build/**",
+    "src/vendor/human.esm.js",
+    ".tmp/**",
     "next-env.d.ts",
   ]),
 ]);

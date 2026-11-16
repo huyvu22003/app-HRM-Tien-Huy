@@ -6,6 +6,7 @@ const SELFIE_ENABLED_EMPLOYEE_CODES = new Set(["0187"]);
 interface CheckinEmployee {
   id: number;
   code: string;
+  photo_url: string | null;
 }
 
 export function isSelfieEnabledEmployeeCode(code: string | null | undefined): boolean {
@@ -15,7 +16,7 @@ export function isSelfieEnabledEmployeeCode(code: string | null | undefined): bo
 /** Nhân viên gắn với tài khoản đăng nhập. */
 async function employeeOf(env: Env, userId: number): Promise<CheckinEmployee | null> {
   return env.DB.prepare(
-    `SELECT e.id, e.code
+    `SELECT e.id, e.code, e.photo_url
      FROM users u
      JOIN employees e ON e.id = u.employee_id
      WHERE u.id = ? AND u.active = 1 AND e.status = 'Đang làm việc'`,
@@ -55,7 +56,7 @@ export async function getTodayCheckin(_request: Request, env: Env, userId: numbe
   const row = await env.DB.prepare("SELECT * FROM checkins WHERE employee_id = ? AND date = ?")
     .bind(employee.id, todayStr())
     .first<CheckinRow>();
-  return json({ data: row ?? null, enabled: true });
+  return json({ data: row ?? null, enabled: true, referencePhotoUrl: employee.photo_url });
 }
 
 interface CheckinBody {
@@ -64,6 +65,20 @@ interface CheckinBody {
   lat?: number; lng?: number; accuracy?: number;
   workplace?: string;
   photo?: string; // data URL
+  faceSimilarity?: number;
+  faceReal?: number;
+  faceLive?: number;
+  blinkVerified?: boolean;
+}
+
+export function validateFaceProof(body: Pick<CheckinBody, "faceSimilarity" | "faceReal" | "faceLive" | "blinkVerified">): string | null {
+  if (typeof body.faceSimilarity !== "number" || body.faceSimilarity < 0.55) return "Khuôn mặt không khớp ảnh hồ sơ";
+  if (typeof body.faceReal !== "number" || body.faceReal < 0.6
+    || typeof body.faceLive !== "number" || body.faceLive < 0.6
+    || body.blinkVerified !== true) {
+    return "Không xác nhận được khuôn mặt trực tiếp. Vui lòng nhìn camera và chớp mắt";
+  }
+  return null;
 }
 
 /**
@@ -74,6 +89,7 @@ export async function saveCheckin(request: Request, env: Env, userId: number): P
   const employee = await employeeOf(env, userId);
   if (!employee) return error("Tài khoản chưa gắn nhân viên đang làm việc", 404);
   if (!isSelfieEnabledEmployeeCode(employee.code)) return error("Tài khoản chưa được kích hoạt chấm công selfie", 403);
+  if (!employee.photo_url) return error("Hồ sơ nhân viên chưa có ảnh khuôn mặt chuẩn", 400);
   const empId = employee.id;
 
   const body = await readJson<CheckinBody>(request);
@@ -84,6 +100,8 @@ export async function saveCheckin(request: Request, env: Env, userId: number): P
   if (!body.photo || !/^data:image\/(jpeg|jpg|png);base64,/i.test(body.photo)) {
     return error("Phải chụp ảnh selfie để chấm công", 400);
   }
+  const faceProofError = validateFaceProof(body);
+  if (faceProofError) return error(faceProofError, 403);
   const type = body.type === "out" ? "out" : "in";
   const now = new Date();
   const time = body.time || `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
@@ -106,7 +124,7 @@ export async function saveCheckin(request: Request, env: Env, userId: number): P
 
   if (!existing) {
     await env.DB.prepare(
-      "INSERT INTO checkins (employee_id, date, time_in, time_out, lat, lng, accuracy, photo_key, photo_out_key, workplace) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO checkins (employee_id, date, time_in, time_out, lat, lng, accuracy, photo_key, photo_out_key, workplace, face_similarity, face_real, face_live) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
       .bind(
         empId, date,
@@ -116,15 +134,16 @@ export async function saveCheckin(request: Request, env: Env, userId: number): P
         type === "in" ? photoKey : null,
         type === "out" ? photoKey : null,
         body.workplace ?? null,
+        body.faceSimilarity, body.faceReal, body.faceLive,
       )
       .run();
   } else if (type === "in") {
-    await env.DB.prepare("UPDATE checkins SET time_in = ?, lat = ?, lng = ?, accuracy = ?, photo_key = COALESCE(?, photo_key), workplace = ? WHERE id = ?")
-      .bind(time, body.lat, body.lng, body.accuracy ?? existing.accuracy, photoKey, body.workplace ?? existing.workplace, existing.id)
+    await env.DB.prepare("UPDATE checkins SET time_in = ?, lat = ?, lng = ?, accuracy = ?, photo_key = COALESCE(?, photo_key), workplace = ?, face_similarity = ?, face_real = ?, face_live = ? WHERE id = ?")
+      .bind(time, body.lat, body.lng, body.accuracy ?? existing.accuracy, photoKey, body.workplace ?? existing.workplace, body.faceSimilarity, body.faceReal, body.faceLive, existing.id)
       .run();
   } else {
-    await env.DB.prepare("UPDATE checkins SET time_out = ?, lat = ?, lng = ?, accuracy = ?, photo_out_key = COALESCE(?, photo_out_key), workplace = ? WHERE id = ?")
-      .bind(time, body.lat, body.lng, body.accuracy ?? existing.accuracy, photoKey, body.workplace ?? existing.workplace, existing.id)
+    await env.DB.prepare("UPDATE checkins SET time_out = ?, lat = ?, lng = ?, accuracy = ?, photo_out_key = COALESCE(?, photo_out_key), workplace = ?, face_similarity = ?, face_real = ?, face_live = ? WHERE id = ?")
+      .bind(time, body.lat, body.lng, body.accuracy ?? existing.accuracy, photoKey, body.workplace ?? existing.workplace, body.faceSimilarity, body.faceReal, body.faceLive, existing.id)
       .run();
   }
 

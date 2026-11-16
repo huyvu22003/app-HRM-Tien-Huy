@@ -601,11 +601,14 @@ export interface ApiCheckin {
   photo_key: string | null;
   photo_out_key: string | null;
   workplace: string | null;
+  face_similarity?: number | null;
+  face_real?: number | null;
+  face_live?: number | null;
 }
 
 /** Trạng thái chấm công hôm nay của người đăng nhập. */
 export function fetchTodayCheckin() {
-  return api.get<{ data: ApiCheckin | null; enabled: boolean }>("/attendance/checkin/today");
+  return api.get<{ data: ApiCheckin | null; enabled: boolean; referencePhotoUrl: string | null }>("/attendance/checkin/today");
 }
 
 export interface ApiCheckinRecord extends ApiCheckin {
@@ -657,6 +660,10 @@ export function saveCheckin(data: {
   accuracy?: number | null;
   workplace?: string;
   photo?: string | null;
+  faceSimilarity: number;
+  faceReal: number;
+  faceLive: number;
+  blinkVerified: boolean;
 }) {
   return api.post<{ success: boolean; data: ApiCheckin | null }>("/attendance/checkin", data);
 }

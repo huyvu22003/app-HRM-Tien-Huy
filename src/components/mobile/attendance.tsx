@@ -16,6 +16,8 @@ import { type Go, todayLabel } from "./nav";
 const WORKPLACE = "Xưởng Cơ khí Tiến Huy — Xưởng A";
 type Geo = { lat: number; lng: number; acc: number } | null;
 type Step = "capture" | "confirm" | "done";
+type FaceProof = { similarity: number; real: number; live: number; blinkVerified: boolean };
+type FaceCheck = FaceProof & { verified: boolean; message: string };
 
 function fmtCoord(lat: number, lng: number) {
   const ns = lat >= 0 ? "N" : "S";
@@ -58,10 +60,27 @@ export function MobileCheckIn({ go }: { go: Go }) {
       </div>
     );
   }
-  return <MobileCheckInEnabled go={go} today={todayData.data} refetchToday={refetch} />;
+  if (!todayData.referencePhotoUrl) {
+    return (
+      <div className="flex h-full flex-col">
+        <MHeader title="Chấm công khuôn mặt" subtitle={todayLabel()} right={<MBadge tone="warning">Thiếu ảnh hồ sơ</MBadge>} />
+        <MBody>
+          <MCard className="flex flex-col items-center px-6 py-10 text-center">
+            <CameraOff size={42} className="text-[var(--color-warning)]" />
+            <div className="mt-4 text-[18px] font-extrabold text-[var(--color-text-primary)]">Chưa có ảnh khuôn mặt chuẩn</div>
+            <div className="mt-2 max-w-[310px] text-[13px] leading-relaxed text-[var(--color-text-muted)]">
+              Nhân sự cần tải ảnh chính diện của nhân viên lên hồ sơ trước khi chấm công selfie.
+            </div>
+            <MButton className="mt-6 w-full" onClick={() => go("home")}>Về trang chủ</MButton>
+          </MCard>
+        </MBody>
+      </div>
+    );
+  }
+  return <MobileCheckInEnabled go={go} today={todayData.data} refetchToday={refetch} referencePhotoUrl={todayData.referencePhotoUrl} />;
 }
 
-function MobileCheckInEnabled({ go, today, refetchToday }: { go: Go; today: ApiCheckin | null; refetchToday: () => void }) {
+function MobileCheckInEnabled({ go, today, refetchToday, referencePhotoUrl }: { go: Go; today: ApiCheckin | null; refetchToday: () => void; referencePhotoUrl: string }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [step, setStep] = useState<Step>("capture");
@@ -72,6 +91,8 @@ function MobileCheckInEnabled({ go, today, refetchToday }: { go: Go; today: ApiC
   const [stamp, setStamp] = useState<{ time: string; date: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
+  const [faceCheck, setFaceCheck] = useState<FaceCheck>({ similarity: 0, real: 0, live: 0, blinkVerified: false, verified: false, message: "Đang tải bộ nhận diện khuôn mặt…" });
+  const faceProofRef = useRef<FaceProof | null>(null);
 
   // Đã có giờ vào mà chưa có giờ ra → lần chấm này là CHẤM RA. Đủ cả hai → xong.
   const mode: "in" | "out" = today?.time_in && !today?.time_out ? "out" : "in";
@@ -110,7 +131,54 @@ function MobileCheckInEnabled({ go, today, refetchToday }: { go: Go; today: ApiC
   }, [step, startCam, stopCam]);
   useEffect(() => () => stopCam(), [stopCam]);
 
+  useEffect(() => {
+    if (step !== "capture") return;
+    let cancelled = false;
+    let blinkVerified = false;
+
+    async function verifyLoop() {
+      try {
+        setFaceCheck({ similarity: 0, real: 0, live: 0, blinkVerified: false, verified: false, message: "Đang tải bộ nhận diện khuôn mặt…" });
+        const { analyzeLiveFace, loadReferenceDescriptor } = await import("@/lib/face-verification");
+        const reference = await loadReferenceDescriptor(referencePhotoUrl);
+        while (!cancelled) {
+          const video = videoRef.current;
+          if (!video || !video.videoWidth) {
+            await new Promise((resolve) => setTimeout(resolve, 350));
+            continue;
+          }
+          const result = await analyzeLiveFace(video, reference);
+          if (cancelled) return;
+          const blinkNow = result.gestures.includes("blink left eye") || result.gestures.includes("blink right eye");
+          blinkVerified = blinkVerified || blinkNow;
+          const matched = result.similarity >= 0.55;
+          const real = result.real >= 0.6;
+          const live = result.live >= 0.6;
+          const verified = !!result.face && matched && real && live && blinkVerified;
+          let message = "Đưa khuôn mặt vào giữa khung hình";
+          if (result.face && !matched) message = "Khuôn mặt không khớp ảnh hồ sơ";
+          else if (result.face && (!real || !live)) message = "Không xác nhận được người thật trực tiếp";
+          else if (result.face && !blinkVerified) message = "Nhìn thẳng camera và chớp mắt";
+          else if (verified) message = "Đã xác thực đúng khuôn mặt";
+          const proof = { similarity: result.similarity, real: result.real, live: result.live, blinkVerified };
+          faceProofRef.current = verified ? proof : null;
+          setFaceCheck({ ...proof, verified, message });
+          await new Promise((resolve) => setTimeout(resolve, 450));
+        }
+      } catch (error) {
+        if (!cancelled) {
+          faceProofRef.current = null;
+          setFaceCheck({ similarity: 0, real: 0, live: 0, blinkVerified: false, verified: false, message: error instanceof Error ? error.message : "Không khởi tạo được nhận diện khuôn mặt" });
+        }
+      }
+    }
+
+    void verifyLoop();
+    return () => { cancelled = true; };
+  }, [referencePhotoUrl, step]);
+
   function capture() {
+    if (!faceCheck.verified || !faceProofRef.current) return;
     const v = videoRef.current;
     if (!v || !v.videoWidth) { setCamErr("Camera chưa sẵn sàng."); return; }
     const canvas = document.createElement("canvas");
@@ -138,7 +206,8 @@ function MobileCheckInEnabled({ go, today, refetchToday }: { go: Go; today: ApiC
   }
 
   async function record() {
-    if (!stamp || !geo || !photo) return;
+    const proof = faceProofRef.current;
+    if (!stamp || !geo || !photo || !proof) return;
     setSaving(true);
     setSaveErr(null);
     try {
@@ -150,6 +219,10 @@ function MobileCheckInEnabled({ go, today, refetchToday }: { go: Go; today: ApiC
         accuracy: geo.acc,
         workplace: WORKPLACE,
         photo,
+        faceSimilarity: proof.similarity,
+        faceReal: proof.real,
+        faceLive: proof.live,
+        blinkVerified: proof.blinkVerified,
       });
       refetchToday();
       setStep("done");
@@ -170,7 +243,8 @@ function MobileCheckInEnabled({ go, today, refetchToday }: { go: Go; today: ApiC
         <MBody>
           <div className="flex flex-col items-center pt-10 text-center">
             <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[var(--color-success-bg)]"><Check size={40} className="text-[var(--color-success)]" /></div>
-            <div className="mt-5 text-[19px] font-extrabold text-[var(--color-text-primary)]">Đã ghi nhận chấm công {mode === "out" ? "ra" : "vào"}</div>
+            <div className="mt-5 text-[19px] font-extrabold text-[var(--color-text-primary)]">Chấm công hoàn thành</div>
+            <div className="mt-1 text-[13px] font-semibold text-[var(--color-success)]">Đã xác thực đúng khuôn mặt và vị trí GPS</div>
             <div className={`${mono} mt-1 text-[15px] text-[var(--color-text-muted)]`}>Giờ {mode === "out" ? "ra" : "vào"} {stamp?.time} · {todayLabel()}</div>
             <div className="mt-1 text-[12.5px] text-[var(--color-text-muted)]">{WORKPLACE}</div>
             {photo && <img src={photo} alt="Ảnh chấm công" className="mt-6 w-full rounded-[16px]" />}
@@ -189,17 +263,19 @@ function MobileCheckInEnabled({ go, today, refetchToday }: { go: Go; today: ApiC
           <div className="flex flex-col gap-4">
             <div className="relative overflow-hidden rounded-[18px]">
               {photo && <img src={photo} alt="Ảnh chấm công" className="w-full" />}
-              <div className="absolute right-3 top-3"><MBadge tone="success"><Check size={13} /> Khuôn mặt khớp 98%</MBadge></div>
+              <div className="absolute right-3 top-3"><MBadge tone="success"><Check size={13} /> Khớp {Math.round(faceCheck.similarity * 100)}%</MBadge></div>
             </div>
             <MCard className="px-4">
-              <Row icon={<ScanFace size={18} className="text-[var(--color-success)]" />} label="Nhận diện khuôn mặt" value="Hợp lệ" ok />
+              <Row icon={<ScanFace size={18} className="text-[var(--color-success)]" />} label="Đối chiếu ảnh hồ sơ" value={`${Math.round(faceCheck.similarity * 100)}%`} ok />
+              <Row icon={<Camera size={18} className="text-[var(--color-success)]" />} label="Khuôn mặt trực tiếp" value="Đã xác nhận" ok />
+              <Row icon={<Check size={18} className="text-[var(--color-success)]" />} label="Chớp mắt" value="Đã xác nhận" ok />
               <Row icon={<LocateFixed size={18} className="text-[var(--color-success)]" />} label="Vị trí GPS" value={geo ? "Đã ghi nhận" : "Chưa xác định"} ok={!!geo} />
               <Row icon={<Clock size={18} className="text-[var(--color-accent)]" />} label="Giờ vào" value={`${stamp?.time} · ${late ? "Trễ" : "Đúng giờ"}`} last />
             </MCard>
             {saveErr && <div className="rounded-[10px] bg-[var(--color-danger-bg)] px-3 py-2 text-[12px] text-[var(--color-danger)]">{saveErr}</div>}
             <div className="flex gap-2.5">
-              <MButton tone="ghost" className="flex-1" onClick={() => { setPhoto(null); setStep("capture"); }} disabled={saving}><RotateCcw size={16} /> Chụp lại</MButton>
-              <MButton tone="success" className="flex-[2]" onClick={record} disabled={saving || !geo || !photo}>{saving ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />} Ghi nhận chấm công {mode === "out" ? "ra" : "vào"}</MButton>
+              <MButton tone="ghost" className="flex-1" onClick={() => { setPhoto(null); faceProofRef.current = null; setStep("capture"); }} disabled={saving}><RotateCcw size={16} /> Chụp lại</MButton>
+              <MButton tone="success" className="flex-[2]" onClick={record} disabled={saving || !geo || !photo || !faceCheck.verified}>{saving ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />} Ghi nhận chấm công {mode === "out" ? "ra" : "vào"}</MButton>
             </div>
           </div>
         </MBody>
@@ -242,6 +318,17 @@ function MobileCheckInEnabled({ go, today, refetchToday }: { go: Go; today: ApiC
             {geo && <MBadge tone="success">Hợp lệ</MBadge>}
           </div>
 
+          <div className={`flex items-center gap-2.5 rounded-[13px] border p-3 ${faceCheck.verified ? "border-[#cbe6d6] bg-[var(--color-success-bg)]" : "border-[#eadfc4] bg-[var(--color-warning-bg)]"}`}>
+            <div className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-white">
+              {faceCheck.verified ? <ScanFace size={18} className="text-[var(--color-success)]" /> : <Loader2 size={18} className="animate-spin text-[var(--color-warning)]" />}
+            </div>
+            <div className="flex-1">
+              <div className="text-[12.5px] font-bold text-[var(--color-text-secondary)]">{faceCheck.verified ? "Khuôn mặt đã xác thực" : "Đang xác thực khuôn mặt"}</div>
+              <div className="text-[11px] text-[var(--color-text-muted)]">{faceCheck.message}</div>
+            </div>
+            {faceCheck.verified && <MBadge tone="success">Khớp {Math.round(faceCheck.similarity * 100)}%</MBadge>}
+          </div>
+
           <div className="relative h-[340px] overflow-hidden rounded-[20px] bg-[#26303a]">
             <video ref={videoRef} playsInline muted className="h-full w-full object-cover" />
             {camErr ? (
@@ -270,10 +357,10 @@ function MobileCheckInEnabled({ go, today, refetchToday }: { go: Go; today: ApiC
 
           <div className="flex items-start gap-2 text-[12px] leading-snug text-[var(--color-text-muted)]">
             <Info size={16} className="mt-0.5 flex-none text-[var(--color-text-lighter)]" />
-            Chụp góc rộng: thấy rõ khuôn mặt và khu vực làm việc để hệ thống xác thực.
+            Nhìn thẳng camera và chớp mắt. Hệ thống sẽ từ chối nếu khuôn mặt không khớp ảnh hồ sơ hoặc phát hiện ảnh chụp lại.
           </div>
 
-          <MButton onClick={capture} disabled={!geo || !!camErr} tone={mode === "out" ? "success" : "accent"} className="h-[54px]">
+          <MButton onClick={capture} disabled={!geo || !!camErr || !faceCheck.verified} tone={mode === "out" ? "success" : "accent"} className="h-[54px]">
             {mode === "out" ? <LogOut size={22} /> : <Camera size={22} />} Chụp &amp; Chấm công {mode === "out" ? "ra" : "vào"}
           </MButton>
         </div>

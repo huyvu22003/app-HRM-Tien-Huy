@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, MapPin, Clock, X, ImageOff, ScanFace, ExternalLink } from "lucide-react";
+import { Loader2, MapPin, Clock, X, ImageOff, ScanFace, ExternalLink, CheckCircle2 } from "lucide-react";
 import { fetchCheckins, loadCheckinPhoto, type ApiCheckinRecord } from "@/lib/api";
 import { useQuery } from "@/lib/hooks";
 import { formatDate } from "@/lib/utils";
@@ -71,6 +71,7 @@ export function CheckinLogScreen() {
                 <th className="px-4 py-3 font-medium">Giờ vào</th>
                 <th className="px-4 py-3 font-medium">Giờ ra</th>
                 <th className="px-4 py-3 font-medium">Vị trí</th>
+                <th className="px-4 py-3 font-medium">Xác thực</th>
                 <th className="px-4 py-3 font-medium">Ảnh vào</th>
                 <th className="px-4 py-3 font-medium">Ảnh ra</th>
               </tr>
@@ -91,6 +92,14 @@ export function CheckinLogScreen() {
                       </a>
                     ) : <span className="text-[var(--color-text-lighter)]">—</span>}
                     {r.workplace && <div className="text-[11px] text-[var(--color-text-muted)]">{r.workplace}{r.accuracy != null ? ` · ~${Math.round(r.accuracy)}m` : ""}</div>}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    {r.face_similarity != null && r.face_real != null && r.face_live != null ? (
+                      <div className="inline-flex flex-col gap-0.5 text-[11.5px] text-[var(--color-success)]">
+                        <span className="inline-flex items-center gap-1 font-semibold"><CheckCircle2 size={13} /> Khớp {Math.round(r.face_similarity * 100)}%</span>
+                        <span>Người thật đã xác nhận</span>
+                      </div>
+                    ) : <span className="text-[var(--color-text-lighter)]">Bản ghi cũ</span>}
                   </td>
                   <td className="px-4 py-2.5"><PhotoThumb photoKey={r.photo_key} onOpen={setZoom} /></td>
                   <td className="px-4 py-2.5"><PhotoThumb photoKey={r.photo_out_key} onOpen={setZoom} /></td>

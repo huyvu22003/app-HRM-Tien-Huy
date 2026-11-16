@@ -324,6 +324,14 @@ const STEPS: { id: string; run: (env: Env) => Promise<void> }[] = [
       await addColumn(env, "compensation", "pit_manual", "REAL DEFAULT 0");
     },
   },
+  {
+    id: "029_checkin_face_verification",
+    run: async (env) => {
+      await addColumn(env, "checkins", "face_similarity", "REAL");
+      await addColumn(env, "checkins", "face_real", "REAL");
+      await addColumn(env, "checkins", "face_live", "REAL");
+    },
+  },
 ];
 
 /** Áp các bước migrate còn thiếu (một lần cho mỗi isolate). */
