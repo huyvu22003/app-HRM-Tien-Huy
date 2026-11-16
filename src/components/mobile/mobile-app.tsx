@@ -9,6 +9,8 @@ import { MobileCheckIn } from "./attendance";
 import { MobileLeave, MobileCreateLeave } from "./leave";
 import { MobilePayslip, MobileApprovals, MobileReport, MobileKpi, MobileNotifications, MobileProfile } from "./more";
 import { useAuth } from "@/lib/auth-context";
+import { fetchNotifications } from "@/lib/api";
+import { useQuery } from "@/lib/hooks";
 import { HrMobileApp } from "./hr-mobile-app";
 
 const TABS: { key: MobileScreen; label: string; icon: typeof House }[] = [
@@ -31,6 +33,8 @@ const TAB_OF: Record<MobileScreen, MobileScreen> = {
 export function MobileApp() {
   const { user } = useAuth();
   const [screen, setScreen] = useState<MobileScreen>("home");
+  const { data: notificationData } = useQuery(() => fetchNotifications(), [user?.role]);
+  const pendingLeaveCount = notificationData?.pendingLeaveCount ?? 0;
   if (user?.role === "hr") return <HrMobileApp />;
   if (user?.role === "director") return <HrMobileApp mode="director" />;
   const go: Go = (s) => setScreen(s);
@@ -65,8 +69,9 @@ export function MobileApp() {
           {TABS.map((t) => {
             const active = activeTab === t.key;
             return (
-              <button key={t.key} onClick={() => go(t.key)} className="flex flex-1 flex-col items-center gap-1 py-1">
+              <button key={t.key} onClick={() => go(t.key)} className="relative flex flex-1 flex-col items-center gap-1 py-1">
                 <t.icon size={22} className={cn(active ? "text-[var(--color-accent)]" : "text-[var(--color-text-lighter)]")} />
+                {t.key === "leave" && pendingLeaveCount > 0 && <span className="absolute left-1/2 top-0 ml-2 flex min-w-4 items-center justify-center rounded-full bg-[var(--color-danger)] px-1 text-[9px] font-bold text-white">{pendingLeaveCount > 99 ? "99+" : pendingLeaveCount}</span>}
                 <span className={cn("text-[10px] font-semibold", active ? "text-[var(--color-accent)]" : "text-[var(--color-text-lighter)]")}>{t.label}</span>
               </button>
             );

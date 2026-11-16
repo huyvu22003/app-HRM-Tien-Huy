@@ -8,7 +8,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useQuery } from "@/lib/hooks";
 import {
-  createAccount, fetchAccounts, fetchAllEmployees, fetchCheckins, fetchLeaveRequests,
+  createAccount, fetchAccounts, fetchAllEmployees, fetchCheckins, fetchLeaveRequests, fetchNotifications,
   resetAccountPassword, updateLeaveRequest, type ApiAccount, type ApiLeaveRequest,
 } from "@/lib/api";
 import { MBody, MBadge, MCard, MHeader, mono } from "./primitives";
@@ -25,18 +25,18 @@ function Overview({ mode }: { mode: ManagementMobileMode }) {
   const { data: accounts } = useQuery(() => mode === "hr" ? fetchAccounts() : Promise.resolve({ accounts: [], employeesWithoutAccount: [] }), [mode]);
   const active = (employees?.data ?? []).filter((e) => e.status === "Đang làm việc").length;
   const present = (checkins?.data ?? []).filter((c) => c.time_in).length;
-  const pending = (leaves?.data ?? []).filter((l) => l.status === "approved_l1").length;
+  const pending = (leaves?.data ?? []).filter((l) => l.can_approve && l.approval_step).length;
   const noAccount = accounts?.employeesWithoutAccount.length ?? 0;
   const stats = [
     ["Đang làm việc", active, Users, "var(--color-accent)"],
     ["Có mặt hôm nay", present, Clock3, "var(--color-success)"],
-    ["Chờ HR duyệt", pending, ClipboardCheck, "var(--color-warning)"],
+    ["Đơn chờ duyệt", pending, ClipboardCheck, "var(--color-warning)"],
     ["Chưa có tài khoản", noAccount, UserCog, "var(--color-danger)"],
   ] as const;
   return <div className="flex h-full flex-col"><MHeader title={mode === "director" ? "Giám đốc Mobile" : "HR Mobile"} subtitle="Tổng quan vận hành hôm nay" /><MBody>
     <div className="grid grid-cols-2 gap-3">{stats.map(([label, value, Icon, color]) => <MCard key={label} className="p-4"><Icon size={20} style={{ color }} /><div className={`${mono} mt-2 text-[25px] font-bold`}>{value}</div><div className="text-[11.5px] text-[var(--color-text-muted)]">{label}</div></MCard>)}</div>
     <MCard className="mt-4 p-4"><div className="text-[13.5px] font-bold">Cần xử lý</div><div className="mt-3 flex flex-col gap-2">
-      {pending > 0 && <div className="flex items-center gap-2 rounded-[10px] bg-[var(--color-warning-bg)] p-3 text-[12px]"><ClipboardCheck size={17} className="text-[var(--color-warning)]" /> {pending} đơn đã qua tổ trưởng, chờ HR duyệt.</div>}
+      {pending > 0 && <div className="flex items-center gap-2 rounded-[10px] bg-[var(--color-warning-bg)] p-3 text-[12px]"><ClipboardCheck size={17} className="text-[var(--color-warning)]" /> {pending} đơn nghỉ đang chờ duyệt.</div>}
       {noAccount > 0 && <div className="flex items-center gap-2 rounded-[10px] bg-[var(--color-danger-bg)] p-3 text-[12px]"><AlertTriangle size={17} className="text-[var(--color-danger)]" /> {noAccount} hồ sơ chưa có tài khoản.</div>}
       {pending === 0 && noAccount === 0 && <div className="flex items-center gap-2 py-2 text-[12px] text-[var(--color-text-muted)]"><CheckCircle2 size={17} className="text-[var(--color-success)]" /> Không có cảnh báo quan trọng.</div>}
     </div></MCard>
@@ -70,9 +70,9 @@ function Attendance() {
 function Approvals() {
   const { data, refetch } = useQuery(() => fetchLeaveRequests(), []);
   const [busy, setBusy] = useState<number | null>(null);
-  const rows = (data?.data ?? []).filter((l) => l.status === "pending" || l.status === "approved_l1");
-  async function act(row: ApiLeaveRequest, action: "approve" | "reject") { setBusy(row.id); try { await updateLeaveRequest(row.id, { action, step: 2 }); refetch(); } finally { setBusy(null); } }
-  return <div className="flex h-full flex-col"><MHeader title="Duyệt nghỉ phép" subtitle={`${rows.filter((r) => r.status === "approved_l1").length} đơn chờ HR`} /><MBody><div className="flex flex-col gap-3">{rows.map((r) => <MCard key={r.id} className="p-4"><div className="flex items-start justify-between gap-2"><div><div className="text-[13.5px] font-bold">{r.employee_name}</div><div className="mt-1 text-[11.5px] text-[var(--color-text-muted)]">{r.type_code} · {r.days} ngày · {r.from_date} → {r.to_date}</div></div><MBadge tone={r.status === "approved_l1" ? "warning" : "muted"}>{r.status === "approved_l1" ? "Chờ HR" : "Chờ tổ trưởng"}</MBadge></div>{r.reason && <div className="mt-2 rounded-[8px] bg-[var(--color-page-bg)] p-2 text-[11.5px]">{r.reason}</div>}<div className="mt-3 flex gap-2"><button disabled={busy === r.id} onClick={() => act(r, "reject")} className="flex h-10 flex-1 items-center justify-center gap-1 rounded-[9px] bg-[var(--color-danger-bg)] text-[12px] font-semibold text-[var(--color-danger)]"><X size={15} /> Từ chối</button><button disabled={busy === r.id || r.status !== "approved_l1"} onClick={() => act(r, "approve")} className="flex h-10 flex-1 items-center justify-center gap-1 rounded-[9px] bg-[var(--color-success)] text-[12px] font-semibold text-white disabled:opacity-40">{busy === r.id ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Duyệt cấp 2</button></div></MCard>)}{rows.length === 0 && <MCard className="p-8 text-center text-[12.5px] text-[var(--color-text-muted)]">Không có đơn chờ xử lý.</MCard>}</div></MBody></div>;
+  const rows = (data?.data ?? []).filter((l) => l.can_approve && l.approval_step);
+  async function act(row: ApiLeaveRequest, action: "approve" | "reject") { if (!row.approval_step) return; setBusy(row.id); try { await updateLeaveRequest(row.id, { action, step: row.approval_step }); refetch(); } finally { setBusy(null); } }
+  return <div className="flex h-full flex-col"><MHeader title="Duyệt nghỉ phép" subtitle={`${rows.length} đơn chờ duyệt`} /><MBody><div className="flex flex-col gap-3">{rows.map((r) => <MCard key={r.id} className="p-4"><div className="flex items-start justify-between gap-2"><div><div className="text-[13.5px] font-bold">{r.employee_name}</div><div className="mt-1 text-[11.5px] text-[var(--color-text-muted)]">{r.type_code} · {r.days} ngày · {r.from_date} → {r.to_date}</div></div><MBadge tone={r.status === "approved_l1" ? "warning" : "muted"}>{r.status === "approved_l1" ? "Chờ HR" : "Chờ tổ trưởng"}</MBadge></div>{r.reason && <div className="mt-2 rounded-[8px] bg-[var(--color-page-bg)] p-2 text-[11.5px]">{r.reason}</div>}<div className="mt-3 flex gap-2"><button disabled={busy === r.id} onClick={() => act(r, "reject")} className="flex h-10 flex-1 items-center justify-center gap-1 rounded-[9px] bg-[var(--color-danger-bg)] text-[12px] font-semibold text-[var(--color-danger)]"><X size={15} /> Từ chối</button><button disabled={busy === r.id} onClick={() => act(r, "approve")} className="flex h-10 flex-1 items-center justify-center gap-1 rounded-[9px] bg-[var(--color-success)] text-[12px] font-semibold text-white disabled:opacity-40">{busy === r.id ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Duyệt cấp 2</button></div></MCard>)}{rows.length === 0 && <MCard className="p-8 text-center text-[12.5px] text-[var(--color-text-muted)]">Không có đơn chờ xử lý.</MCard>}</div></MBody></div>;
 }
 
 function Accounts() {
@@ -97,7 +97,9 @@ const TABS: { key: HrTab; label: string; icon: typeof Users }[] = [
 
 export function HrMobileApp({ mode = "hr" }: { mode?: ManagementMobileMode }) {
   const [tab, setTab] = useState<HrTab>("overview");
+  const { data: notificationData } = useQuery(() => fetchNotifications(), [mode]);
+  const pendingLeaveCount = notificationData?.pendingLeaveCount ?? 0;
   const tabs = mode === "director" ? TABS.filter((item) => item.key !== "accounts" && item.key !== "salary") : TABS;
   const content = tab === "overview" ? <Overview mode={mode} /> : tab === "employees" ? <Employees /> : tab === "attendance" ? <Attendance /> : tab === "approvals" ? <Approvals /> : tab === "salary" ? <MobilePayslip /> : <Accounts />;
-  return <div className="flex h-[100dvh] flex-col overflow-hidden bg-[var(--color-page-bg)]"><div key={tab} className="flex min-h-0 flex-1 flex-col">{content}</div><nav className="flex flex-none border-t border-[var(--color-border)] bg-white/95 px-1 pt-2" style={{ paddingBottom: "calc(env(safe-area-inset-bottom,0px) + 8px)" }}>{tabs.map((item) => { const active = item.key === tab; return <button key={item.key} onClick={() => setTab(item.key)} className="flex flex-1 flex-col items-center gap-1 py-1"><item.icon size={21} className={cn(active ? "text-[var(--color-accent)]" : "text-[var(--color-text-lighter)]")} /><span className={cn("text-[9.5px] font-semibold", active ? "text-[var(--color-accent)]" : "text-[var(--color-text-lighter)]")}>{item.label}</span></button>; })}</nav></div>;
+  return <div className="flex h-[100dvh] flex-col overflow-hidden bg-[var(--color-page-bg)]"><div key={tab} className="flex min-h-0 flex-1 flex-col">{content}</div><nav className="flex flex-none border-t border-[var(--color-border)] bg-white/95 px-1 pt-2" style={{ paddingBottom: "calc(env(safe-area-inset-bottom,0px) + 8px)" }}>{tabs.map((item) => { const active = item.key === tab; return <button key={item.key} onClick={() => setTab(item.key)} className="relative flex flex-1 flex-col items-center gap-1 py-1"><item.icon size={21} className={cn(active ? "text-[var(--color-accent)]" : "text-[var(--color-text-lighter)]")} />{item.key === "approvals" && pendingLeaveCount > 0 && <span className="absolute left-1/2 top-0 ml-2 flex min-w-4 items-center justify-center rounded-full bg-[var(--color-danger)] px-1 text-[9px] font-bold text-white">{pendingLeaveCount > 99 ? "99+" : pendingLeaveCount}</span>}<span className={cn("text-[9.5px] font-semibold", active ? "text-[var(--color-accent)]" : "text-[var(--color-text-lighter)]")}>{item.label}</span></button>; })}</nav></div>;
 }

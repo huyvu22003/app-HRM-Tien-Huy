@@ -52,7 +52,7 @@ export function MobileHome({ go }: { go: Go }) {
 
   const myAtt = att?.data?.find((r) => r.employee_id === empId);
   const myKpi = kpi?.data?.find((k) => k.employee_id === empId);
-  const pending = (leaves?.data ?? []).filter((r) => r.status === "pending");
+  const pending = (leaves?.data ?? []).filter((r) => r.can_approve && r.approval_step);
 
   return (
     <div className="flex h-full flex-col">

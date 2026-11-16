@@ -23,15 +23,14 @@ const LEAVE_LABEL: Record<string, string> = { PN: "Phép năm", PB: "Phép bện
 
 /* ---------------- Duyệt đơn ---------------- */
 export function MobileApprovals({ go }: { go: Go }) {
-  const { user } = useAuth();
-  const step: 1 | 2 = user?.role === "lead" ? 1 : 2;
   const { data, refetch } = useQuery(() => fetchLeaveRequests(), []);
   const [busy, setBusy] = useState<number | null>(null);
-  const pending = (data?.data ?? []).filter((r: ApiLeaveRequest) => r.status === "pending" || r.status === "approved_l1");
+  const pending = (data?.data ?? []).filter((r: ApiLeaveRequest) => r.can_approve && r.approval_step);
 
-  async function act(id: number, action: "approve" | "reject") {
-    setBusy(id);
-    try { await updateLeaveRequest(id, { action, step }); } finally { setBusy(null); refetch(); }
+  async function act(row: ApiLeaveRequest, action: "approve" | "reject") {
+    if (!row.approval_step) return;
+    setBusy(row.id);
+    try { await updateLeaveRequest(row.id, { action, step: row.approval_step }); } finally { setBusy(null); refetch(); }
   }
 
   return (
@@ -60,10 +59,10 @@ export function MobileApprovals({ go }: { go: Go }) {
               </div>
               {r.reason && <div className="mt-2.5 text-[12.5px] leading-relaxed text-[var(--color-text-muted)]">“{r.reason}”</div>}
               <div className="mt-3 flex gap-2.5">
-                <button onClick={() => act(r.id, "reject")} disabled={busy !== null} className="flex h-[42px] flex-1 items-center justify-center gap-1.5 rounded-[11px] border border-[#f0c9c4] bg-[#fdf4f3] text-[13px] font-bold text-[var(--color-danger)] disabled:opacity-50">
+                <button onClick={() => act(r, "reject")} disabled={busy !== null} className="flex h-[42px] flex-1 items-center justify-center gap-1.5 rounded-[11px] border border-[#f0c9c4] bg-[#fdf4f3] text-[13px] font-bold text-[var(--color-danger)] disabled:opacity-50">
                   {busy === r.id ? <Loader2 size={16} className="animate-spin" /> : <X size={16} />} Từ chối
                 </button>
-                <button onClick={() => act(r.id, "approve")} disabled={busy !== null} className="flex h-[42px] flex-1 items-center justify-center gap-1.5 rounded-[11px] bg-[var(--color-success)] text-[13px] font-bold text-white disabled:opacity-50">
+                <button onClick={() => act(r, "approve")} disabled={busy !== null} className="flex h-[42px] flex-1 items-center justify-center gap-1.5 rounded-[11px] bg-[var(--color-success)] text-[13px] font-bold text-white disabled:opacity-50">
                   {busy === r.id ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} Duyệt
                 </button>
               </div>
