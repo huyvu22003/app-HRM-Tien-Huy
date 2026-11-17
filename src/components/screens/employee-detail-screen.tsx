@@ -875,6 +875,9 @@ export function EmployeeDetailScreen({
           next.resign_date = "";
         }
       }
+      if (field === "resign_date") {
+        next.status = value ? "Nghỉ việc" : prev.status === "Nghỉ việc" ? "Đang làm việc" : prev.status;
+      }
       return next;
     });
   }

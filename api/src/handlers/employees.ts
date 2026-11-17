@@ -148,6 +148,30 @@ interface EmployeeBody {
   insurance?: InsuranceBody;
 }
 
+export function normalizeEmploymentState(input: {
+  status?: string;
+  resignDate?: string | null;
+  existingResignDate?: string | null;
+  today?: string;
+}): { status?: string; resignDate?: string | null } {
+  const dateWasProvided = input.resignDate !== undefined;
+  const normalizedDate = typeof input.resignDate === "string"
+    ? input.resignDate.trim() || null
+    : input.resignDate;
+  const today = input.today ?? new Date().toISOString().slice(0, 10);
+
+  if (normalizedDate) {
+    return { status: "Nghỉ việc", resignDate: normalizedDate };
+  }
+  if (input.status === "Nghỉ việc") {
+    return { status: "Nghỉ việc", resignDate: input.existingResignDate || today };
+  }
+  if (dateWasProvided && normalizedDate === null) {
+    return { status: input.status ?? "Đang làm việc", resignDate: null };
+  }
+  return { status: input.status, resignDate: input.resignDate };
+}
+
 // CI không tự chạy migration nên đảm bảo cột mở rộng tồn tại theo kiểu "thêm nếu
 // chưa có" (SQLite không hỗ trợ ADD COLUMN IF NOT EXISTS → kiểm tra qua PRAGMA).
 let employeeColsEnsured = false;
@@ -167,11 +191,15 @@ export async function createEmployee(request: Request, env: Env): Promise<Respon
     return error("Thiếu mã nhân viên hoặc họ tên", 400);
   }
 
+  const employment = normalizeEmploymentState({
+    status: body.status ?? "Đang làm việc",
+    resignDate: body.resignDate,
+  });
   const result = await env.DB.prepare(
     `INSERT INTO employees
       (code, name, gender, dob, phone, cccd, address, email, department_id, position,
-       workplace, contract_type, contract_end, join_date, status, manager, level, bank, tax_code)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       workplace, contract_type, contract_end, join_date, resign_date, status, manager, level, bank, tax_code)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       body.code,
@@ -188,7 +216,8 @@ export async function createEmployee(request: Request, env: Env): Promise<Respon
       body.contractType ?? null,
       body.contractEnd ?? null,
       body.joinDate ?? null,
-      body.status ?? "Đang làm việc",
+      employment.resignDate ?? null,
+      employment.status ?? "Đang làm việc",
       body.manager ?? null,
       body.level ?? null,
       body.bank ?? null,
@@ -230,16 +259,16 @@ export async function importEmployees(request: Request, env: Env): Promise<Respo
       departmentId = dept?.id ?? null;
     }
 
-    const existing = await env.DB.prepare("SELECT id FROM employees WHERE code = ?")
+    const existing = await env.DB.prepare("SELECT id, status, resign_date FROM employees WHERE code = ?")
       .bind(code)
-      .first<{ id: number }>();
+      .first<{ id: number; status: string | null; resign_date: string | null }>();
 
     // Chỉ nhận field CÓ MẶT trong dòng import (tránh ghi đè null lên dữ liệu cũ).
     const has = (k: string) => r[k] !== undefined && r[k] !== null && String(r[k]).trim() !== "";
     const strField = (k: string) => String(r[k]).trim();
     const cols: Record<string, unknown> = {};
     for (const k of ["gender", "dob", "phone", "cccd", "address", "email", "position",
-                     "workplace", "contract_type", "contract_end", "join_date", "status",
+                     "workplace", "contract_type", "contract_end", "join_date", "resign_date", "status",
                      "manager", "level", "bank", "tax_code",
                      // Phase 2: các trường hồ sơ mở rộng
                      "resign_reason", "contract_date_1", "contract_date_2", "contract_date_3",
@@ -252,6 +281,15 @@ export async function importEmployees(request: Request, env: Env): Promise<Respo
     }
     // Trạng thái là trường chức năng — nếu file để trống thì mặc định "Đang làm việc".
     if (isReplace && !has("status")) cols.status = "Đang làm việc";
+    const employment = normalizeEmploymentState({
+      status: cols.status as string | undefined,
+      resignDate: Object.prototype.hasOwnProperty.call(cols, "resign_date")
+        ? cols.resign_date as string | null
+        : undefined,
+      existingResignDate: existing?.resign_date ?? null,
+    });
+    if (employment.status !== undefined) cols.status = employment.status;
+    if (employment.resignDate !== undefined) cols.resign_date = employment.resignDate;
     if (deptName) cols.department_id = departmentId;
     else if (isReplace) cols.department_id = null;
 
@@ -388,7 +426,7 @@ export async function updateEmployee(request: Request, env: Env, id: string): Pr
   const body = await readJson<EmployeeBody>(request);
 
   await ensureEmployeeColumns(env);
-  const existing = await env.DB.prepare("SELECT * FROM employees WHERE id = ?").bind(id).first();
+  const existing = await env.DB.prepare("SELECT * FROM employees WHERE id = ?").bind(id).first<{ resign_date: string | null } & Record<string, unknown>>();
   if (!existing) return error("Không tìm thấy nhân viên", 404);
 
   // Resolve department by name → id (falls back to explicit departmentId)
@@ -406,6 +444,11 @@ export async function updateEmployee(request: Request, env: Env, id: string): Pr
 
   const fields: string[] = [];
   const args: unknown[] = [];
+  const employment = normalizeEmploymentState({
+    status: body.status,
+    resignDate: body.resignDate,
+    existingResignDate: existing.resign_date,
+  });
   const map: Record<string, unknown> = {
     code: body.code,
     name: body.name,
@@ -420,10 +463,10 @@ export async function updateEmployee(request: Request, env: Env, id: string): Pr
     workplace: body.workplace,
     contract_type: body.contractType,
     contract_end: body.contractEnd,
-    resign_date: body.resignDate,
+    resign_date: employment.resignDate,
     bhxh_no: body.bhxhNo,
     join_date: body.joinDate,
-    status: body.status,
+    status: employment.status,
     manager: body.manager,
     level: body.level,
     bank: body.bank,

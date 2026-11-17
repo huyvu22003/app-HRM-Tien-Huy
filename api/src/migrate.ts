@@ -332,6 +332,18 @@ const STEPS: { id: string; run: (env: Env) => Promise<void> }[] = [
       await addColumn(env, "checkins", "face_live", "REAL");
     },
   },
+  {
+    id: "030_sync_resignation_status",
+    run: async (env) => {
+      await env.DB.prepare(
+        `UPDATE employees
+         SET status = 'Nghỉ việc', updated_at = datetime('now')
+         WHERE resign_date IS NOT NULL
+           AND trim(resign_date) <> ''
+           AND status <> 'Nghỉ việc'`,
+      ).run();
+    },
+  },
 ];
 
 /** Áp các bước migrate còn thiếu (một lần cho mỗi isolate). */
