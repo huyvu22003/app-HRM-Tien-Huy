@@ -146,6 +146,7 @@ export function MobileCreateLeave({ go }: { go: Go }) {
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
 
   async function submit() {
     setErr(null);
@@ -155,11 +156,30 @@ export function MobileCreateLeave({ go }: { go: Go }) {
     setSaving(true);
     try {
       await createLeaveRequest({ employeeId: user.employeeId, typeCode: type, fromDate: from, toDate: addDays(from, days - 1), days, reason: reason.trim() || undefined });
-      go("leave");
+      setSubmitted(true);
+      setSaving(false);
     } catch (e) {
       setErr((e as Error).message || "Gửi đơn thất bại.");
       setSaving(false);
     }
+  }
+
+  if (submitted) {
+    return (
+      <div className="flex h-full flex-col bg-white">
+        <MHeader title="Nghỉ phép" plain />
+        <MBody>
+          <div className="flex flex-col items-center pt-12 text-center">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[var(--color-success-bg)]">
+              <CheckCircle2 size={42} className="text-[var(--color-success)]" />
+            </div>
+            <div className="mt-5 text-[19px] font-extrabold text-[var(--color-text-primary)]">Gửi đơn nghỉ phép thành công</div>
+            <div className="mt-2 text-[13px] leading-relaxed text-[var(--color-text-muted)]">Đơn đã được chuyển đến cấp có quyền duyệt.</div>
+            <MButton className="mt-7 w-full" onClick={() => go("leave")}>Xem đơn đã gửi</MButton>
+          </div>
+        </MBody>
+      </div>
+    );
   }
 
   return (

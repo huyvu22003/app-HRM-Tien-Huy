@@ -1,6 +1,5 @@
 "use client";
 
-import { useRef } from "react";
 import { Calendar } from "lucide-react";
 import { cn, formatDate } from "@/lib/utils";
 
@@ -25,25 +24,6 @@ export function DateField({
   placeholder?: string;
   disabled?: boolean;
 }) {
-  const nativeRef = useRef<HTMLInputElement>(null);
-
-  function open() {
-    if (disabled) return;
-    const el = nativeRef.current;
-    if (!el) return;
-    const withPicker = el as HTMLInputElement & { showPicker?: () => void };
-    if (typeof withPicker.showPicker === "function") {
-      try {
-        withPicker.showPicker();
-        return;
-      } catch {
-        /* fallback focus below */
-      }
-    }
-    el.focus();
-    el.click();
-  }
-
   return (
     <div className="relative">
       <input
@@ -52,29 +32,21 @@ export function DateField({
         disabled={disabled}
         value={value ? formatDate(value) : ""}
         placeholder={placeholder}
-        onClick={open}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            open();
-          }
-        }}
-        className={cn(className, "cursor-pointer pr-8")}
+        tabIndex={-1}
+        aria-hidden
+        className={cn(className, "pointer-events-none pr-8")}
       />
       <Calendar
         size={14}
-        onClick={open}
         className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--color-text-lighter)]"
       />
       <input
-        ref={nativeRef}
         type="date"
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        tabIndex={-1}
-        aria-hidden
-        className="pointer-events-none absolute bottom-0 right-3 h-0 w-0 opacity-0"
+        aria-label={placeholder}
+        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
       />
     </div>
   );

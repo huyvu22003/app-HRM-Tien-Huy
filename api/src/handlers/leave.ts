@@ -104,6 +104,16 @@ export async function createLeaveRequest(request: Request, env: Env, userId: num
     }
   }
 
+  const overlapping = await env.DB.prepare(
+    `SELECT id FROM leave_requests
+     WHERE employee_id = ? AND status != 'rejected'
+       AND from_date <= ? AND to_date >= ?
+     LIMIT 1`,
+  ).bind(body.employeeId, body.toDate, body.fromDate).first<{ id: number }>();
+  if (overlapping) {
+    return error("Ngày nghỉ bị trùng với một đơn đã gửi trước đó. Vui lòng chọn ngày khác.", 409);
+  }
+
   const result = await env.DB.prepare(
     `INSERT INTO leave_requests (employee_id, type_code, from_date, to_date, days, reason, created_by)
      VALUES (?, ?, ?, ?, ?, ?, ?)`

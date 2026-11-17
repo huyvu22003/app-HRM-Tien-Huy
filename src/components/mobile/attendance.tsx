@@ -93,21 +93,47 @@ function MobileCheckInEnabled({ go, today, refetchToday, referencePhotoUrl }: { 
   const [saveErr, setSaveErr] = useState<string | null>(null);
   const [faceCheck, setFaceCheck] = useState<FaceCheck>({ similarity: 0, real: 0, live: 0, blinkVerified: false, verified: false, message: "Đang tải bộ nhận diện khuôn mặt…" });
   const faceProofRef = useRef<FaceProof | null>(null);
+  const faceVerifiedAtRef = useRef(0);
+  const geoWatchRef = useRef<number | null>(null);
 
   // Đã có giờ vào mà chưa có giờ ra → lần chấm này là CHẤM RA. Đủ cả hai → xong.
   const mode: "in" | "out" = today?.time_in && !today?.time_out ? "out" : "in";
   const bothDone = !!(today?.time_in && today?.time_out);
 
-  // Định vị bắt buộc.
-  useEffect(() => {
-    if (!navigator.geolocation) { setGeoErr("Thiết bị không hỗ trợ định vị."); return; }
-    const id = navigator.geolocation.watchPosition(
-      (p) => { setGeo({ lat: p.coords.latitude, lng: p.coords.longitude, acc: Math.round(p.coords.accuracy) }); setGeoErr(null); },
-      () => setGeoErr("Chưa bật định vị. Hãy cho phép truy cập vị trí để chấm công."),
-      { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 },
-    );
-    return () => navigator.geolocation.clearWatch(id);
+  const acceptPosition = useCallback((p: GeolocationPosition) => {
+    setGeo({ lat: p.coords.latitude, lng: p.coords.longitude, acc: Math.round(p.coords.accuracy) });
+    setGeoErr(null);
   }, []);
+
+  const rejectPosition = useCallback((err: GeolocationPositionError) => {
+    if (err.code === err.PERMISSION_DENIED) {
+      setGeoErr("Chưa được cấp quyền vị trí. Bấm Bật định vị và chọn Cho phép.");
+    } else if (err.code === err.TIMEOUT) {
+      setGeoErr("Chưa lấy được vị trí. Hãy ra nơi thoáng và thử lại.");
+    } else {
+      setGeoErr("Không xác định được vị trí trên thiết bị này.");
+    }
+  }, []);
+
+  const requestLocation = useCallback(() => {
+    if (!navigator.geolocation) { setGeoErr("Thiết bị không hỗ trợ định vị."); return; }
+    setGeoErr("Đang yêu cầu quyền vị trí…");
+    const options: PositionOptions = { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 };
+    navigator.geolocation.getCurrentPosition(acceptPosition, rejectPosition, options);
+    if (geoWatchRef.current === null) {
+      geoWatchRef.current = navigator.geolocation.watchPosition(acceptPosition, rejectPosition, options);
+    }
+  }, [acceptPosition, rejectPosition]);
+
+  // Thử lấy vị trí khi mở màn hình; nút Bật định vị bên dưới cho phép yêu cầu lại
+  // bằng thao tác trực tiếp của người dùng (cần thiết trong trình duyệt Zalo).
+  useEffect(() => {
+    requestLocation();
+    return () => {
+      if (geoWatchRef.current !== null) navigator.geolocation.clearWatch(geoWatchRef.current);
+      geoWatchRef.current = null;
+    };
+  }, [requestLocation]);
 
   const stopCam = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -161,8 +187,25 @@ function MobileCheckInEnabled({ go, today, refetchToday, referencePhotoUrl }: { 
           else if (result.face && !blinkVerified) message = "Nhìn thẳng camera và chớp mắt";
           else if (verified) message = "Đã xác thực đúng khuôn mặt";
           const proof = { similarity: result.similarity, real: result.real, live: result.live, blinkVerified };
-          faceProofRef.current = verified ? proof : null;
-          setFaceCheck({ ...proof, verified, message });
+          if (verified) {
+            // Giữ kết quả hợp lệ trong một khoảng ngắn để nhân viên kịp bấm chụp,
+            // nhưng vẫn tiếp tục đối chiếu để loại người khác bước vào khung hình.
+            faceProofRef.current = proof;
+            faceVerifiedAtRef.current = Date.now();
+            setFaceCheck({ ...proof, verified: true, message });
+            await new Promise((resolve) => setTimeout(resolve, 450));
+            continue;
+          }
+          const freshVerifiedFace = !!result.face
+            && matched
+            && Date.now() - faceVerifiedAtRef.current <= 5000;
+          if (freshVerifiedFace) {
+            await new Promise((resolve) => setTimeout(resolve, 450));
+            continue;
+          }
+          faceProofRef.current = null;
+          faceVerifiedAtRef.current = 0;
+          setFaceCheck({ ...proof, verified: false, message });
           await new Promise((resolve) => setTimeout(resolve, 450));
         }
       } catch (error) {
@@ -178,7 +221,12 @@ function MobileCheckInEnabled({ go, today, refetchToday, referencePhotoUrl }: { 
   }, [referencePhotoUrl, step]);
 
   function capture() {
-    if (!faceCheck.verified || !faceProofRef.current) return;
+    if (!faceCheck.verified || !faceProofRef.current || Date.now() - faceVerifiedAtRef.current > 5000) {
+      faceProofRef.current = null;
+      faceVerifiedAtRef.current = 0;
+      setFaceCheck((current) => ({ ...current, verified: false, message: "Vui lòng nhìn camera và chớp mắt lại" }));
+      return;
+    }
     const v = videoRef.current;
     if (!v || !v.videoWidth) { setCamErr("Camera chưa sẵn sàng."); return; }
     const canvas = document.createElement("canvas");
@@ -316,6 +364,7 @@ function MobileCheckInEnabled({ go, today, refetchToday, referencePhotoUrl }: { 
               <div className="text-[11px] text-[var(--color-text-muted)]">{geo ? `${fmtCoord(geo.lat, geo.lng)} · sai số ~${geo.acc}m` : geoErr || "Vui lòng chờ…"}</div>
             </div>
             {geo && <MBadge tone="success">Hợp lệ</MBadge>}
+            {!geo && <button type="button" onClick={requestLocation} className="rounded-[9px] bg-white px-2.5 py-1.5 text-[11px] font-bold text-[var(--color-accent)] shadow-sm">Bật định vị</button>}
           </div>
 
           <div className={`flex items-center gap-2.5 rounded-[13px] border p-3 ${faceCheck.verified ? "border-[#cbe6d6] bg-[var(--color-success-bg)]" : "border-[#eadfc4] bg-[var(--color-warning-bg)]"}`}>
