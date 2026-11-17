@@ -42,6 +42,31 @@ function getStatusDisplay(status: string) {
 const isLeadApproved = (s: string) => s === "approved_l1" || s === "approved_l2" || s === "approved";
 const isHrApproved = (s: string) => s === "approved_l2" || s === "approved";
 const isDirectorApproved = (s: string) => s === "approved";
+
+function ApprovalCell({
+  approved,
+  active,
+  busy,
+  onDecision,
+}: {
+  approved: boolean;
+  active: boolean;
+  busy: boolean;
+  onDecision: (action: "approve" | "reject") => void;
+}) {
+  if (approved) return <CheckCircle2 size={16} className="text-[var(--color-success)]" />;
+  if (!active) return <Clock size={16} className="text-[var(--color-text-lighter)]" />;
+  return (
+    <div className="flex min-w-[82px] flex-col gap-1">
+      <button onClick={() => onDecision("approve")} disabled={busy} className="rounded-[7px] bg-[var(--color-success)] px-2 py-1 text-[10.5px] font-semibold text-white disabled:opacity-60">
+        {busy ? "Đang xử lý…" : "Duyệt"}
+      </button>
+      <button onClick={() => onDecision("reject")} disabled={busy} className="rounded-[7px] border border-[var(--color-danger)] px-2 py-1 text-[10.5px] font-semibold text-[var(--color-danger)] disabled:opacity-60">
+        Từ chối
+      </button>
+    </div>
+  );
+}
 function matchesFilter(status: string, filter: StatusFilter) {
   if (filter === "all") return true;
   if (filter === "pending") return status === "pending" || status === "approved_l1" || status === "approved_l2";
@@ -192,19 +217,19 @@ export function LeaveScreen() {
             {isLoading ? (
               <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-[var(--color-text-muted)]"><Loader2 size={16} className="animate-spin" /> Đang tải dữ liệu...</div>
             ) : (
-              <table className="w-full min-w-[1050px] text-[13px]">
+              <table className="w-full min-w-[1150px] text-[13px]">
                 <thead>
                   <tr className="text-left text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">
                     <th className="px-4 py-3 font-medium">Nhân viên</th>
                     <th className="px-4 py-3 font-medium">Loại</th>
                     <th className="px-4 py-3 font-medium">Số ngày</th>
                     <th className="px-4 py-3 font-medium">Từ ngày</th>
+                    <th className="px-4 py-3 font-medium">Đến ngày</th>
                     <th className="px-4 py-3 font-medium">Lý do nghỉ</th>
                     <th className="px-4 py-3 font-medium">Duyệt tổ trưởng</th>
                     <th className="px-4 py-3 font-medium">Duyệt Nhân sự</th>
                     <th className="px-4 py-3 font-medium">Duyệt BGĐ</th>
                     <th className="px-4 py-3 font-medium">Trạng thái</th>
-                    <th className="px-4 py-3 font-medium">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -219,10 +244,11 @@ export function LeaveScreen() {
                           <td className="px-4 py-2.5 text-[var(--color-text-muted)]">{TYPE_LABEL[r.type_code] ?? r.type_code}</td>
                           <td className="px-4 py-2.5 font-[family-name:var(--font-mono)]">{r.days}</td>
                           <td className="px-4 py-2.5 font-[family-name:var(--font-mono)] text-[var(--color-text-muted)]">{formatDate(r.from_date)}</td>
+                          <td className="px-4 py-2.5 font-[family-name:var(--font-mono)] text-[var(--color-text-muted)]">{formatDate(r.to_date)}</td>
                           <td className="max-w-[220px] px-4 py-2.5 text-[var(--color-text-muted)]"><span className="line-clamp-2" title={r.reason || ""}>{r.reason?.trim() || "—"}</span></td>
-                          <td className="px-4 py-2.5">{isLeadApproved(r.status) ? <CheckCircle2 size={15} className="text-[var(--color-success)]" /> : <Clock size={15} className="text-[var(--color-text-lighter)]" />}</td>
-                          <td className="px-4 py-2.5">{isHrApproved(r.status) ? <CheckCircle2 size={15} className="text-[var(--color-success)]" /> : <Clock size={15} className="text-[var(--color-text-lighter)]" />}</td>
-                          <td className="px-4 py-2.5">{isDirectorApproved(r.status) ? <CheckCircle2 size={15} className="text-[var(--color-success)]" /> : <Clock size={15} className="text-[var(--color-text-lighter)]" />}</td>
+                          <td className="px-4 py-2.5"><ApprovalCell approved={isLeadApproved(r.status)} active={r.can_approve === true && r.approval_step === 1} busy={processingId === r.id} onDecision={(action) => decide(r, action)} /></td>
+                          <td className="px-4 py-2.5"><ApprovalCell approved={isHrApproved(r.status)} active={r.can_approve === true && r.approval_step === 2} busy={processingId === r.id} onDecision={(action) => decide(r, action)} /></td>
+                          <td className="px-4 py-2.5"><ApprovalCell approved={isDirectorApproved(r.status)} active={r.can_approve === true && r.approval_step === 3} busy={processingId === r.id} onDecision={(action) => decide(r, action)} /></td>
                           <td className="px-4 py-2.5">
                             <span className={cn("flex w-fit items-center gap-1 rounded-[20px] px-2 py-0.5 text-[11px] font-medium", display.color === "approved" && "bg-[var(--color-success-bg)] text-[var(--color-success)]", display.color === "pending" && "bg-[var(--color-warning-bg)] text-[var(--color-warning)]", display.color === "rejected" && "bg-[var(--color-danger-bg)] text-[var(--color-danger)]")}>
                               {display.color === "approved" && <CheckCircle2 size={11} />}
@@ -230,16 +256,6 @@ export function LeaveScreen() {
                               {display.color === "rejected" && <XCircle size={11} />}
                               {display.label}
                             </span>
-                          </td>
-                          <td className="px-4 py-2.5">
-                            {r.can_approve && r.approval_step ? (
-                              <div className="flex gap-1.5">
-                                <button onClick={() => decide(r, "approve")} disabled={processingId === r.id} className="rounded-[7px] bg-[var(--color-success)] px-2.5 py-1 text-[11px] font-medium text-white disabled:opacity-60">
-                                  {processingId === r.id ? "Đang xử lý…" : r.approval_step === 1 ? "Tổ trưởng duyệt" : r.approval_step === 2 ? "Nhân sự duyệt" : "BGĐ duyệt"}
-                                </button>
-                                <button onClick={() => decide(r, "reject")} disabled={processingId === r.id} className="rounded-[7px] border border-[var(--color-danger)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-danger)] disabled:opacity-60">Từ chối</button>
-                              </div>
-                            ) : <span className="text-[11px] text-[var(--color-text-lighter)]">—</span>}
                           </td>
                         </tr>
                       );
