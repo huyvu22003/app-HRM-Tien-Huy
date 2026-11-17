@@ -753,6 +753,22 @@ export function EmployeeDetailScreen({
 
   const currentPhoto = photoDraft ?? photoUrl ?? employee.photo_url ?? getEmployeePhoto(employee.id);
 
+  const salaryValue = (value: string | number | null | undefined) => {
+    const parsed = Number(String(value ?? "").replace(/[^\d.-]/g, ""));
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  const totalSalary = editing && form
+    ? salaryValue(form.base_salary)
+      + salaryValue(form.allowance)
+      + salaryValue(form.responsibility_salary)
+      + salaryValue(form.gas_allowance)
+      + salaryValue(form.attendance_bonus)
+    : salaryValue(compensation?.base_salary)
+      + salaryValue(compensation?.allowance)
+      + salaryValue(compensation?.responsibility_salary)
+      + salaryValue(compensation?.gas_allowance)
+      + salaryValue(compensation?.attendance_bonus);
+
   const kpiScore = seededRandom(employee.name + "kpi", 65, 98);
   const kpiRank = kpiScore >= 90 ? "Tốt" : kpiScore >= 70 ? "Khá" : kpiScore >= 50 ? "TB" : "Yếu";
 
@@ -1200,6 +1216,7 @@ export function EmployeeDetailScreen({
                 <Field label="Trách nhiệm" value={compensation?.responsibility_salary ? formatMoney(compensation.responsibility_salary) : "-"} editing={editing} field="responsibility_salary" form={form!} onChange={handleFieldChange} />
                 <Field label="PC xăng xe" value={compensation?.gas_allowance ? formatMoney(compensation.gas_allowance) : "-"} editing={editing} field="gas_allowance" form={form!} onChange={handleFieldChange} />
                 <Field label="Chuyên cần" value={compensation?.attendance_bonus ? formatMoney(compensation.attendance_bonus) : "-"} editing={editing} field="attendance_bonus" form={form!} onChange={handleFieldChange} />
+                <ReadOnlyField label="Tổng lương" value={formatMoney(totalSalary)} />
                 <Field label="Ngân hàng" value={employee.bank} editing={editing} field="bank" form={form!} onChange={handleFieldChange} />
                 {employee.bank_account && <ReadOnlyField label="Số tài khoản" value={employee.bank_account} />}
                 {employee.bank_branch && <ReadOnlyField label="Chi nhánh ngân hàng" value={employee.bank_branch} />}
