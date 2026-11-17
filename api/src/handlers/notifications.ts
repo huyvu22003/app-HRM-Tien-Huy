@@ -36,10 +36,15 @@ export async function getNotifications(_request: Request, env: Env, userId: numb
   if (isManager) {
     const leadScope = role === "lead";
     if (!leadScope || empId) {
+    const pendingCondition = leadScope
+      ? "lr.status = 'pending' AND e.manager_employee_id = ?"
+      : role === "hr"
+        ? "lr.status = 'approved_l1'"
+        : "lr.status = 'approved_l2'";
     const { results } = await env.DB.prepare(
       `SELECT lr.id, lr.type_code, lr.days, lr.created_at, e.name AS employee_name
        FROM leave_requests lr JOIN employees e ON e.id = lr.employee_id
-       WHERE ${leadScope ? "lr.status = 'pending' AND e.manager_employee_id = ?" : "lr.status IN ('pending', 'approved_l1')"}
+       WHERE ${pendingCondition}
        ORDER BY lr.created_at DESC LIMIT 30`,
     ).bind(...(leadScope ? [empId] : [])).all<{ id: number; type_code: string; days: number; created_at: string; employee_name: string }>();
     pendingLeaveCount = results.length;
@@ -57,9 +62,9 @@ export async function getNotifications(_request: Request, env: Env, userId: numb
   if (empId) {
     const { results } = await env.DB.prepare(
       `SELECT id, type_code, days, status, created_at,
-              COALESCE(approved_l2_at, approved_l1_at, created_at) AS decided_at
+              COALESCE(approved_l3_at, created_at) AS decided_at
        FROM leave_requests
-       WHERE employee_id = ? AND status IN ('approved', 'approved_l1', 'approved_l2', 'rejected')
+       WHERE employee_id = ? AND status IN ('approved', 'rejected')
        ORDER BY decided_at DESC LIMIT 12`,
     ).bind(empId).all<{ id: number; type_code: string; days: number; status: string; decided_at: string }>();
     for (const r of results) {

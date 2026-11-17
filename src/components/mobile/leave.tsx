@@ -22,10 +22,13 @@ const TYPE = Object.fromEntries(TYPES.map((t) => [t.code, t]));
 
 const isLead = (s: string) => s === "approved_l1" || s === "approved_l2" || s === "approved";
 const isHr = (s: string) => s === "approved_l2" || s === "approved";
+const isDirector = (s: string) => s === "approved";
 function statusInfo(s: string): { label: string; tone: "success" | "warning" | "danger" } {
   if (s === "rejected") return { label: "Từ chối", tone: "danger" };
-  if (isLead(s)) return { label: "Đã duyệt", tone: "success" };
-  return { label: "Chờ", tone: "warning" };
+  if (s === "approved") return { label: "Đã duyệt", tone: "success" };
+  if (s === "approved_l2") return { label: "Chờ BGĐ", tone: "warning" };
+  if (s === "approved_l1") return { label: "Chờ Nhân sự", tone: "warning" };
+  return { label: "Chờ Tổ trưởng", tone: "warning" };
 }
 
 type Filter = "all" | "pending" | "approved" | "rejected";
@@ -45,8 +48,8 @@ export function MobileLeave({ go }: { go: Go }) {
 
   const filtered = requests.filter((r) => {
     if (filter === "all") return true;
-    if (filter === "pending") return r.status === "pending";
-    if (filter === "approved") return isLead(r.status);
+    if (filter === "pending") return r.status === "pending" || r.status === "approved_l1" || r.status === "approved_l2";
+    if (filter === "approved") return r.status === "approved";
     return r.status === "rejected";
   });
 
@@ -122,6 +125,8 @@ export function MobileLeave({ go }: { go: Go }) {
                       <span className={`flex items-center gap-1 font-semibold ${isLead(r.status) ? "text-[var(--color-success)]" : ""}`}>{isLead(r.status) ? <CheckCircle2 size={13} /> : <Clock size={13} className="text-[var(--color-text-lighter)]" />} Tổ trưởng</span>
                       <span className="h-px flex-1 bg-[var(--color-border)]" />
                       <span className={`flex items-center gap-1 font-semibold ${isHr(r.status) ? "text-[var(--color-success)]" : ""}`}>{isHr(r.status) ? <CheckCircle2 size={13} /> : <Clock size={13} className="text-[var(--color-text-lighter)]" />} HR</span>
+                      <span className="h-px flex-1 bg-[var(--color-border)]" />
+                      <span className={`flex items-center gap-1 font-semibold ${isDirector(r.status) ? "text-[var(--color-success)]" : ""}`}>{isDirector(r.status) ? <CheckCircle2 size={13} /> : <Clock size={13} className="text-[var(--color-text-lighter)]" />} BGĐ</span>
                     </div>
                   )}
                 </MCard>

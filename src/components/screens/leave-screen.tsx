@@ -33,18 +33,19 @@ const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
 function getStatusDisplay(status: string) {
   switch (status) {
     case "approved": return { label: "Đã duyệt", color: "approved" as const };
-    case "approved_l1": return { label: "Chờ HR/BGĐ", color: "pending" as const };
-    case "approved_l2": return { label: "Duyệt HR", color: "approved" as const };
+    case "approved_l1": return { label: "Chờ Nhân sự", color: "pending" as const };
+    case "approved_l2": return { label: "Chờ Ban giám đốc", color: "pending" as const };
     case "rejected": return { label: "Từ chối", color: "rejected" as const };
     default: return { label: "Chờ duyệt", color: "pending" as const };
   }
 }
 const isLeadApproved = (s: string) => s === "approved_l1" || s === "approved_l2" || s === "approved";
 const isHrApproved = (s: string) => s === "approved_l2" || s === "approved";
+const isDirectorApproved = (s: string) => s === "approved";
 function matchesFilter(status: string, filter: StatusFilter) {
   if (filter === "all") return true;
-  if (filter === "pending") return status === "pending" || status === "approved_l1";
-  if (filter === "approved") return isLeadApproved(status);
+  if (filter === "pending") return status === "pending" || status === "approved_l1" || status === "approved_l2";
+  if (filter === "approved") return status === "approved";
   if (filter === "rejected") return status === "rejected";
   return true;
 }
@@ -191,22 +192,24 @@ export function LeaveScreen() {
             {isLoading ? (
               <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-[var(--color-text-muted)]"><Loader2 size={16} className="animate-spin" /> Đang tải dữ liệu...</div>
             ) : (
-              <table className="w-full min-w-[700px] text-[13px]">
+              <table className="w-full min-w-[1050px] text-[13px]">
                 <thead>
                   <tr className="text-left text-[11px] uppercase tracking-wide text-[var(--color-text-lighter)]">
                     <th className="px-4 py-3 font-medium">Nhân viên</th>
                     <th className="px-4 py-3 font-medium">Loại</th>
                     <th className="px-4 py-3 font-medium">Số ngày</th>
                     <th className="px-4 py-3 font-medium">Từ ngày</th>
+                    <th className="px-4 py-3 font-medium">Lý do nghỉ</th>
                     <th className="px-4 py-3 font-medium">Duyệt tổ trưởng</th>
-                    <th className="px-4 py-3 font-medium">Duyệt HR</th>
+                    <th className="px-4 py-3 font-medium">Duyệt Nhân sự</th>
+                    <th className="px-4 py-3 font-medium">Duyệt BGĐ</th>
                     <th className="px-4 py-3 font-medium">Trạng thái</th>
                     <th className="px-4 py-3 font-medium">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.length === 0 ? (
-                    <tr><td colSpan={8} className="px-4 py-8 text-center text-[var(--color-text-muted)]">Không có đơn nghỉ phép nào.</td></tr>
+                    <tr><td colSpan={10} className="px-4 py-8 text-center text-[var(--color-text-muted)]">Không có đơn nghỉ phép nào.</td></tr>
                   ) : (
                     filtered.map((r) => {
                       const display = getStatusDisplay(r.status);
@@ -216,8 +219,10 @@ export function LeaveScreen() {
                           <td className="px-4 py-2.5 text-[var(--color-text-muted)]">{TYPE_LABEL[r.type_code] ?? r.type_code}</td>
                           <td className="px-4 py-2.5 font-[family-name:var(--font-mono)]">{r.days}</td>
                           <td className="px-4 py-2.5 font-[family-name:var(--font-mono)] text-[var(--color-text-muted)]">{formatDate(r.from_date)}</td>
+                          <td className="max-w-[220px] px-4 py-2.5 text-[var(--color-text-muted)]"><span className="line-clamp-2" title={r.reason || ""}>{r.reason?.trim() || "—"}</span></td>
                           <td className="px-4 py-2.5">{isLeadApproved(r.status) ? <CheckCircle2 size={15} className="text-[var(--color-success)]" /> : <Clock size={15} className="text-[var(--color-text-lighter)]" />}</td>
                           <td className="px-4 py-2.5">{isHrApproved(r.status) ? <CheckCircle2 size={15} className="text-[var(--color-success)]" /> : <Clock size={15} className="text-[var(--color-text-lighter)]" />}</td>
+                          <td className="px-4 py-2.5">{isDirectorApproved(r.status) ? <CheckCircle2 size={15} className="text-[var(--color-success)]" /> : <Clock size={15} className="text-[var(--color-text-lighter)]" />}</td>
                           <td className="px-4 py-2.5">
                             <span className={cn("flex w-fit items-center gap-1 rounded-[20px] px-2 py-0.5 text-[11px] font-medium", display.color === "approved" && "bg-[var(--color-success-bg)] text-[var(--color-success)]", display.color === "pending" && "bg-[var(--color-warning-bg)] text-[var(--color-warning)]", display.color === "rejected" && "bg-[var(--color-danger-bg)] text-[var(--color-danger)]")}>
                               {display.color === "approved" && <CheckCircle2 size={11} />}
@@ -230,7 +235,7 @@ export function LeaveScreen() {
                             {r.can_approve && r.approval_step ? (
                               <div className="flex gap-1.5">
                                 <button onClick={() => decide(r, "approve")} disabled={processingId === r.id} className="rounded-[7px] bg-[var(--color-success)] px-2.5 py-1 text-[11px] font-medium text-white disabled:opacity-60">
-                                  {processingId === r.id ? "Đang xử lý…" : r.approval_step === 1 ? "Duyệt tổ trưởng" : "Duyệt phép"}
+                                  {processingId === r.id ? "Đang xử lý…" : r.approval_step === 1 ? "Tổ trưởng duyệt" : r.approval_step === 2 ? "Nhân sự duyệt" : "BGĐ duyệt"}
                                 </button>
                                 <button onClick={() => decide(r, "reject")} disabled={processingId === r.id} className="rounded-[7px] border border-[var(--color-danger)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-danger)] disabled:opacity-60">Từ chối</button>
                               </div>

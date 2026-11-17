@@ -739,8 +739,11 @@ export interface ApiLeaveRequest {
   status: string;
   current_step: number;
   created_at: string;
+  approved_l1_at?: string | null;
+  approved_l2_at?: string | null;
+  approved_l3_at?: string | null;
   can_approve?: boolean;
-  approval_step?: 1 | 2 | null;
+  approval_step?: 1 | 2 | 3 | null;
   is_own?: boolean;
 }
 
@@ -893,7 +896,7 @@ export function createLeaveRequest(data: {
 
 export function updateLeaveRequest(
   id: number,
-  data: { action: "approve" | "reject"; step?: 1 | 2 },
+  data: { action: "approve" | "reject"; step?: 1 | 2 | 3 },
 ) {
   return api.put<{ success: boolean; status: string }>(
     `/leave/requests/${id}`,

@@ -8,10 +8,13 @@ describe("leave approval permissions", () => {
     expect(getLeaveApprovalStep("lead", 10, 10, "approved_l1")).toBeNull();
   });
 
-  it("allows HR and directors to perform final approval", () => {
-    expect(getLeaveApprovalStep("hr", 20, 10, "pending")).toBe(2);
-    expect(getLeaveApprovalStep("director", null, 10, "approved_l1")).toBe(2);
-    expect(getLeaveApprovalStep("super", null, null, "pending")).toBe(2);
+  it("enforces team lead, HR, then director approval in order", () => {
+    expect(getLeaveApprovalStep("hr", 20, 10, "pending")).toBeNull();
+    expect(getLeaveApprovalStep("hr", 20, 10, "approved_l1")).toBe(2);
+    expect(getLeaveApprovalStep("director", null, 10, "approved_l1")).toBeNull();
+    expect(getLeaveApprovalStep("director", null, 10, "approved_l2")).toBe(3);
+    expect(getLeaveApprovalStep("super", null, null, "pending")).toBeNull();
+    expect(getLeaveApprovalStep("super", null, null, "approved_l2")).toBe(3);
   });
 
   it("does not allow staff or already processed requests", () => {

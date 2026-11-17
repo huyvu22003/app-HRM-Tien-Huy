@@ -6,13 +6,14 @@ export function getLeaveApprovalStep(
   actorEmployeeId: number | null,
   managerEmployeeId: number | null,
   status: string,
-): 1 | 2 | null {
+): 1 | 2 | 3 | null {
   if (role === "lead" && actorEmployeeId !== null && managerEmployeeId === actorEmployeeId && status === "pending") {
     return 1;
   }
-  if (["super", "director", "hr"].includes(role) && (status === "pending" || status === "approved_l1")) {
+  if (role === "hr" && status === "approved_l1") {
     return 2;
   }
+  if (["super", "director"].includes(role) && status === "approved_l2") return 3;
   return null;
 }
 
@@ -133,7 +134,7 @@ export async function createLeaveRequest(request: Request, env: Env, userId: num
 
 interface LeaveApprovalBody {
   action?: "approve" | "reject";
-  step?: 1 | 2;
+  step?: 1 | 2 | 3;
 }
 
 export async function updateLeaveRequest(
@@ -190,8 +191,17 @@ export async function updateLeaveRequest(
       return json({ success: true, status: "approved_l1" });
     }
 
+    if (approvalStep === 2) {
+      await env.DB.prepare(
+        "UPDATE leave_requests SET status = 'approved_l2', current_step = 3, approved_l2_by = ?, approved_l2_at = datetime('now') WHERE id = ?"
+      )
+        .bind(userId, id)
+        .run();
+      return json({ success: true, status: "approved_l2" });
+    }
+
     await env.DB.prepare(
-      "UPDATE leave_requests SET status = 'approved', approved_l2_by = ?, approved_l2_at = datetime('now') WHERE id = ?"
+      "UPDATE leave_requests SET status = 'approved', current_step = 4, approved_l3_by = ?, approved_l3_at = datetime('now') WHERE id = ?"
     )
       .bind(userId, id)
       .run();

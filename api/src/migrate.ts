@@ -344,6 +344,32 @@ const STEPS: { id: string; run: (env: Env) => Promise<void> }[] = [
       ).run();
     },
   },
+  {
+    id: "031_three_step_leave_approval",
+    run: async (env) => {
+      await addColumn(env, "leave_requests", "approved_l3_by", "INTEGER REFERENCES users(id)");
+      await addColumn(env, "leave_requests", "approved_l3_at", "TEXT");
+      // Chuẩn hóa các đơn từng được HR duyệt vượt cấp: thiếu tổ trưởng thì quay
+      // về bước 1; đủ tổ trưởng + HR thì chờ BGĐ ở bước 3.
+      await env.DB.exec(`
+        UPDATE leave_requests
+        SET status = 'pending', current_step = 1,
+            approved_l2_by = NULL, approved_l2_at = NULL
+        WHERE status = 'approved' AND approved_l1_by IS NULL;
+
+        UPDATE leave_requests
+        SET status = 'approved_l1', current_step = 2
+        WHERE status = 'approved'
+          AND approved_l1_by IS NOT NULL AND approved_l2_by IS NULL;
+
+        UPDATE leave_requests
+        SET status = 'approved_l2', current_step = 3
+        WHERE status = 'approved'
+          AND approved_l1_by IS NOT NULL AND approved_l2_by IS NOT NULL
+          AND approved_l3_by IS NULL;
+      `);
+    },
+  },
 ];
 
 /** Áp các bước migrate còn thiếu (một lần cho mỗi isolate). */
